@@ -88,13 +88,11 @@ let
     # Resolve the active profile target instead of capturing cfg.package's
     # store path. This keeps the CLI usable after a Nix/Home Manager switch,
     # while an already-installed wrapper remains unchanged.
-    if ! orca_ide="$(command -v orca-ide)"; then
-      echo "orca: unable to find orca-ide in PATH" >&2
+    if ! cli_entrypoint="$(command -v orca-ide-cli)"; then
+      echo "orca: unable to find orca-ide-cli in PATH" >&2
       exit 127
     fi
-    orca_ide="$(readlink -f "$orca_ide")"
-    orca_root="$(dirname "$(dirname "$orca_ide")")"
-    cli_entrypoint="$orca_root/opt/orca-ide/resources/app.asar.unpacked/out/cli/index.js"
+    cli_entrypoint="$(readlink -f "$cli_entrypoint")"
     if [ ! -f "$cli_entrypoint" ]; then
       echo "orca: CLI entrypoint not found: $cli_entrypoint" >&2
       exit 1

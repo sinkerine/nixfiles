@@ -107,7 +107,24 @@ with lib; let
       plan_mode_reasoning_effort = "ultra";
     };
   };
-  codexProfiles = defaultReasoningProfiles // defaultUltraProfile // reasoningProfiles // ultraProfiles;
+  strataProvider = {
+    name = "Strata on kazuki";
+    base_url = "https://kazuki.m.mado.moe/v1";
+    wire_api = "responses";
+    stream_idle_timeout_ms = 600000;
+    experimental_bearer_token = "lan-only";
+  };
+  strataProfiles = builtins.listToAttrs (map (effort:
+    nameValuePair "strata-${effort}" {
+      model = "rvn-qwen3.8-flash-next-uncensored-iq3_s";
+      model_provider = "strata";
+      model_context_window = 32768;
+      show_raw_agent_reasoning = true;
+      model_reasoning_effort = effort;
+      plan_mode_reasoning_effort = effort;
+      model_providers.strata = strataProvider;
+    }) [ "low" "medium" "high" ]);
+  codexProfiles = defaultReasoningProfiles // defaultUltraProfile // reasoningProfiles // ultraProfiles // strataProfiles;
   codexProfileFiles = mapAttrs' (profileName: profileSettings:
     nameValuePair ".codex/${profileName}.config.toml" {
       source = toml.generate "${profileName}.config.toml" profileSettings;

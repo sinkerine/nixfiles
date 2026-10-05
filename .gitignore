@@ -1,3 +1,7 @@
 */state/default.nix
 **/result
 flycheck_*
+
+# Python bytecode
+__pycache__/
+*.py[cod]

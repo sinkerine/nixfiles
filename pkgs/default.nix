@@ -21,4 +21,5 @@ with pkgs; {
   webos-dev-manager = (callPackage ./webos-dev-manager { });
   orca-ide = callPackage ./orca-ide.nix { };
   xurl = (callPackage ./xurl { });
+  strata = callPackage ./strata { };
 }

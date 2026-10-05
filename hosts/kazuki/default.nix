@@ -15,6 +15,42 @@ let
 
   hostIp = "192.168.88.29/24";
   gateway = "192.168.88.1";
+  strataEnabled = false;
+  strataData = "/home/sinkerine/Strata-data";
+  strataModel = "/home/sinkerine/.cache/Strata-data/models/RVN-IQ3_S/RVN-Qwen3.8-Flash-Next-IQ3_S-merged.gguf";
+  strataPack = "${strataData}/packs/rvn_iq3_s";
+  strataConfig = pkgs.writeText "strata-rvn-iq3_s.json" (builtins.toJSON {
+    exe = "${pkgs.strata}/bin/strata";
+    args = [
+      "--pack" strataPack
+      "--native" strataModel
+      "--ple-gguf" strataModel
+      "--expert-profile" "${pkgs.strata}/share/strata/data/expert-profile.bin"
+      "--expert-cache" "auto"
+      "--prefill" "auto"
+      "--spec" "4"
+      "--spec-min-p" "0.5"
+      "--mtp" "${strataData}/mtp/rt"
+      "--max-context" "131072"
+      "--kv" "int8"
+      "--mmap-experts"
+      # Use available RAM for pinned experts; Strata subtracts system headroom itself.
+      "--resident-budget-gib" "30"
+      "--kv-resident" "32768"
+      # Leave 1.8 GiB free after load to grow the GPU expert cache.
+      "--vram-reserve-mib" "1800"
+    ];
+    cwd = "${pkgs.strata}/share/strata";
+    tokenizer = "${strataPack}/tokenizer";
+    model_name = "rvn-qwen3.8-flash-next-uncensored-iq3_s";
+    api_key = "lan-only";
+    log = "/var/log/strata/server.log";
+    lib_dirs = [ "${pkgs.cudaPackages_13_0.cudatoolkit}/lib" ];
+    allowed_hosts = [ "kazuki.m.mado.moe" ];
+    port = 8081;
+    gpu = 0;
+    gpus_asked = true;
+  });
 in
 {
   system.stateVersion = "22.05";
@@ -281,55 +317,41 @@ in
     ];
   };
 
-  # Local OpenAI-compatible inference endpoint for Hermes and other agents.
-  systemd.services.llama-qwen35 = {
-    description = "llama.cpp Qwen3.5 9B inference server";
+  # Disable the previous inference server while testing Strata.
+  systemd.services.llama-qwen35.enable = false;
+
+  # Local OpenAI-compatible Strata endpoint for Hermes and other agents.
+  systemd.services.strata = {
+    enable = strataEnabled;
+    description = "Strata Qwen3.8 inference server";
     wantedBy = [ "multi-user.target" ];
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
-    unitConfig = {
-      ConditionPathExists = [
-        "/home/sinkerine/.cache/llama.cpp/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf"
-        "/home/sinkerine/.cache/llama.cpp/mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf"
-      ];
-    };
+    environment.LD_LIBRARY_PATH = lib.makeLibraryPath [
+      pkgs.gcc.cc.lib
+      pkgs.zlib
+      pkgs.cudaPackages_13_0.cudatoolkit
+    ];
     serviceConfig = {
       User = "sinkerine";
       Group = "users";
-      ExecStart = ''
-        ${lib.getExe' pkgs.llama-cpp-cuda "llama-server"} \
-          --model /home/sinkerine/.cache/llama.cpp/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf \
-          --alias Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M \
-          --mmproj /home/sinkerine/.cache/llama.cpp/mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf \
-          --host 127.0.0.1 \
-          --port 8081 \
-          --ctx-size 131072 \
-          --parallel 1 \
-          --n-gpu-layers 32 \
-          --flash-attn on \
-          --cache-type-k q8_0 \
-          --cache-type-v q8_0 \
-          --chat-template-kwargs '{"enable_thinking":false}' \
-          --metrics
-      '';
+      WorkingDirectory = "${pkgs.strata}/share/strata";
+      ExecStart = "${pkgs.strata}/bin/strata-server --engine strata --config ${strataConfig} --port 8081";
+      LogsDirectory = "strata";
+      LogsDirectoryMode = "0750";
       Restart = "on-failure";
       RestartSec = 5;
       SupplementaryGroups = [ "video" "render" ];
-      NoNewPrivileges = true;
-      PrivateTmp = true;
-      ProtectSystem = "strict";
-      ProtectHome = "read-only";
-      ReadWritePaths = [ "/home/sinkerine/.cache/llama.cpp" ];
+      LimitMEMLOCK = "infinity";
     };
   };
-
-  services.traefik.dynamicConfigOptions.http = {
-    routers.llamaQwen35 = {
-      rule = "Host(`llama.${hostname}.m.mado.moe`)";
+  services.traefik.dynamicConfigOptions.http = mkIf strataEnabled {
+    routers.strata = {
+      rule = "Host(`${hostname}.m.mado.moe`)";
       middlewares = [ "lan-only@file" ];
-      service = "llamaQwen35";
+      service = "strata";
     };
-    services.llamaQwen35.loadBalancer.servers = [
+    services.strata.loadBalancer.servers = [
       { url = "http://127.0.0.1:8081"; }
     ];
   };

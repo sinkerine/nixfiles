@@ -183,6 +183,9 @@ stdenv.mkDerivation (finalAttrs: {
 
     mkdir -p $out/opt/orca-ide
     cp -r dist/*-unpacked/resources $out/opt/orca-ide/
+    mkdir -p $out/bin
+    ln -s $out/opt/orca-ide/resources/app.asar.unpacked/out/cli/index.js \
+      $out/bin/orca-ide-cli
     install -Dm444 resources/build/icon.png \
       $out/share/icons/hicolor/1024x1024/apps/orca-ide.png
 
