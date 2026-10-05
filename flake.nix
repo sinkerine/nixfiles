@@ -69,6 +69,7 @@
     };
     # Do not add inputs.nixpkgs.follows — proxmox-nixos pins nixpkgs-stable intentionally.
     proxmox-nixos.url = "github:SaumonNet/proxmox-nixos";
+    proxmox-nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
   };
 
   outputs =

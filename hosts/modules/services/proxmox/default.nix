@@ -174,6 +174,11 @@ in
         inherit (cfg) ipAddress bridges openFirewall;
       };
 
+      # PVE's Perl environment uses glibc from its pinned nixpkgs 26.05.
+      # Keep PAM modules on the same glibc ABI; host nixpkgs can advance ahead
+      # and otherwise PAM fails to load inside pvedaemon.
+      security.pam.package = inputs.proxmox-nixpkgs.legacyPackages.${pkgs.system}.linux-pam;
+
       # LXC invokes Proxmox hooks directly; provide their FHS paths.
       system.activationScripts.proxmoxPerlInterpreter = ''
         install -d -m 0755 /usr/bin
