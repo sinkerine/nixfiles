@@ -20,6 +20,13 @@ writeShellApplication {
       root="$PWD"
     fi
 
+    # Orca's headless Sachi runtime uses Xvfb on :99. Keep normal desktop
+    # Codex launches on their native clipboard, but let headless Orca sessions
+    # fall back to OSC 52 instead of writing into Xvfb's private clipboard.
+    if [[ -n "''${ORCA_CODEX_HOME:-}" && "''${DISPLAY:-}" == ":99" ]]; then
+      unset DISPLAY WAYLAND_DISPLAY
+    fi
+
     # Orca launches Codex with an isolated CODEX_HOME. Keep profile names and
     # settings aligned with the canonical profiles managed under ~/.codex.
     orca_profile_runtime_home="''${ORCA_CODEX_HOME:-}"

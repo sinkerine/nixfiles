@@ -56,7 +56,7 @@ let
 
     if [ -f "$target" ]; then
       tmp="$target.tmp.$$"
-      ${pkgs.jq}/bin/jq -s '
+      ${pkgs.jq}/bin/jq --arg codexCommand codex-trusted -s '
         def deepmerge(a; b):
           if (a | type) == "object" and (b | type) == "object" then
             reduce (b | keys_unsorted[]) as $key
@@ -68,7 +68,9 @@ let
           else b
           end;
 
-        . as $documents | deepmerge($documents[0]; $documents[1])
+        . as $documents
+        | deepmerge($documents[0]; $documents[1])
+        | .settings.agentCmdOverrides.codex = $codexCommand
       ' "$target" "$defaults" > "$tmp"
       chmod --reference="$target" "$tmp"
       mv "$tmp" "$target"
