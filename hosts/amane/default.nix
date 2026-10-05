@@ -16,6 +16,7 @@ with lib;
     ../common/baseline.nix
     ../common/users.nix
     ../common/grub-legacy.nix
+    ../common/xray-sing-box-compat.nix
   ];
 
   sops = {
@@ -23,6 +24,14 @@ with lib;
     secrets = {
       hashedPassword.neededForUsers = true;
       xrayClientId = {
+        owner = "xray";
+        group = "xray";
+      };
+      makinaXrayClientId = {
+        owner = "xray";
+        group = "xray";
+      };
+      kazukiXrayClientId = {
         owner = "xray";
         group = "xray";
       };
@@ -45,6 +54,14 @@ with lib;
               clients = [
                 {
                   id = config.sops.placeholder.xrayClientId;
+                  flow = "xtls-rprx-vision";
+                }
+                {
+                  id = config.sops.placeholder.makinaXrayClientId;
+                  flow = "xtls-rprx-vision";
+                }
+                {
+                  id = config.sops.placeholder.kazukiXrayClientId;
                   flow = "xtls-rprx-vision";
                 }
               ];
@@ -72,6 +89,14 @@ with lib;
               clients = [
                 {
                   id = config.sops.placeholder.xrayClientId;
+                  flow = "xtls-rprx-vision";
+                }
+                {
+                  id = config.sops.placeholder.makinaXrayClientId;
+                  flow = "xtls-rprx-vision";
+                }
+                {
+                  id = config.sops.placeholder.kazukiXrayClientId;
                   flow = "xtls-rprx-vision";
                 }
               ];

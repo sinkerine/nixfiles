@@ -30,12 +30,59 @@ in
     easyrsa
     herdr
     i2c-tools
+    sing-box
   ];
 
   sops = {
     defaultSopsFile = ./secrets.yaml;
     secrets = {
       hashedPassword.neededForUsers = true;
+      amaneXrayClientId = {
+        owner = "root";
+        group = "root";
+        mode = "0400";
+      };
+    };
+    templates."sing-box-proxy.json" = {
+      owner = "sing-box";
+      group = "sing-box";
+      mode = "0400";
+      content = builtins.toJSON {
+        log.level = "warn";
+        inbounds = [
+          {
+            type = "socks";
+            tag = "socks-in";
+            listen = "127.0.0.1";
+            listen_port = 10809;
+          }
+        ];
+        outbounds = [
+          {
+            type = "vless";
+            tag = "amane";
+            server = "direct.15cm.net";
+            server_port = config.my.ports.xray.listen;
+            uuid = config.sops.placeholder.amaneXrayClientId;
+            flow = "xtls-rprx-vision";
+            tls = {
+              enabled = true;
+              server_name = "www.cloudflare.com";
+              utls = {
+                enabled = true;
+                fingerprint = "chrome";
+              };
+              reality = {
+                enabled = true;
+                public_key = "IM4pgDQbcql0ZIrzUWeU0HKE8GWbqsAV1t3c-PC20ks";
+                short_id = "a1b2c3d4";
+              };
+            };
+          }
+        ];
+        route.final = "amane";
+      };
+      restartUnits = [ "sing-box-proxy.service" ];
     };
     age = {
       keyFile = "/keys/age/${hostname}.txt";
@@ -46,6 +93,30 @@ in
   };
 
   users.users.root.hashedPasswordFile = config.sops.secrets.hashedPassword.path;
+
+  users.users.sing-box = {
+    group = "sing-box";
+    isSystemUser = true;
+  };
+  users.groups.sing-box = { };
+
+  systemd.services.sing-box-proxy = {
+    description = "Amane SOCKS5 proxy";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.sing-box}/bin/sing-box run -c ${config.sops.templates."sing-box-proxy.json".path}";
+      Restart = "on-failure";
+      RestartSec = 5;
+      User = "sing-box";
+      Group = "sing-box";
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+    };
+  };
 
   services.openssh = {
     enable = true;

@@ -25,6 +25,7 @@ in
     ../common/boot-loader.nix
     ../common/users.nix
     ../common/trusted.nix
+    ../common/xray-sing-box-compat.nix
     ./samba
   ];
 
@@ -42,6 +43,10 @@ in
         owner = "xray";
         group = "xray";
       };
+      makinaXrayClientId = {
+        owner = "xray";
+        group = "xray";
+      };
       xrayPrivateKey = {
         owner = "xray";
         group = "xray";
@@ -56,6 +61,10 @@ in
             id = config.sops.placeholder.xrayClientId;
             flow = "xtls-rprx-vision";
           };
+          makinaXrayClient = {
+            id = config.sops.placeholder.makinaXrayClientId;
+            flow = "xtls-rprx-vision";
+          };
         in
         builtins.toJSON {
           log.loglevel = "warning";
@@ -65,7 +74,7 @@ in
               port = config.my.ports.xray.listen;
               protocol = "vless";
               settings = {
-                clients = [ xrayClient ];
+                clients = [ xrayClient makinaXrayClient ];
                 decryption = "none";
               };
               streamSettings = {
@@ -87,7 +96,7 @@ in
               port = config.my.ports.xray.mobileSachi;
               protocol = "vless";
               settings = {
-                clients = [ xrayClient ];
+                clients = [ xrayClient makinaXrayClient ];
                 decryption = "none";
               };
               streamSettings = {

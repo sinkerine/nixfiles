@@ -10,22 +10,87 @@
 with lib;
 
 let
-  inherit (mylib) writeShellScriptFile templateFile;
+  sachiOutbound = { type = "vless"; server_port = config.my.ports.xray.listen; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; domain_resolver = "local-dns"; tls = { enabled = true; server_name = "www.cloudflare.com"; utls = { enabled = true; fingerprint = "chrome"; }; reality = { enabled = true; public_key = "-6pvY7DzL_M7q-7fNeZZrnxosjIFyNPltVCo4rFu1yo"; short_id = "e5f60718"; }; }; };
+  outbounds = [
+    { type = "vless"; tag = "amane"; server = "direct.15cm.net"; server_port = config.my.ports.xray.listen; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; domain_resolver = "local-dns"; tls = { enabled = true; server_name = "www.cloudflare.com"; utls = { enabled = true; fingerprint = "chrome"; }; reality = { enabled = true; public_key = "IM4pgDQbcql0ZIrzUWeU0HKE8GWbqsAV1t3c-PC20ks"; short_id = "a1b2c3d4"; }; }; }
+    (sachiOutbound // { tag = "sachi-local"; server = "sachi.m.mado.moe"; })
+    (sachiOutbound // { tag = "sachi-public"; server = "mado.moe"; })
+    { type = "urltest"; tag = "sachi"; outbounds = [ "sachi-local" "sachi-public" ]; interval = "10s"; }
+    { type = "selector"; tag = "proxy"; outbounds = [ "amane" "sachi" ]; default = "amane"; }
+    { type = "direct"; tag = "direct"; }
+  ];
 in
 {
   system.stateVersion = "22.05";
+  # TUN routing starts off; choose `asako-proxy off|amane|sachi`.
+  my.asakoProxy.defaultEnabled = false;
   imports = [
     ./hardware-configuration.nix
     ../common/baseline.nix
     ../common/boot-loader.nix
     ../common/users.nix
     ../common/trusted.nix
+    ./proxy-options.nix
   ];
 
   environment.systemPackages = with pkgs; [
     easyrsa
     brightnessctl
-    xray
+    sing-box
+    (pkgs.writeShellApplication {
+      name = "asako-proxy";
+      runtimeInputs = with pkgs; [ systemd coreutils ];
+      text = ''
+        set -euo pipefail
+        case "''${1:-}" in
+          amane|on) /run/wrappers/bin/sudo systemctl restart asako-proxy-enable.service ;;
+          sachi) /run/wrappers/bin/sudo systemctl restart asako-proxy-sachi.service ;;
+          off) /run/wrappers/bin/sudo systemctl restart asako-proxy-disable.service ;;
+          status)
+            /run/wrappers/bin/sudo systemctl status --no-pager sing-box-tun.service || true
+            if [ -f /var/lib/asako-proxy/state ]; then
+              echo "Boot choice: $(cat /var/lib/asako-proxy/state)"
+            else
+              echo "Boot choice: ${if config.my.asakoProxy.defaultEnabled then "amane" else "off"} (default)"
+            fi
+            ;;
+          *) echo "Usage: asako-proxy off|amane|sachi|status" >&2; exit 2 ;;
+        esac
+      '';
+    })
+    (pkgs.writeShellApplication {
+      name = "asako-sing-box-android-profiles";
+      runtimeInputs = with pkgs; [ coreutils python3 ];
+      text = ''
+        umask 077
+        uuid_file="''${MAKINA_XRAY_CLIENT_ID_FILE:-${config.sops.secrets.makinaXrayClientId.path}}"
+        auth_keys_file="$(mktemp)"
+        trap 'rm -f "$auth_keys_file"' EXIT
+        python3 - "$auth_keys_file" \
+          ${config.sops.secrets.makinaAmaneHeadscaleAuthKey.path} \
+          ${config.sops.secrets.makinaSachiHeadscaleAuthKey.path} <<'PY'
+        import json, sys
+        output, amane_path, sachi_path = sys.argv[1:]
+        def read(path):
+            with open(path, encoding="utf-8") as source:
+                return source.read().strip()
+        keys = {
+            "amane-normal-tailscale": read(amane_path),
+            "amane-paypal-tailscale": read(amane_path),
+            "sachi-normal-tailscale": read(sachi_path),
+            "sachi-paypal-tailscale": read(sachi_path),
+        }
+        with open(output, "w", encoding="utf-8") as destination:
+            json.dump(keys, destination)
+        PY
+        out="''${1:-/nas/storage/inbox}"
+        if [ "$out" = /nas/storage/inbox ] && [ ! -d "$out" ]; then
+          echo "NAS inbox is unavailable: $out" >&2
+          exit 1
+        fi
+        python3 ${./android-profiles.py} "$uuid_file" "$out" "$auth_keys_file"
+      '';
+    })
   ];
 
   programs.proxychains = {
@@ -45,124 +110,41 @@ in
     defaultSopsFile = ./secrets.yaml;
     secrets = {
       hashedPassword.neededForUsers = true;
-      xrayClientId = {
-        owner = "xray";
-        group = "xray";
-      };
+      xrayClientId = { owner = "root"; group = "sinkerine"; mode = "0440"; };
+      makinaXrayClientId = { owner = "root"; group = "sinkerine"; mode = "0440"; };
+      makinaAmaneHeadscaleAuthKey = { owner = "root"; group = "sinkerine"; mode = "0440"; };
+      makinaSachiHeadscaleAuthKey = { owner = "root"; group = "sinkerine"; mode = "0440"; };
     };
-    templates."xray.json" = {
-      owner = "xray";
-      group = "xray";
+    templates."sing-box-proxy.json" = {
+      owner = "root";
+      group = "root";
       content = builtins.toJSON {
-        log.loglevel = "warning";
+        log.level = "warn";
+        dns.servers = [ { type = "local"; tag = "local-dns"; } ];
         inbounds = [
-          {
-            tag = "socks-in";
-            listen = "127.0.0.1";
-            port = 10809;
-            protocol = "socks";
-            settings = {
-              auth = "noauth";
-              udp = true;
-            };
-          }
-          {
-            tag = "http-in";
-            listen = "127.0.0.1";
-            port = 10808;
-            protocol = "http";
-          }
+          { type = "socks"; tag = "socks-in"; listen = "127.0.0.1"; listen_port = 10809; }
+          { type = "http"; tag = "http-in"; listen = "127.0.0.1"; listen_port = 10808; }
         ];
-        outbounds = [
-          {
-            tag = "amane";
-            protocol = "vless";
-            settings.vnext = [
-              {
-                address = "direct.15cm.net";
-                port = config.my.ports.xray.listen;
-                users = [
-                  {
-                    id = config.sops.placeholder.xrayClientId;
-                    encryption = "none";
-                    flow = "xtls-rprx-vision";
-                  }
-                ];
-              }
-            ];
-            streamSettings = {
-              network = "tcp";
-              security = "reality";
-              realitySettings = {
-                fingerprint = "chrome";
-                serverName = "www.cloudflare.com";
-                publicKey = "IM4pgDQbcql0ZIrzUWeU0HKE8GWbqsAV1t3c-PC20ks";
-                shortId = "a1b2c3d4";
-              };
-            };
-          }
-          {
-            tag = "sachi";
-            protocol = "vless";
-            settings.vnext = [
-              {
-                address = "mado.moe";
-                port = config.my.ports.xray.listen;
-                users = [
-                  {
-                    id = config.sops.placeholder.xrayClientId;
-                    encryption = "none";
-                    flow = "xtls-rprx-vision";
-                  }
-                ];
-              }
-            ];
-            streamSettings = {
-              network = "tcp";
-              security = "reality";
-              realitySettings = {
-                fingerprint = "chrome";
-                serverName = "www.cloudflare.com";
-                publicKey = "-6pvY7DzL_M7q-7fNeZZrnxosjIFyNPltVCo4rFu1yo";
-                shortId = "e5f60718";
-              };
-            };
-          }
-          {
-            tag = "direct";
-            protocol = "freedom";
-          }
-        ];
-        routing = {
-          domainStrategy = "IPIfNonMatch";
-          balancers = [
-            {
-              tag = "servers";
-              selector = [ "amane" "sachi" ];
-            }
-          ];
-          rules = [
-            {
-              type = "field";
-              inboundTag = [ "socks-in" "http-in" ];
-              domain = [ "geosite:cn" ];
-              outboundTag = "direct";
-            }
-            {
-              type = "field";
-              inboundTag = [ "socks-in" "http-in" ];
-              ip = [ "geoip:cn" ];
-              outboundTag = "direct";
-            }
-            {
-              type = "field";
-              inboundTag = [ "socks-in" "http-in" ];
-              balancerTag = "servers";
-            }
-          ];
-        };
+        outbounds = outbounds;
+        http_clients = [ { tag = "rule-set-via-proxy"; detour = "proxy"; } ];
+        route = { final = "proxy"; auto_detect_interface = true; default_domain_resolver = "local-dns"; rules = [ { rule_set = [ "geosite-cn" ]; action = "route"; outbound = "direct"; } { rule_set = [ "geoip-cn" ]; action = "route"; outbound = "direct"; } ]; rule_set = [
+          { tag = "geosite-cn"; type = "remote"; format = "binary"; url = "https://github.com/SagerNet/sing-geosite/raw/rule-set/geosite-cn.srs"; http_client = "rule-set-via-proxy"; }
+          { tag = "geoip-cn"; type = "remote"; format = "binary"; url = "https://github.com/SagerNet/sing-geoip/raw/rule-set/geoip-cn.srs"; http_client = "rule-set-via-proxy"; }
+        ]; };
       };
-      restartUnits = [ "xray.service" ];
+      restartUnits = [ "sing-box-proxy.service" "sing-box-tun.service" ];
+    };
+    templates."sing-box-tun.json" = {
+      owner = "root";
+      group = "root";
+      content = builtins.toJSON {
+        log.level = "warn";
+        experimental.clash_api = { external_controller = "127.0.0.1:19090"; };
+        dns = { servers = [ { type = "local"; tag = "local-dns"; } { type = "https"; tag = "remote-dns"; server = "1.1.1.1"; path = "/dns-query"; detour = "proxy"; } ]; final = "remote-dns"; strategy = "prefer_ipv4"; };
+        inbounds = [ { type = "tun"; tag = "tun-in"; interface_name = "singtun0"; address = [ "172.19.0.1/30" "fdfe:dcba:9876::1/126" ]; mtu = 9000; auto_route = true; strict_route = true; route_exclude_address = [ "10.0.0.0/8" "100.64.0.0/10" "127.0.0.0/8" "169.254.0.0/16" "172.16.0.0/12" "192.168.0.0/16" "fd00::/8" "fe80::/10" ]; } ];
+        outbounds = outbounds;
+        route = { final = "proxy"; auto_detect_interface = true; default_domain_resolver = "local-dns"; rules = [ { protocol = "dns"; action = "hijack-dns"; } ]; };
+      };
     };
     age = {
       keyFile = "/keys/age/${hostname}.txt";
@@ -170,21 +152,6 @@ in
     };
     # https://github.com/Mic92/sops-nix/issues/167
     gnupg.sshKeyPaths = [ ];
-  };
-
-  users.users.xray = {
-    group = "xray";
-    isSystemUser = true;
-  };
-  users.groups.xray = { };
-  services.xray = {
-    enable = true;
-    settingsFile = config.sops.templates."xray.json".path;
-  };
-  systemd.services.xray.serviceConfig = {
-    DynamicUser = mkForce false;
-    User = "xray";
-    Group = "xray";
   };
 
   services.openssh = {
@@ -214,6 +181,8 @@ in
   networking = {
     hostName = hostname;
     domain = "mado.moe";
+    # sing-box's TUN TCP stack accepts connections on its virtual interface.
+    firewall.trustedInterfaces = [ "singtun0" ];
     networkmanager = {
       enable = true;
     };

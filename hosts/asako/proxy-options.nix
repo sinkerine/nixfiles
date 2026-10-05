@@ -1,0 +1,81 @@
+{ config, lib, pkgs, ... }:
+
+with lib;
+
+{
+  options.my.asakoProxy = {
+    enable = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Install and run Asako's sing-box localhost proxy.";
+    };
+    defaultEnabled = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Enable Asako's sing-box TUN routing at boot.";
+    };
+  };
+
+  config = mkIf config.my.asakoProxy.enable {
+    systemd.services.sing-box-proxy = {
+      description = "Asako local sing-box proxy";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      serviceConfig = {
+        ExecStart = "${pkgs.sing-box}/bin/sing-box run -c ${config.sops.templates."sing-box-proxy.json".path}";
+        Restart = "on-failure";
+        User = "root";
+        CapabilityBoundingSet = "CAP_NET_ADMIN CAP_NET_BIND_SERVICE";
+        AmbientCapabilities = "CAP_NET_ADMIN CAP_NET_BIND_SERVICE";
+        NoNewPrivileges = true;
+      };
+    };
+    systemd.services.sing-box-tun = {
+      description = "Asako sing-box TUN routing";
+      requires = [ "sing-box-proxy.service" ];
+      after = [ "network-online.target" "sing-box-proxy.service" ];
+      wants = [ "network-online.target" ];
+      serviceConfig = {
+        ExecStart = "${pkgs.sing-box}/bin/sing-box run -c ${config.sops.templates."sing-box-tun.json".path}";
+        Restart = "on-failure";
+        User = "root";
+        CapabilityBoundingSet = "CAP_NET_ADMIN CAP_NET_BIND_SERVICE";
+        AmbientCapabilities = "CAP_NET_ADMIN CAP_NET_BIND_SERVICE";
+        NoNewPrivileges = true;
+      };
+    };
+    systemd.services.asako-proxy-restore = {
+      description = "Restore Asako TUN routing choice";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "network-online.target" "sing-box-proxy.service" ];
+      requires = [ "sing-box-proxy.service" ];
+      wants = [ "network-online.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.python3}/bin/python ${./proxy-state.py} restore ${if config.my.asakoProxy.defaultEnabled then "amane" else "off"}";
+      };
+    };
+    systemd.services.asako-proxy-enable = {
+      description = "Enable Asako TUN routing";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.python3}/bin/python ${./proxy-state.py} amane";
+      };
+    };
+    systemd.services.asako-proxy-disable = {
+      description = "Disable Asako TUN routing";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.python3}/bin/python ${./proxy-state.py} off";
+      };
+    };
+    systemd.services.asako-proxy-sachi = {
+      description = "Route Asako TUN traffic through Sachi";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.python3}/bin/python ${./proxy-state.py} sachi";
+      };
+    };
+  };
+}
