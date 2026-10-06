@@ -320,6 +320,11 @@ in
             name = "Feishin";
             exec = "feishin --disable-gpu-sandbox --ozone-platform-hint=auto --enable-features=WaylandWindowDecorations --enable-wayland-ime";
           };
+          webos-dev-manager = {
+            name = "Dev Manager Desktop";
+            exec = "env NIXPKGS_ALLOW_UNFREE=1 nix run --impure github:nix-community/nixGL -- webos-dev-manager";
+            terminal = false;
+          };
           "io.github.xiaoyifang.goldendict_ng" = {
             name = "GoldenDict-ng";
             exec = "env GOLDENDICT_FORCE_WAYLAND=1 goldendict";
