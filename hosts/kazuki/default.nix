@@ -242,7 +242,7 @@ in
   };
 
   my.services.proxmox = {
-    enable = true;
+    enable = false;
     ipAddress = "192.168.88.29";
     bridges = [ "vmbr0" ];
     enableDashboardProxy = true;
@@ -252,7 +252,7 @@ in
     };
   };
 
-  my.services.guiTestSandbox.enable = true;
+  my.services.guiTestSandbox.enable = false;
 
   # Keep agent-driven activation scoped to this host and flake target.
   security.sudo.extraRules = [
