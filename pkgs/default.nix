@@ -21,4 +21,7 @@ with pkgs; {
   orca-ide = callPackage ./orca-ide.nix { };
   xurl = (callPackage ./xurl { });
   strata = callPackage ./strata { };
+  pi-ast-grep = callPackage ./pi-ast-grep { };
+  pi-vim = callPackage ./pi-vim { };
+  pi-web-access = callPackage ./pi-web-access { };
 }

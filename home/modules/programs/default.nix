@@ -33,6 +33,7 @@
     ./codex.nix
     ./ai-agent-common
     ./claude-code.nix
+    ./pi-coding-agent.nix
     ./obsidian.nix
     ./ergodox.nix
   ];
