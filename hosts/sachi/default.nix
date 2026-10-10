@@ -21,6 +21,7 @@ in
   system.stateVersion = "22.05";
   imports = [
     ./hardware-configuration.nix
+    ../modules/services/networking/ipv6
     ../common/baseline.nix
     ../common/boot-loader.nix
     ../common/users.nix
@@ -193,7 +194,7 @@ in
     networkConfig = {
       DHCP = "no";
       DNS = [ gateway ];
-      IPv6AcceptRA = false;
+      IPv6AcceptRA = true;
       LinkLocalAddressing = "ipv6";
     };
     routes = [
@@ -213,6 +214,7 @@ in
   };
   hardware.nvidia-container-toolkit.enable = true;
 
+    ipv6AcceptRAConfig.Token = "static:::30";
   boot.kernelModules = [
     "coretemp"
     "kvm-intel"
@@ -264,6 +266,7 @@ in
     enable = true;
     useRoutingFeatures = "server";
   };
+    enableIPv6 = true;
   users.users.xray = {
     group = "xray";
     isSystemUser = true;
@@ -277,6 +280,7 @@ in
     DynamicUser = mkForce false;
     User = "xray";
     Group = "xray";
+  my.services.ipv6Dns.enable = true;
   };
   networking.firewall.allowedTCPPorts = [
     config.my.ports.xray.listen

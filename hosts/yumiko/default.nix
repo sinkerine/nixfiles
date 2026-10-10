@@ -73,6 +73,7 @@ with lib;
   my.services.tailscale.enable = true;
   my.services.gateway = {
     enable = true;
+    enableIPv6 = true;
     internalDomain = "${hostname}.m.mado.moe";
     lanOnlyIpRanges =
       [ config.my.ip.ranges.local config.my.ip.ranges.tailscale ];

@@ -184,6 +184,7 @@ in
     # sing-box's TUN TCP stack accepts connections on its virtual interface.
     firewall.trustedInterfaces = [ "singtun0" ];
     networkmanager = {
+      AllowUsers *@fd7a:115c:a1e0::/48
       enable = true;
     };
   };
@@ -206,6 +207,12 @@ in
   };
   systemd.services.kmonad-laptop.serviceConfig = {
     Restart = "always";
+      # Defaults for new and unmanaged profiles. Existing saved Wi-Fi profiles
+      # retain their own IPv6 method and may need a one-time profile update.
+      settings.connection = {
+        "ipv6.method" = "auto";
+        "ipv6.may-fail" = true;
+      };
     RestartSec = "5";
   };
 
@@ -265,3 +272,8 @@ in
     enableScrapeSmartctl = true;
   };
 }
+    enableIPv6 = true;
+    # Roaming interfaces are not trusted LANs. Tailscale and loopback remain
+    # explicitly allowed by the gateway base policy.
+    ipv6Interface = null;
+    lanOnlyIpRanges = [ config.my.ip.ranges.local config.my.ip.ranges.tailscale ];

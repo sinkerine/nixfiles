@@ -183,6 +183,7 @@ with lib;
   };
 
   nix.gc.options = mkForce "-d";
+    enableIPv6 = true;
 
   my.services.zrepl = {
     enable = true;

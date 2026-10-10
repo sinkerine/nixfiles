@@ -1,13 +1,21 @@
-{ config, lib, mylib, ... }:
+{ config, lib, mylib, pkgs, ... }:
 
 with lib;
 let
   cfg = config.my.services.gateway;
   inherit (mylib) mkDefaultTrueEnableOption assertNotNull;
+  ipv6Base = pkgs.writeText "traefik-dynamic-base.json" (builtins.toJSON config.services.traefik.dynamicConfigOptions);
+  ipv6ConfigCommand = "${pkgs.python3}/bin/python3 ${./ipv6-config.py} ${ipv6Base} ${config.services.traefik.dataDir}/dynamic-ipv6.yaml ${escapeShellArg (if cfg.ipv6Interface == null then "-" else cfg.ipv6Interface)} ${pkgs.iproute2}/bin/ip";
 in {
   options.my.services.gateway = {
     enable = mkEnableOption "traefik gateway";
     enableDocker = mkEnableOption "docker integration";
+    enableIPv6 = mkEnableOption "IPv6 gateway source ranges";
+    ipv6Interface = mkOption {
+      type = types.nullOr types.str;
+      default = "vmbr0";
+      description = "Optional explicitly trusted interface for dynamic native IPv6 gateway source ranges.";
+    };
     enableDashboardProxy = mkDefaultTrueEnableOption "dashboard proxy";
     internalDomain = mkOption {
       type = with types; nullOr str;
@@ -25,7 +33,8 @@ in {
     };
     externalAllowListIpRanges = mkOption {
       type = with types; listOf str;
-      default = config.my.ip.ranges.cloudFlareList;
+      default = config.my.ip.ranges.cloudFlareList
+        ++ optionals cfg.enableIPv6 config.my.ip.ranges.cloudFlare6List;
     };
   };
 
@@ -76,8 +85,13 @@ in {
         dynamicConfigOptions = {
           http = {
             middlewares = {
-              lan-only.ipAllowList.sourceRange = cfg.lanOnlyIpRanges;
+              # Tailscale clients have IPv4 and IPv6 overlay addresses. Keep
+              # both addresses trusted by internal-only routes.
+              lan-only.ipAllowList.sourceRange = cfg.lanOnlyIpRanges
+                ++ [ config.my.ip.ranges.tailscale6 ]
+                ++ optionals cfg.enableIPv6 [ config.my.ip.ranges.local6 ];
               wan.ipAllowList.sourceRange = cfg.lanOnlyIpRanges
+                ++ optionals cfg.enableIPv6 [ config.my.ip.ranges.local6 config.my.ip.ranges.tailscale6 ]
                 ++ cfg.externalAllowListIpRanges;
             };
           };
@@ -101,6 +115,28 @@ in {
           exposedbydefault = false;
           network = "g_proxy";
         };
+      };
+    })
+    (mkIf cfg.enableIPv6 {
+      services.traefik.dynamicConfigFile = "${config.services.traefik.dataDir}/dynamic-ipv6.yaml";
+      systemd.services.traefik.serviceConfig.ExecStartPre = [ ipv6ConfigCommand ];
+      systemd.services.gateway-ipv6-config = {
+        description = "Refresh Traefik LAN IPv6 source ranges";
+        wants = [ "network-online.target" ];
+        after = [ "network-online.target" "traefik.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          User = "traefik";
+          ExecStart = ipv6ConfigCommand;
+          NoNewPrivileges = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          ReadWritePaths = [ config.services.traefik.dataDir ];
+        };
+      };
+      systemd.timers.gateway-ipv6-config = {
+        wantedBy = [ "timers.target" ];
+        timerConfig = { OnBootSec = "1m"; OnUnitActiveSec = "1m"; };
       };
     })
     (mkIf cfg.enableDashboardProxy {

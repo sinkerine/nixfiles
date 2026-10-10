@@ -225,12 +225,13 @@ in
   };
 
   systemd.network.networks."20-${brIf}" = {
+    ipv6AcceptRAConfig.Token = "static:::29";
     matchConfig.Name = brIf;
     address = [ hostIp ];
     networkConfig = {
       DHCP = "no";
       DNS = [ gateway ];
-      IPv6AcceptRA = false;
+      IPv6AcceptRA = true;
       LinkLocalAddressing = "ipv6";
     };
     routes = [
@@ -323,6 +324,7 @@ in
     useRoutingFeatures = "client";
   };
   my.services.gateway = {
+    enableIPv6 = true;
     enable = true;
     enableDocker = true;
     internalDomain = "${hostname}.m.mado.moe";
