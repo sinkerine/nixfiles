@@ -197,18 +197,6 @@ in
             "${config.home.homeDirectory}/orca/"
           ];
         };
-        my.services.clipper = {
-          enable = true;
-          extraSettings = {
-            executable = "${pkgs.wl-clipboard}/bin/wl-copy";
-            flags = "";
-          };
-        };
-        systemd.user.services.clipper.Unit.After = [
-          "wayland-session@niri-uwsm\\x2duwsm.desktop.target"
-          "wayland-session@hyprland\\x2duwsm.desktop.target"
-        ];
-        my.services.copyq.enable = true;
         my.services.syncthing.enable = true;
         my.programs.networkmanager-dmenu = {
           enable = true;
