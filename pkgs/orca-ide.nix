@@ -14,6 +14,7 @@
   freetype,
   gnumake,
   gdk-pixbuf,
+  gobject-introspection,
   glib,
   gtk3,
   lib,
@@ -56,19 +57,20 @@
 let
   electron = electron_43;
   pnpm = pnpm_11;
+  computerUsePython = python3.withPackages (ps: [ ps.pygobject3 ]);
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ide";
   # Keep this update method: append the date and timestamp through seconds
   # to the upstream version, and pin the matching commit from custom.
-  version = "1.4.197-20260927.203631";
+  version = "1.4.197-20261008.104823";
 
   # Always update from the custom branch commit; keep this method honored.
   src = fetchFromGitHub {
     owner = "15cm";
     repo = "orca";
-    rev = "bebaef88bb1054e0cce98855226a29b3631eee05";
-    hash = "sha256-P42jdlrckLYg8bVGOjj1bid6pkHEgJylCz1Z8j4gLkM=";
+    rev = "8ebffa569e83c83c94c18b4e7ff34cd020ed1329";
+    hash = "sha256-pKA8T24zPq3DzuAei3ybhpQg46xzz0PANvtrOEPYG20=";
   };
 
   pnpmDeps = fetchPnpmDeps {
@@ -129,6 +131,7 @@ stdenv.mkDerivation (finalAttrs: {
     pipewire
     systemd
     wayland
+    computerUsePython
   ];
 
   strictDeps = true;
@@ -184,8 +187,6 @@ stdenv.mkDerivation (finalAttrs: {
     mkdir -p $out/opt/orca-ide
     cp -r dist/*-unpacked/resources $out/opt/orca-ide/
     mkdir -p $out/bin
-    ln -s $out/opt/orca-ide/resources/app.asar.unpacked/out/cli/index.js \
-      $out/bin/orca-ide-cli
     install -Dm444 resources/build/icon.png \
       $out/share/icons/hicolor/1024x1024/apps/orca-ide.png
 
@@ -193,9 +194,25 @@ stdenv.mkDerivation (finalAttrs: {
   '';
 
   postFixup = ''
+    # Run the unpacked CLI with the same Electron/Node ABI as the app.
+    # Expose an executable on PATH instead of a symlink to a JavaScript file.
+    makeWrapper ${lib.getExe electron} $out/bin/orca-ide-cli \
+      --set ELECTRON_RUN_AS_NODE 1 \
+      --set ORCA_CLI_COMMAND orca-ide-cli \
+      --prefix PATH : ${computerUsePython}/bin \
+      --prefix GI_TYPELIB_PATH : ${gobject-introspection}/lib/girepository-1.0:${at-spi2-core}/lib/girepository-1.0 \
+      --run 'export ORCA_NODE_OPTIONS="''${NODE_OPTIONS-}"' \
+      --run 'export ORCA_NODE_REPL_EXTERNAL_MODULE="''${NODE_REPL_EXTERNAL_MODULE-}"' \
+      --unset NODE_OPTIONS \
+      --unset NODE_REPL_EXTERNAL_MODULE \
+      --add-flags $out/opt/orca-ide/resources/app.asar.unpacked/out/cli/index.js
+
     makeWrapper ${lib.getExe electron} $out/bin/orca-ide \
       --inherit-argv0 \
       --set ELECTRON_FORCE_IS_PACKAGED 1 \
+      --set ORCA_CLI_COMMAND orca-ide-cli \
+      --prefix PATH : ${computerUsePython}/bin \
+      --prefix GI_TYPELIB_PATH : ${gobject-introspection}/lib/girepository-1.0:${at-spi2-core}/lib/girepository-1.0 \
       --add-flags --no-sandbox \
       --add-flags $out/opt/orca-ide/resources/app.asar
   '';

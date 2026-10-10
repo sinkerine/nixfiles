@@ -71,6 +71,7 @@ let
         . as $documents
         | deepmerge($documents[0]; $documents[1])
         | .settings.agentCmdOverrides.codex = $codexCommand
+        | .settings.agentDefaultArgs.codex = "--profile luna-medium"
       ' "$target" "$defaults" > "$tmp"
       chmod --reference="$target" "$tmp"
       mv "$tmp" "$target"
@@ -80,26 +81,14 @@ let
   '';
   orcaCli = pkgs.writeShellScriptBin "orca" ''
     set -euo pipefail
-    export ORCA_NODE_OPTIONS="''${NODE_OPTIONS-}"
-    export ORCA_NODE_REPL_EXTERNAL_MODULE="''${NODE_REPL_EXTERNAL_MODULE-}"
-    unset NODE_OPTIONS
-    unset NODE_REPL_EXTERNAL_MODULE
-
     # Resolve the active profile target instead of capturing cfg.package's
     # store path. This keeps the CLI usable after a Nix/Home Manager switch,
     # while an already-installed wrapper remains unchanged.
-    if ! cli_entrypoint="$(command -v orca-ide-cli)"; then
+    if ! cli_command="$(command -v orca-ide-cli)"; then
       echo "orca: unable to find orca-ide-cli in PATH" >&2
       exit 127
     fi
-    cli_entrypoint="$(readlink -f "$cli_entrypoint")"
-    if [ ! -f "$cli_entrypoint" ]; then
-      echo "orca: CLI entrypoint not found: $cli_entrypoint" >&2
-      exit 1
-    fi
-
-    ELECTRON_RUN_AS_NODE=1 exec ${lib.getExe pkgs.electron_43} \
-      "$cli_entrypoint" "$@"
+    exec "$cli_command" "$@"
   '';
   serveArgs = [
     "serve"
@@ -161,7 +150,7 @@ in
       source = "${orcaCli}/bin/orca";
       force = true;
     };
-    home.sessionVariables.ORCA_CLI_COMMAND = "orca";
+    home.sessionVariables.ORCA_CLI_COMMAND = "orca-ide-cli";
     home.packages = [ cfg.package orcaCli ] ++ lib.optional (cfg.mode == "headless") pkgs.xorg-server;
 
     systemd.user.services.orca = lib.mkIf (cfg.mode == "headless") {
@@ -177,7 +166,7 @@ in
         WorkingDirectory = config.home.homeDirectory;
         Environment = [
           "LIBGL_ALWAYS_SOFTWARE=1"
-          "ORCA_CLI_COMMAND=orca"
+          "ORCA_CLI_COMMAND=orca-ide-cli"
         ];
         StandardOutput = "journal";
         StandardError = "journal";

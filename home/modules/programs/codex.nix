@@ -18,13 +18,24 @@ with lib; let
     "orca-cli"
     "orca-emulator"
     "orca-emulator-android"
-    "orca-linear"
     "orca-per-workspace-env"
     "orchestration"
   ];
+  # Keep upstream guides, but teach their discovery stubs about Nix's CLI wrapper.
+  orcaPatchedSkills = pkgs.runCommand "orca-cli-skills" { } ''
+    cp -r ${orcaSkills}/skills $out
+    chmod -R u+w $out
+    ${lib.concatMapStringsSep "\n" (skill: ''
+      substituteInPlace $out/${skill}/SKILL.md \
+        --replace-fail \
+          '- Otherwise, on Linux outside an Orca-managed terminal, use `orca-ide`.' \
+          '- Otherwise, when `orca-ide-cli` is discoverable on PATH, use `orca-ide-cli`. On Nix this executable wraps the packaged CLI; `orca-ide` launches the GUI.
+- Otherwise, on Linux outside an Orca-managed terminal, use `orca-ide`.'
+    '') orcaSkillNames}
+  '';
   orcaSkillFiles = listToAttrs (map (skill:
     nameValuePair ".agents/skills/${skill}" {
-      source = "${orcaSkills}/skills/${skill}";
+      source = "${orcaPatchedSkills}/${skill}";
     })
   orcaSkillNames);
   codexHooksPath = "${config.home.homeDirectory}/.codex/hooks.json";
