@@ -7,10 +7,11 @@ keys:
     - &sachi age147zmk06prg2864yym9tcg5z9vl9ldykv5zkwuuefuy85q994qp3sjh3lfd
     - &yumiko age1g8qxqwmajcpcz46ugnan9hyt5x5wcz9rd09jd5mq6jgvhx443qfq08jcq0
     - &amane age1snfpluv03zwz8t6cxt0a26gpjxum2cad75gqw5k5fjg6y7cgx4zqcjq8fm
+    - &michiru age19cfrwfvsafm4aunr5fmynr3gu6davpq40nzcj9yc9pezaefgqclqnezfm5
 creation_rules:
-  - path_regex: hosts/modules/services/autofs/cifs-secrets.txt
   - path_regex: hosts/modules/services/networking/ipv6/secrets\.yaml$
     age: "age147zmk06prg2864yym9tcg5z9vl9ldykv5zkwuuefuy85q994qp3sjh3lfd,age1sc2gp8d40y7d9engfqhydg5v6mcg0aj40x3yccndzh7ruxvj63cqcpax76"
+  - path_regex: hosts/modules/services/autofs/cifs-secrets.txt
     # kazuki, asako
     age: "age1sc2gp8d40y7d9engfqhydg5v6mcg0aj40x3yccndzh7ruxvj63cqcpax76,age1kez9h9hmz4amrq5phv8cwv3d04l775ctzaqgrd7q9u70hp6s0ehsjp5wk8"
     pgp: *sinkerine
@@ -48,6 +49,18 @@ creation_rules:
   - path_regex: hosts/amane/secrets\.yaml$
     pgp: *sinkerine
     age: *amane
+  - path_regex: hosts/modules/services/networking/regional-proxy/routeros/routeros-secrets\.yaml$
+    age: *kazuki
+  - path_regex: hosts/michiru/regional-proxy-secrets\.yaml$
+    age: "age19cfrwfvsafm4aunr5fmynr3gu6davpq40nzcj9yc9pezaefgqclqnezfm5,age1sc2gp8d40y7d9engfqhydg5v6mcg0aj40x3yccndzh7ruxvj63cqcpax76"
+  - path_regex: hosts/michiru/relay-secrets\.yaml$
+    age: "age19cfrwfvsafm4aunr5fmynr3gu6davpq40nzcj9yc9pezaefgqclqnezfm5,age1sc2gp8d40y7d9engfqhydg5v6mcg0aj40x3yccndzh7ruxvj63cqcpax76,age1kez9h9hmz4amrq5phv8cwv3d04l775ctzaqgrd7q9u70hp6s0ehsjp5wk8,age147zmk06prg2864yym9tcg5z9vl9ldykv5zkwuuefuy85q994qp3sjh3lfd"
+  - path_regex: hosts/michiru/secrets\.yaml$
+    age: "age19cfrwfvsafm4aunr5fmynr3gu6davpq40nzcj9yc9pezaefgqclqnezfm5,age1sc2gp8d40y7d9engfqhydg5v6mcg0aj40x3yccndzh7ruxvj63cqcpax76"
+  - path_regex: hosts/michiru/regional-proxy-turn-secrets\.yaml$
+    age: "age19cfrwfvsafm4aunr5fmynr3gu6davpq40nzcj9yc9pezaefgqclqnezfm5,age1sc2gp8d40y7d9engfqhydg5v6mcg0aj40x3yccndzh7ruxvj63cqcpax76"
+  - path_regex: hosts/sachi/regional-proxy-secrets\.yaml$
+    age: "age147zmk06prg2864yym9tcg5z9vl9ldykv5zkwuuefuy85q994qp3sjh3lfd,age19cfrwfvsafm4aunr5fmynr3gu6davpq40nzcj9yc9pezaefgqclqnezfm5,age1sc2gp8d40y7d9engfqhydg5v6mcg0aj40x3yccndzh7ruxvj63cqcpax76"
   - path_regex: hosts/asako/zrepl/.*\.(crt|key)$
     pgp: *sinkerine
     age: *asako

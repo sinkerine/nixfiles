@@ -16,7 +16,6 @@ with lib;
     ../common/baseline.nix
     ../common/users.nix
     ../common/grub-legacy.nix
-    ../common/xray-sing-box-compat.nix
   ];
 
   sops = {
@@ -24,105 +23,79 @@ with lib;
     secrets = {
       hashedPassword.neededForUsers = true;
       xrayClientId = {
-        owner = "xray";
-        group = "xray";
+        owner = "sing-box";
+        group = "sing-box";
       };
       makinaXrayClientId = {
-        owner = "xray";
-        group = "xray";
+        owner = "sing-box";
+        group = "sing-box";
       };
       kazukiXrayClientId = {
-        owner = "xray";
-        group = "xray";
+        owner = "sing-box";
+        group = "sing-box";
       };
       xrayPrivateKey = {
-        owner = "xray";
-        group = "xray";
+        owner = "sing-box";
+        group = "sing-box";
       };
     };
-    templates."xray.json" = {
-      owner = "xray";
-      group = "xray";
+    templates."sing-box-server.json" = {
+      owner = "sing-box";
+      group = "sing-box";
       content = builtins.toJSON {
-        log.loglevel = "warning";
-        inbounds = [
-          {
-            listen = "0.0.0.0";
-            port = config.my.ports.xray.listen;
-            protocol = "vless";
-            settings = {
-              clients = [
-                {
-                  id = config.sops.placeholder.xrayClientId;
-                  flow = "xtls-rprx-vision";
-                }
-                {
-                  id = config.sops.placeholder.makinaXrayClientId;
-                  flow = "xtls-rprx-vision";
-                }
-                {
-                  id = config.sops.placeholder.kazukiXrayClientId;
-                  flow = "xtls-rprx-vision";
-                }
+          log.level = "warn";
+          inbounds = [
+            {
+              type = "vless";
+              tag = "reality-main";
+              listen = "0.0.0.0";
+              listen_port = config.my.ports.xray.listen;
+              users = [
+                { name = "primary"; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; }
+                { name = "makina"; uuid = config.sops.placeholder.makinaXrayClientId; flow = "xtls-rprx-vision"; }
+                { name = "kazuki"; uuid = config.sops.placeholder.kazukiXrayClientId; flow = "xtls-rprx-vision"; }
               ];
-              decryption = "none";
-            };
-            streamSettings = {
-              network = "tcp";
-              security = "reality";
-              realitySettings = {
-                show = false;
-                dest = "www.cloudflare.com:443";
-                xver = 0;
-                serverNames = [ "www.cloudflare.com" ];
-                privateKey = config.sops.placeholder.xrayPrivateKey;
-                shortIds = [ "a1b2c3d4" ];
+              tls = {
+                enabled = true;
+                server_name = "www.cloudflare.com";
+                reality = {
+                  enabled = true;
+                  handshake = { server = "www.cloudflare.com"; server_port = 443; };
+                  private_key = config.sops.placeholder.xrayPrivateKey;
+                  short_id = "a1b2c3d4";
+                };
               };
-            };
-          }
+            }
           # Mobile-only SNI spoofing profile. Excluded from normal client routing.
-          {
-            listen = "0.0.0.0";
-            port = config.my.ports.xray.mobileAmane;
-            protocol = "vless";
-            settings = {
-              clients = [
-                {
-                  id = config.sops.placeholder.xrayClientId;
-                  flow = "xtls-rprx-vision";
-                }
-                {
-                  id = config.sops.placeholder.makinaXrayClientId;
-                  flow = "xtls-rprx-vision";
-                }
-                {
-                  id = config.sops.placeholder.kazukiXrayClientId;
-                  flow = "xtls-rprx-vision";
-                }
+            {
+              type = "vless";
+              tag = "reality-mobile";
+              listen = "0.0.0.0";
+              listen_port = config.my.ports.xray.mobileAmane;
+              users = [
+                { name = "primary"; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; }
+                { name = "makina"; uuid = config.sops.placeholder.makinaXrayClientId; flow = "xtls-rprx-vision"; }
+                { name = "kazuki"; uuid = config.sops.placeholder.kazukiXrayClientId; flow = "xtls-rprx-vision"; }
               ];
-              decryption = "none";
-            };
-            streamSettings = {
-              network = "tcp";
-              security = "reality";
-              realitySettings = {
-                show = false;
-                dest = "www.paypal.com:443";
-                xver = 0;
-                serverNames = [ "www.paypal.com" ];
-                privateKey = config.sops.placeholder.xrayPrivateKey;
-                shortIds = [ "8c614ced" ];
+              tls = {
+                enabled = true;
+                server_name = "www.paypal.com";
+                reality = {
+                  enabled = true;
+                  handshake = { server = "www.paypal.com"; server_port = 443; };
+                  private_key = config.sops.placeholder.xrayPrivateKey;
+                  short_id = "8c614ced";
+                };
               };
-            };
-          }
-        ];
-        outbounds = [
-          {
-            protocol = "freedom";
-          }
-        ];
-      };
-      restartUnits = [ "xray.service" ];
+            }
+          ];
+          outbounds = [
+            {
+              type = "direct";
+            }
+          ];
+        };
+      restartUnits = [ "sing-box-server.service" ];
     };
     age = {
       keyFile = "/keys/age/${hostname}.txt";
@@ -141,7 +114,7 @@ with lib;
     };
   };
 
-  environment.systemPackages = with pkgs; [ xray ];
+  environment.systemPackages = with pkgs; [ sing-box ];
 
   users.users.sinkerine.linger = true;
 
@@ -163,27 +136,11 @@ with lib;
       allowedTCPPorts = [
         config.my.ports.xray.listen
         config.my.ports.xray.mobileAmane
-        # Coturn
-        3478
-        5349
-      ];
-      allowedUDPPorts = [
-        # Coturn
-        3478
-        5349
-      ];
-      allowedUDPPortRanges = [
-        # Coturn
-        {
-          from = 49160;
-          to = 49200;
-        }
       ];
     };
   };
 
   nix.gc.options = mkForce "-d";
-    enableIPv6 = true;
 
   my.services.zrepl = {
     enable = true;
@@ -205,22 +162,28 @@ with lib;
     enable = true;
     useRoutingFeatures = "server";
   };
-  users.users.xray = {
-    group = "xray";
-    isSystemUser = true;
-  };
-  users.groups.xray = { };
-  services.xray = {
-    enable = true;
-    settingsFile = config.sops.templates."xray.json".path;
-  };
-  systemd.services.xray.serviceConfig = {
-    DynamicUser = mkForce false;
-    User = "xray";
-    Group = "xray";
+  users.users.sing-box = { isSystemUser = true; group = "sing-box"; };
+  users.groups.sing-box = { };
+  systemd.services.sing-box-server = {
+    description = "VLESS Reality proxy server";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.sing-box}/bin/sing-box run -c ${config.sops.templates."sing-box-server.json".path}";
+      Restart = "on-failure";
+      RestartSec = 5;
+      User = "sing-box";
+      Group = "sing-box";
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+    };
   };
   my.services.gateway = {
     enable = true;
+    enableIPv6 = true;
     enableDocker = true;
     internalDomain = "${hostname}.m.mado.moe";
     lanOnlyIpRanges = [

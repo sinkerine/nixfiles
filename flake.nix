@@ -7,6 +7,10 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    disko = {
+      url = "github:nix-community/disko/v1.13.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.11";
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -76,6 +80,7 @@
     {
       self,
       nixpkgs,
+      disko,
       nixpkgs-stable,
       home-manager,
       nur,
@@ -232,6 +237,13 @@
       ];
 
       nixosConfigurationArgs = {
+        "michiru" = {
+          system = "x86_64-linux";
+          pkgs = import nixpkgs { system = "x86_64-linux"; };
+          modules = [ disko.nixosModules.disko ./hosts/michiru ];
+          specialArgs = { };
+          minimal = true;
+        };
         # TODO: migrate to unencrypted pool + encrypted dataset.
         "kazuki" = rec {
           system = "x86_64-linux";
@@ -298,15 +310,20 @@
         };
       };
       nixosConfigurations = builtins.mapAttrs (
-        _: v:
+        hostname: v:
         nixpkgs.lib.nixosSystem (
-          v
+          (builtins.removeAttrs v [ "minimal" ])
           // {
-            modules = v.modules ++ [
-              ./modules/nixos
-              ./hosts/modules
-              sops-nix.nixosModules.sops
-            ];
+            modules = v.modules ++ (
+              if v.minimal or false then
+                (if hostname == "michiru" then [ sops-nix.nixosModules.sops ] else [ ])
+              else
+                [
+                  ./modules/nixos
+                  ./hosts/modules
+                  sops-nix.nixosModules.sops
+                ]
+            );
             specialArgs = v.specialArgs // {
               inherit (self) inputs;
               mylib = (
@@ -347,7 +364,20 @@
               magicRollback = false;
             };
           };
-        });
+        }) // {
+          michiru = {
+            hostname = "103.117.101.12";
+            sshOpts = [ "-i" "/home/sinkerine/.ssh/id_ed25519" ];
+            profilesOrder = [ "system" ];
+            profiles.system = {
+              sshUser = "root";
+              path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.michiru;
+              confirmTimeout = 60;
+              autoRollback = false;
+              magicRollback = false;
+            };
+          };
+        };
       };
       checks = builtins.mapAttrs (system: deployLib: deployLib.deployChecks self.deploy) deploy-rs.lib;
       devShells = forAllSystems (system: {

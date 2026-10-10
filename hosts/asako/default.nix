@@ -12,7 +12,7 @@ with lib;
 let
   sachiOutbound = { type = "vless"; server_port = config.my.ports.xray.listen; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; domain_resolver = "local-dns"; tls = { enabled = true; server_name = "www.cloudflare.com"; utls = { enabled = true; fingerprint = "chrome"; }; reality = { enabled = true; public_key = "-6pvY7DzL_M7q-7fNeZZrnxosjIFyNPltVCo4rFu1yo"; short_id = "e5f60718"; }; }; };
   outbounds = [
-    { type = "vless"; tag = "amane"; server = "direct.15cm.net"; server_port = config.my.ports.xray.listen; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; domain_resolver = "local-dns"; tls = { enabled = true; server_name = "www.cloudflare.com"; utls = { enabled = true; fingerprint = "chrome"; }; reality = { enabled = true; public_key = "IM4pgDQbcql0ZIrzUWeU0HKE8GWbqsAV1t3c-PC20ks"; short_id = "a1b2c3d4"; }; }; }
+    { type = "vless"; tag = "amane"; server = "167.148.6.201"; server_port = config.my.ports.xray.listen; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; domain_resolver = "local-dns"; tls = { enabled = true; server_name = "www.cloudflare.com"; utls = { enabled = true; fingerprint = "chrome"; }; reality = { enabled = true; public_key = "IM4pgDQbcql0ZIrzUWeU0HKE8GWbqsAV1t3c-PC20ks"; short_id = "a1b2c3d4"; }; }; }
     (sachiOutbound // { tag = "sachi-local"; server = "sachi.m.mado.moe"; })
     (sachiOutbound // { tag = "sachi-public"; server = "mado.moe"; })
     { type = "urltest"; tag = "sachi"; outbounds = [ "sachi-local" "sachi-public" ]; interval = "10s"; }
@@ -22,8 +22,9 @@ let
 in
 {
   system.stateVersion = "22.05";
-  # TUN routing starts off; choose `asako-proxy off|amane|sachi`.
+  # TUN routing starts off; choose `asako-proxy off|amane|sachi|hk`.
   my.asakoProxy.defaultEnabled = false;
+  my.services.regionalProxy.cnClient = true;
   imports = [
     ./hardware-configuration.nix
     ../common/baseline.nix
@@ -31,6 +32,7 @@ in
     ../common/users.nix
     ../common/trusted.nix
     ./proxy-options.nix
+    ../modules/services/networking/regional-proxy/default.nix
   ];
 
   environment.systemPackages = with pkgs; [
@@ -45,16 +47,18 @@ in
         case "''${1:-}" in
           amane|on) /run/wrappers/bin/sudo systemctl restart asako-proxy-enable.service ;;
           sachi) /run/wrappers/bin/sudo systemctl restart asako-proxy-sachi.service ;;
+          hk) /run/wrappers/bin/sudo systemctl restart asako-proxy-hk.service ;;
           off) /run/wrappers/bin/sudo systemctl restart asako-proxy-disable.service ;;
           status)
             /run/wrappers/bin/sudo systemctl status --no-pager sing-box-tun.service || true
+            /run/wrappers/bin/sudo systemctl status --no-pager sing-box-hk-tun.service || true
             if [ -f /var/lib/asako-proxy/state ]; then
               echo "Boot choice: $(cat /var/lib/asako-proxy/state)"
             else
               echo "Boot choice: ${if config.my.asakoProxy.defaultEnabled then "amane" else "off"} (default)"
             fi
             ;;
-          *) echo "Usage: asako-proxy off|amane|sachi|status" >&2; exit 2 ;;
+          *) echo "Usage: asako-proxy off|amane|sachi|hk|status" >&2; exit 2 ;;
         esac
       '';
     })
@@ -75,20 +79,24 @@ in
             with open(path, encoding="utf-8") as source:
                 return source.read().strip()
         keys = {
-            "amane-normal-tailscale": read(amane_path),
+            "amane-tailscale": read(amane_path),
             "amane-paypal-tailscale": read(amane_path),
-            "sachi-normal-tailscale": read(sachi_path),
+            "sachi-tailscale": read(sachi_path),
             "sachi-paypal-tailscale": read(sachi_path),
+            "michiru-cn-direct-tailscale": read(sachi_path),
         }
         with open(output, "w", encoding="utf-8") as destination:
             json.dump(keys, destination)
         PY
         out="''${1:-/nas/storage/inbox}"
+        if [ -z "''${MICHIRU_PROFILE_CONFIG_FILE:-}" ] && [ -r ${config.sops.templates."asako-hk.json".path} ]; then
+          export MICHIRU_PROFILE_CONFIG_FILE=${config.sops.templates."asako-hk.json".path}
+        fi
         if [ "$out" = /nas/storage/inbox ] && [ ! -d "$out" ]; then
           echo "NAS inbox is unavailable: $out" >&2
           exit 1
         fi
-        python3 ${./android-profiles.py} "$uuid_file" "$out" "$auth_keys_file"
+        python3 ${../makina/android-profiles.py} "$uuid_file" "$out" "$auth_keys_file"
       '';
     })
   ];
@@ -114,6 +122,19 @@ in
       makinaXrayClientId = { owner = "root"; group = "sinkerine"; mode = "0440"; };
       makinaAmaneHeadscaleAuthKey = { owner = "root"; group = "sinkerine"; mode = "0440"; };
       makinaSachiHeadscaleAuthKey = { owner = "root"; group = "sinkerine"; mode = "0440"; };
+      asakoHKProfile = {
+        sopsFile = ../michiru/relay-secrets.yaml;
+        key = "asakoHKProfile";
+        owner = "root";
+        group = "sinkerine";
+        mode = "0440";
+      };
+    };
+    templates."asako-hk.json" = {
+      owner = "root";
+      group = "sinkerine";
+      mode = "0440";
+      content = config.sops.placeholder.asakoHKProfile;
     };
     templates."sing-box-proxy.json" = {
       owner = "root";
@@ -163,6 +184,7 @@ in
     };
     extraConfig = ''
       AllowUsers *@100.64.*.*
+      AllowUsers *@fd7a:115c:a1e0::/48
       AllowUsers *@192.168.88.*
     '';
   };
@@ -182,10 +204,15 @@ in
     hostName = hostname;
     domain = "mado.moe";
     # sing-box's TUN TCP stack accepts connections on its virtual interface.
-    firewall.trustedInterfaces = [ "singtun0" ];
+    firewall.trustedInterfaces = [ "singtun0" "singtun-hk0" ];
     networkmanager = {
-      AllowUsers *@fd7a:115c:a1e0::/48
       enable = true;
+      # Defaults for new and unmanaged profiles. Existing saved Wi-Fi profiles
+      # retain their own IPv6 method and may need a one-time profile update.
+      settings.connection = {
+        "ipv6.method" = "auto";
+        "ipv6.may-fail" = true;
+      };
     };
   };
 
@@ -207,12 +234,6 @@ in
   };
   systemd.services.kmonad-laptop.serviceConfig = {
     Restart = "always";
-      # Defaults for new and unmanaged profiles. Existing saved Wi-Fi profiles
-      # retain their own IPv6 method and may need a one-time profile update.
-      settings.connection = {
-        "ipv6.method" = "auto";
-        "ipv6.may-fail" = true;
-      };
     RestartSec = "5";
   };
 
@@ -264,7 +285,12 @@ in
   my.services.gateway = {
     enable = true;
     enableDocker = true;
+    enableIPv6 = true;
+    # Roaming interfaces are not trusted LANs. Tailscale and loopback remain
+    # explicitly allowed by the gateway base policy.
+    ipv6Interface = null;
     internalDomain = "${hostname}.m.mado.moe";
+    lanOnlyIpRanges = [ config.my.ip.ranges.local config.my.ip.ranges.tailscale ];
   };
   my.services.smartd.enable = true;
   my.services.metrics = {
@@ -272,8 +298,3 @@ in
     enableScrapeSmartctl = true;
   };
 }
-    enableIPv6 = true;
-    # Roaming interfaces are not trusted LANs. Tailscale and loopback remain
-    # explicitly allowed by the gateway base policy.
-    ipv6Interface = null;
-    lanOnlyIpRanges = [ config.my.ip.ranges.local config.my.ip.ranges.tailscale ];

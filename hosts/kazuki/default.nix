@@ -42,13 +42,12 @@ let
       # Pin the hottest experts; Strata clamps this budget to available RAM minus 4 GiB.
       "--resident-budget-gib" "30"
       "--kv-resident" "32768"
-      # Leave 1.8 GiB free after load to grow the GPU expert cache.
+      "--vram-reserve-mib" "1800"
       "--vision"
       "--control-vector-scaled" "${strataRefusalVector}:1.0"
       "--control-vector-layer-range" "4" "44"
       "--cvec-mode" "project"
       "--cvec-dir" "per-layer"
-      "--vram-reserve-mib" "1800"
     ];
     cwd = "${pkgs.strata}/share/strata";
     tokenizer = "${strataPack}/tokenizer";
@@ -77,6 +76,7 @@ in
     ../common/boot-loader.nix
     ../common/users.nix
     ../common/trusted.nix
+    ../modules/services/networking/regional-proxy
   ];
 
   environment.systemPackages = with pkgs; [
@@ -114,7 +114,7 @@ in
           {
             type = "vless";
             tag = "amane";
-            server = "direct.15cm.net";
+            server = "167.148.6.201";
             server_port = config.my.ports.xray.listen;
             uuid = config.sops.placeholder.amaneXrayClientId;
             flow = "xtls-rprx-vision";
@@ -347,19 +347,19 @@ in
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     environment.LD_LIBRARY_PATH = lib.makeLibraryPath [
+      "/run/opengl-driver"
       pkgs.gcc.cc.lib
       pkgs.zlib
-      "/run/opengl-driver"
       pkgs.cudaPackages_13_0.cudatoolkit
     ];
-    serviceConfig = {
-      User = "sinkerine";
     preStart = ''
       if [ ! -f "${strataPack}/native_experts.txt" ] || [ ! -f "${strataPack}/tokenizer/vocab.json" ]; then
         mkdir -p "${strataPack}"
         ${pkgs.strata}/bin/strata-iq-pack --gguf "${strataModelFirst}" --out "${strataPack}"
       fi
     '';
+    serviceConfig = {
+      User = "sinkerine";
       Group = "users";
       WorkingDirectory = "${pkgs.strata}/share/strata";
       ExecStart = "${pkgs.strata}/bin/strata-server --engine strata --config ${strataConfig} --port 8081";
@@ -367,9 +367,9 @@ in
       LogsDirectoryMode = "0750";
       Restart = "on-failure";
       RestartSec = 5;
+      TimeoutStartSec = "infinity";
       SupplementaryGroups = [ "video" "render" ];
       LimitMEMLOCK = "infinity";
-      TimeoutStartSec = "infinity";
     };
   };
   services.traefik.dynamicConfigOptions.http = mkIf strataEnabled {

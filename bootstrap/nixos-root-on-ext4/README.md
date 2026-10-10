@@ -1,4 +1,5 @@
 ## Steps
+> Michiru installation uses its dedicated [reproducible bootstrap procedure](../michiru/README.md); this generic workflow does not apply to that host.
 For installation on VPS, use the image built by [nixos-minimal-vps.nix](../nixos-iso/nixos-minimal-vps.nix) to make sure virtio kernel modules are loaded.
 
 ### 1

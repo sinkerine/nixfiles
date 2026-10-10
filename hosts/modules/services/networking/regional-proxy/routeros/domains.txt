@@ -1,0 +1,2 @@
+# RouterOS HK domain allowlist. Empty by default.
+# One domain per line; includes its subdomains. No IPs, CIDRs or wildcards.
