@@ -58,6 +58,16 @@ with lib; let
   defaultCodexModelName = "luna";
   defaultCodexModel = "gpt-6-${defaultCodexModelName}";
   notificationsEnabled = false;
+  magpieProvider = {
+    name = "Magpie";
+    base_url = "https://magpie-api.sachi.m.mado.moe/v1";
+    wire_api = "responses";
+    requires_openai_auth = true;
+  };
+  magpieProfileSettings = {
+    model_provider = "magpie";
+    model_providers.magpie = magpieProvider;
+  };
   reasoningEfforts = [
     "medium"
     "high"
@@ -69,16 +79,6 @@ with lib; let
         map (effort:
           nameValuePair "${modelName}-${effort}" ({
             inherit model;
-  magpieProvider = {
-    name = "Magpie";
-    base_url = "https://magpie-api.sachi.m.mado.moe/v1";
-    wire_api = "responses";
-    requires_openai_auth = true;
-  };
-  magpieProfileSettings = {
-    model_provider = "magpie";
-    model_providers.magpie = magpieProvider;
-  };
             model_reasoning_effort = effort;
             plan_mode_reasoning_effort = effort;
           } // magpieProfileSettings))
@@ -115,9 +115,9 @@ with lib; let
   };
   strataProfiles = builtins.listToAttrs (map (effort:
     nameValuePair "strata-${effort}" {
-      model = "rvn-qwen3.8-flash-next-uncensored-iq3_s";
+      model = "Qwen3.8-Flash-Next-abliterated-GSQ-RCO-IQ2_XS";
       model_provider = "strata";
-      model_context_window = 32768;
+      model_context_window = 131072;
       show_raw_agent_reasoning = true;
       model_reasoning_effort = effort;
       plan_mode_reasoning_effort = effort;

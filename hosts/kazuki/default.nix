@@ -17,14 +17,19 @@ let
   gateway = "192.168.88.1";
   strataEnabled = false;
   strataData = "/home/sinkerine/Strata-data";
-  strataModel = "/home/sinkerine/.cache/Strata-data/models/RVN-IQ3_S/RVN-Qwen3.8-Flash-Next-IQ3_S-merged.gguf";
-  strataPack = "${strataData}/packs/rvn_iq3_s";
-  strataConfig = pkgs.writeText "strata-rvn-iq3_s.json" (builtins.toJSON {
+  strataModelName = "Qwen3.8-Flash-Next-abliterated-GSQ-RCO-IQ2_XS";
+  strataModelDir = "/home/sinkerine/.cache/Strata-data/models/Qwen3.8-Flash-Next/IQ2_XS";
+  strataPack = "${strataData}/packs/qwen3.8_iq2_xs";
+  strataModelFirst = "${strataModelDir}/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf";
+  strataModelSecond = "${strataModelDir}/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf";
+  strataRefusalVector = "${strataModelDir}/Huihui-Qwen3.8-Flash-Next-refusal-direction-r.gguf";
+  strataVisionProjector = "${strataModelDir}/mmproj-Qwen3.8-Flash-Next-BF16.gguf";
+  strataConfig = pkgs.writeText "strata-qwen3.8-iq2-xs.json" (builtins.toJSON {
     exe = "${pkgs.strata}/bin/strata";
     args = [
-      "--pack" strataPack
-      "--native" strataModel
-      "--ple-gguf" strataModel
+      "--pack" "${strataPack}"
+      "--native" "${strataModelFirst}"
+      "--ple-gguf" "${strataModelSecond}"
       "--expert-profile" "${pkgs.strata}/share/strata/data/expert-profile.bin"
       "--expert-cache" "auto"
       "--prefill" "auto"
@@ -34,15 +39,27 @@ let
       "--max-context" "131072"
       "--kv" "int8"
       "--mmap-experts"
-      # Use available RAM for pinned experts; Strata subtracts system headroom itself.
+      # Pin the hottest experts; Strata clamps this budget to available RAM minus 4 GiB.
       "--resident-budget-gib" "30"
       "--kv-resident" "32768"
       # Leave 1.8 GiB free after load to grow the GPU expert cache.
+      "--vision"
+      "--control-vector-scaled" "${strataRefusalVector}:1.0"
+      "--control-vector-layer-range" "4" "44"
+      "--cvec-mode" "project"
+      "--cvec-dir" "per-layer"
       "--vram-reserve-mib" "1800"
     ];
     cwd = "${pkgs.strata}/share/strata";
     tokenizer = "${strataPack}/tokenizer";
-    model_name = "rvn-qwen3.8-flash-next-uncensored-iq3_s";
+    model_name = strataModelName;
+    vision = {
+      exe = "${pkgs.strata}/bin/strata-vision";
+      mmproj = "${strataVisionProjector}";
+      model = "${strataModelFirst}";
+      gpu = true;
+      max_tokens = 1024;
+    };
     api_key = "lan-only";
     log = "/var/log/strata/server.log";
     lib_dirs = [ "${pkgs.cudaPackages_13_0.cudatoolkit}/lib" ];
@@ -168,7 +185,7 @@ in
     enable = true;
     enableZed = true;
     enableZfsUnstable = true;
-    arcMaxBytes = 12 * 1024 * 1024 * 1024;
+    arcMaxBytes = 8 * 1024 * 1024 * 1024;
   };
   my.essentials.gui.enable = true;
 
@@ -323,17 +340,24 @@ in
   # Local OpenAI-compatible Strata endpoint for Hermes and other agents.
   systemd.services.strata = {
     enable = strataEnabled;
-    description = "Strata Qwen3.8 inference server";
+    description = "Strata API: Qwen3.8 Flash-Next IQ2_XS";
     wantedBy = [ "multi-user.target" ];
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     environment.LD_LIBRARY_PATH = lib.makeLibraryPath [
       pkgs.gcc.cc.lib
       pkgs.zlib
+      "/run/opengl-driver"
       pkgs.cudaPackages_13_0.cudatoolkit
     ];
     serviceConfig = {
       User = "sinkerine";
+    preStart = ''
+      if [ ! -f "${strataPack}/native_experts.txt" ] || [ ! -f "${strataPack}/tokenizer/vocab.json" ]; then
+        mkdir -p "${strataPack}"
+        ${pkgs.strata}/bin/strata-iq-pack --gguf "${strataModelFirst}" --out "${strataPack}"
+      fi
+    '';
       Group = "users";
       WorkingDirectory = "${pkgs.strata}/share/strata";
       ExecStart = "${pkgs.strata}/bin/strata-server --engine strata --config ${strataConfig} --port 8081";
@@ -343,6 +367,7 @@ in
       RestartSec = 5;
       SupplementaryGroups = [ "video" "render" ];
       LimitMEMLOCK = "infinity";
+      TimeoutStartSec = "infinity";
     };
   };
   services.traefik.dynamicConfigOptions.http = mkIf strataEnabled {

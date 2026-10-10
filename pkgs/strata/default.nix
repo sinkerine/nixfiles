@@ -58,12 +58,20 @@ stdenv.mkDerivation {
       -DSTRATA_GGML_DIR=${llamaCpp} \
       -DSTRATA_ENABLE_CUDA=ON \
       -DSTRATA_BUILD_TESTS=OFF
+    cmake -G Ninja -S tools/vision -B build-vision \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_CUDA_COMPILER=${cudaPackages_13_0.cuda_nvcc}/bin/nvcc \
+      -DCMAKE_CUDA_ARCHITECTURES=120 \
+      -DCUDAToolkit_ROOT=${cudaPackages_13_0.cudatoolkit} \
+      -DLLAMA_DIR=${llamaCpp} \
+      -DSTRATA_VISION_CUDA=ON
     runHook postConfigure
   '';
 
   buildPhase = ''
     runHook preBuild
     cmake --build build --target strata --parallel $NIX_BUILD_CORES
+    cmake --build build-vision --target strata-vision --parallel $NIX_BUILD_CORES
     runHook postBuild
   '';
 
@@ -71,9 +79,12 @@ stdenv.mkDerivation {
     runHook preInstall
     mkdir -p "$out/bin" "$out/share/strata"
     install -Dm755 build/strata "$out/bin/strata"
+    install -Dm755 build-vision/bin/strata-vision "$out/bin/strata-vision"
     cp -R serve tools data "$out/share/strata/"
     makeWrapper ${python}/bin/python "$out/bin/strata-server" \
       --add-flags "$out/share/strata/serve/server.py"
+    makeWrapper ${python}/bin/python "$out/bin/strata-iq-pack" \
+      --add-flags "$out/share/strata/tools/iq_pack.py"
     runHook postInstall
   '';
 
