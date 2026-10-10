@@ -120,7 +120,6 @@ in
 
         my.programs.hyprland.enableGammastep = true;
 
-        xdg.configFile."ssh/interactive.conf".source = ../../features/conf/ssh/interactive.conf;
         qt = {
           enable = true;
           platformTheme = {
@@ -180,7 +179,6 @@ in
         my.services.gpg.enable = true;
 
         programs.zsh.shellAliases = {
-          ssh = "ssh -F ~/.config/ssh/interactive.conf";
           # Nix Home Manager
           snh = "switch-nix-home.sh";
           snho = "switch-nix-home.sh --option substitute false";
