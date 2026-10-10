@@ -2,11 +2,11 @@
   config,
   lib,
   pkgs,
+  hostname,
   ...
 }:
 with lib; let
   cfg = config.my.programs.codex;
-  caveman = pkgs.caveman;
   orcaSkills = pkgs.fetchFromGitHub {
     owner = "stablyai";
     repo = "orca";
@@ -27,28 +27,6 @@ with lib; let
       source = "${orcaSkills}/skills/${skill}";
     })
   orcaSkillNames);
-  cavemanSkillNamespace = pkgs.linkFarm "caveman-agent-skills" [
-    {
-      name = "SKILL.md";
-      path = "${caveman}/skills/caveman/SKILL.md";
-    }
-    {
-      name = "caveman-commit";
-      path = "${caveman}/skills/caveman-commit";
-    }
-    {
-      name = "caveman-help";
-      path = "${caveman}/skills/caveman-help";
-    }
-    {
-      name = "caveman-review";
-      path = "${caveman}/skills/caveman-review";
-    }
-    {
-      name = "caveman-compress";
-      path = "${caveman}/caveman-compress";
-    }
-  ];
   codexHooksPath = "${config.home.homeDirectory}/.codex/hooks.json";
   orcaCodexHookPath = "${config.home.homeDirectory}/.codex/.orca/agent-hooks/codex-hook.sh";
   orcaCodexHookEvents = [
@@ -63,7 +41,7 @@ with lib; let
   ];
   toml = pkgs.formats.toml {};
   codexModels = {
-    sol = "gpt-6-sol";
+    sol = "gpt-6.1-sol";
     luna = "gpt-6-luna";
   };
   defaultCodexModelName = "luna";
@@ -80,9 +58,19 @@ with lib; let
         map (effort:
           nameValuePair "${modelName}-${effort}" ({
             inherit model;
+  magpieProvider = {
+    name = "Magpie";
+    base_url = "https://magpie-api.sachi.m.mado.moe/v1";
+    wire_api = "responses";
+    requires_openai_auth = true;
+  };
+  magpieProfileSettings = {
+    model_provider = "magpie";
+    model_providers.magpie = magpieProvider;
+  };
             model_reasoning_effort = effort;
             plan_mode_reasoning_effort = effort;
-          }))
+          } // magpieProfileSettings))
         reasoningEfforts
     )
     codexModels));
@@ -91,21 +79,21 @@ with lib; let
         model = defaultCodexModel;
         model_reasoning_effort = effort;
         plan_mode_reasoning_effort = effort;
-      })
+      } // magpieProfileSettings)
     reasoningEfforts);
   ultraProfiles = mapAttrs' (modelName: model:
     nameValuePair "${modelName}-ultra" ({
       inherit model;
       model_reasoning_effort = "ultra";
       plan_mode_reasoning_effort = "ultra";
-    }))
+    } // magpieProfileSettings))
   codexModels;
   defaultUltraProfile = {
     "${defaultCodexModelName}-ultra" = {
       model = defaultCodexModel;
       model_reasoning_effort = "ultra";
       plan_mode_reasoning_effort = "ultra";
-    };
+    } // magpieProfileSettings;
   };
   strataProvider = {
     name = "Strata on kazuki";
@@ -139,7 +127,7 @@ in {
     enableCLIProxyAPI = mkOption {
       type = types.bool;
       default = true;
-      description = "Use CLIProxyAPI endpoint and API-key auth instead of default Codex auth.";
+      description = "Use Magpie endpoint and API-key auth instead of default Codex auth.";
     };
   };
 
@@ -192,41 +180,16 @@ in {
                     }
                   ];
                 }
-              ]
-              ++ lib.optional (event == "SessionStart") {
-                hooks = [
-                  {
-                    type = "command";
-                    command = "echo 'CAVEMAN MODE ACTIVE. Rules: Drop articles/filler/pleasantries/hedging. Fragments OK. Short synonyms. Pattern: [thing] [action] [reason]. [next step]. Not: Sure! I would be happy to help you with that. Yes: Bug in auth middleware. Fix: Code/commits/security: write normal. User says stop caveman or normal mode to deactivate.'";
-                    statusMessage = "Loading caveman mode...";
-                    timeout = 10;
-                  }
-                ];
-              });
+              ]);
           };
-        };
-        ".codex/plugins/caveman" = {
-          source = "${caveman}/plugins/caveman";
-        };
-        ".agents/skills/caveman" = {
-          source = cavemanSkillNamespace;
-        };
-        ".agents/skills/manage-docker-services" = {
-          source = ./codex-skills/manage-docker-services;
-        };
-        ".agents/skills/nix-deploy-rs" = {
-          source = ./codex-skills/nix-deploy-rs;
         };
         ".agents/skills/orca-skill-discovery" = {
           source = ./codex-skills/orca-skill-discovery;
         };
-        ".agents/skills/gui-sandbox" = {
-          source = ./codex-skills/gui-sandbox;
-        };
       }
       // optionalAttrs cfg.enableCLIProxyAPI {
         ".codex/auth.json".text = builtins.toJSON {
-          OPENAI_API_KEY = "sk-dummy";
+          OPENAI_API_KEY = "magpie";
         };
       };
 
@@ -288,14 +251,9 @@ in {
           notify = [(lib.getExe pkgs.codex-notify)];
         }
         // optionalAttrs cfg.enableCLIProxyAPI {
-          model_provider = "cliproxyapi";
-          model_providers = {
-            cliproxyapi = {
-              name = "cliproxyapi";
-              base_url = "https://cpa.sachi.m.mado.moe/v1";
-              wire_api = "responses";
-            };
-          };
+          model = "gpt-6-luna";
+          model_provider = "magpie";
+          model_providers.magpie = magpieProvider;
         };
     };
 

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Manage Docker Services"
-  short_description: "Add, update, and remove host Compose services"
-  default_prompt: "Use $manage-docker-services to add or remove a Docker Compose service on sachi or amane."

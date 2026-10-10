@@ -1,4 +1,0 @@
-interface:
-  display_name: "GPU GUI Sandbox"
-  short_description: "Run isolated NVIDIA-backed GUI tests safely"
-  default_prompt: "Use $gui-sandbox to run a headless GPU-backed GUI test with CUA and collect safe artifacts."
