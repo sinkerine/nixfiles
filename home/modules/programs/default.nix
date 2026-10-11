@@ -13,7 +13,6 @@
     ./fontconfig
     ./zsh
     ./zsh/zimfw.nix
-    ./git
     ./gh.nix
     ./python-dev-tools
     ./yazi

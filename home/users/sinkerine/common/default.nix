@@ -15,6 +15,14 @@
 
   imports = [ ../../../common/baseline.nix ];
 
+  programs.git = {
+    enable = true;
+    settings = {
+      user.name = "sinkerine";
+      user.email = "git@sinkerine.net";
+    };
+  };
+
   my.services.orca = {
     enable = builtins.elem hostname [
       "kazuki"

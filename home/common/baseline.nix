@@ -21,7 +21,6 @@ with lib;
   ]);
 
   my.services.nix-home-manager-gc.enable = true;
-  my.programs.git.enable = true;
   my.programs.zsh.enable = true;
   my.programs.tmux.enable = true;
   my.programs.fontconfig.enable = true;
