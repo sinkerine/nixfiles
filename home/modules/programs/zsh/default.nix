@@ -33,9 +33,8 @@ in {
         enable = true;
         modules = [
           "mollifier/cd-gitroot --fpath . --source cd-gitroot.plugin.zsh"
-          "ohmyzsh/ohmyzsh --root plugins/git"
           "jeffreytse/zsh-vi-mode"
-          "15cm/zce.zsh --source zce.plugin.zsh"
+          "https://github.com/sinkerine/zce.zsh.git --source zce.plugin.zsh"
           "zsh-users/zsh-autosuggestions"
           "zsh-users/zsh-syntax-highlighting"
         ] ++ optionals (nixinfo.configName != "work@desktop")

@@ -43,7 +43,19 @@ in
     home.activation.zimfwInit = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       export ZIM_HOME=${escapeShellArg (toString cfg.zimHome)}
       export ZIM_CONFIG_FILE=${escapeShellArg (toString cfg.zimConfigFile)}
-      ${pkgs.zsh}/bin/zsh -c "source ${cfg.package}/zimfw.zsh init -q"
+      # Zim checks .zdegit before reinstalling, so repair the old GitHub
+      # owner metadata first. The module contents are unchanged by this rename.
+      zce_zdegit="$ZIM_HOME/modules/zce.zsh/.zdegit"
+      if [[ -f "$zce_zdegit" ]] && [[ "$(head -n 1 "$zce_zdegit")" == "https://github.com/15cm/zce.zsh.git" ]]; then
+        ${pkgs.gnused}/bin/sed -i '1s#^https://github.com/15cm/zce.zsh.git$#https://github.com/sinkerine/zce.zsh.git#' "$zce_zdegit"
+      fi
+      if ! ${pkgs.zsh}/bin/zsh -c "source ${cfg.package}/zimfw.zsh init -q"; then
+        # Reinstall modules whose recorded origin changed, such as after a
+        # repository owner rename. Zim's quiet reinstall repairs stale
+        # .zdegit metadata without requiring an interactive shell command.
+        ${pkgs.zsh}/bin/zsh -c "source ${cfg.package}/zimfw.zsh reinstall -q"
+        ${pkgs.zsh}/bin/zsh -c "source ${cfg.package}/zimfw.zsh init -q"
+      fi
     '';
     programs.zsh.initContent = mkOrder 550 ''
       export ZIM_HOME=${cfg.zimHome};
