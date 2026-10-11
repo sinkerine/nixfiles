@@ -7,7 +7,7 @@
 with lib;
 let
   cfg = config.my.programs.claude-code;
-  ccstatusline = pkgs.ccstatusline;
+  claude-statusbar = pkgs.claude-statusbar;
   claude-notify = pkgs.claude-notify;
   notificationsEnabled = false;
 in
@@ -17,6 +17,8 @@ in
   };
 
   config = mkIf cfg.enable {
+    home.packages = [ claude-statusbar ];
+
     programs.claude-code = {
       enable = true;
       settings = {
@@ -25,7 +27,8 @@ in
         skipDangerousModePermissionPrompt = true;
         statusLine = {
           type = "command";
-          command = "${lib.getExe ccstatusline}";
+          command = "${lib.getExe claude-statusbar} render";
+          refreshInterval = 1;
         };
       };
     };
