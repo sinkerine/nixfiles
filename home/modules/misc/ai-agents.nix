@@ -12,12 +12,6 @@ in {
   };
 
   config = mkIf cfg.enable {
-    programs.zsh.shellAliases = {
-      jc = "nix develop /nixfiles --command jailed-claude-code";
-      jx = "nix develop /nixfiles --command jailed-codex";
-      jailedcodex-tmux = "nix develop /nixfiles#tmux --command jailed-codex";
-    };
-
     my.programs.codex.enable = true;
     home.packages = [ pkgs.codex-auth ];
     my.programs.claude-code.enable = true;
