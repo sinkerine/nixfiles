@@ -3,8 +3,7 @@
 with lib;
 let
   cfg = config.my.programs.pi-coding-agent;
-  # Orca's orchestration discovery stub is longer than the Agent Skills
-  # specification's limit. Keep Pi able to load the complete stub.
+  # Orca's orchestration discovery stub is longer than Pi's default limit.
   piCodingAgent = pkgs.pi-coding-agent.overrideAttrs (old: {
     postInstall = (old.postInstall or "") + ''
       cd $out/lib/node_modules/pi-monorepo
@@ -16,7 +15,16 @@ let
     '';
   });
   piAstGrep = pkgs.pi-ast-grep;
+  piCollapseTools = pkgs.pi-collapse-tools;
+  piSubagents = pkgs.pi-subagents;
   piVim = pkgs.pi-vim;
+  # This dependency-free extension defaults to summary mode.
+  piThinkingSteps = pkgs.fetchFromGitHub {
+    owner = "crustyhacker";
+    repo = "pi-thinking-steps";
+    rev = "2209e03ad13e1eda2c66f5fd7a13932b584c4764"; # v1.0.17
+    hash = "sha256-0M9qtHl5QqKMQYM5lfzma1aWW1gwMkB81AdihOk9xLY=";
+  };
   piWebAccess = pkgs.pi-web-access;
   piWebAccessConfig = builtins.toJSON {
     provider = "openai";
@@ -46,32 +54,6 @@ let
       exec pi --provider magpie --model gpt-6-astra "$@"
     '';
   };
-  piSubagents = pkgs.buildNpmPackage rec {
-    pname = "pi-subagents";
-    version = "0.76.1";
-
-    src = pkgs.fetchFromGitHub {
-      owner = "nicobailon";
-      repo = "pi-subagents";
-      rev = "v${version}";
-      hash = "sha256-D+JOBUu/RsYMcG+Cj5my9LYXmzzq9bEP0fCbZEEKGLI=";
-    };
-
-    npmDepsHash = "sha256-zPo0Z3IjaSEA74YptOUComiwvQxSMhPw7N6SwtGkveE=";
-    npmFlags = [ "--omit=dev" ];
-    dontNpmBuild = true;
-    postInstall = ''
-      # Pi provides typebox; declaring it as a peer avoids a second runtime copy.
-      ${pkgs.python3}/bin/python - "$out/lib/node_modules/pi-subagents/package.json" <<'PY'
-      import json, pathlib, sys
-      path = pathlib.Path(sys.argv[1])
-      package = json.loads(path.read_text())
-      package.setdefault("peerDependencies", {})["typebox"] = "*"
-      package.get("dependencies", {}).pop("typebox", None)
-      path.write_text(json.dumps(package, indent=2) + "\n")
-      PY
-    '';
-  };
 in
 {
   options.my.programs.pi-coding-agent = {
@@ -86,9 +68,45 @@ in
         defaultProvider = "magpie";
         defaultModel = "gpt-pi";
         defaultProjectTrust = "always";
+        defaultTools = [ "+codemode" ];
+        subagents = {
+          defaultProvider = "magpie";
+          agentOverrides = {
+            scout = {
+              model = "gpt-6-luna";
+              thinking = "low";
+            };
+            researcher = {
+              model = "gpt-6-luna";
+              thinking = "medium";
+            };
+            worker = {
+              model = "gpt-6.1-sol";
+              thinking = "medium";
+            };
+            reviewer = {
+              model = "gpt-6.1-sol";
+              thinking = "high";
+            };
+            oracle = {
+              model = "gpt-6-astra";
+              thinking = "high";
+            };
+            "evidence-auditor" = {
+              model = "gpt-6.1-sol";
+              thinking = "high";
+            };
+            delegate = {
+              model = "gpt-6-luna";
+              thinking = "medium";
+            };
+          };
+        };
         packages = [
           "${piAstGrep}/lib/node_modules/pi-ast-grep"
+          "${piCollapseTools}/lib/node_modules/pi-collapse-tools"
           "${piSubagents}/lib/node_modules/pi-subagents"
+          "${piThinkingSteps}"
           "${piWebAccess}/lib/node_modules/pi-web-access"
         ];
       };
@@ -138,6 +156,10 @@ in
 
     home.file.".pi/agent/extensions/pi-vim" = {
       source = "${piVim}/lib/node_modules/pi-vim";
+      force = true;
+    };
+    home.file.".pi/agent/skills/e2e-feature/SKILL.md" = {
+      source = ./pi-coding-agent-skills/e2e-feature/SKILL.md;
       force = true;
     };
     xdg.configFile."pi/web-search.json".text = piWebAccessConfig;
