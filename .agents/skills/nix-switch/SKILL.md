@@ -25,6 +25,18 @@ sudo nixos-rebuild switch --flake path:/nixfiles#kazuki
 
 Prefer `/home/sinkerine/local/bin/switch-nix-home.sh` after changing Home Manager files under `home/` or user configuration. Prefer `/home/sinkerine/local/bin/switch-nix-os.sh` after changing NixOS files under `hosts/`, system modules, or other system-level flake inputs. If a change affects both layers, run the relevant switches separately, usually Home Manager first and NixOS second when the system switch provides a dependency required by Home Manager.
 
+## Passwordless NixOS switching on `kazuki`
+
+The `kazuki` configuration already grants `sinkerine` a `NOPASSWD` sudo rule for this exact command:
+
+```bash
+sudo -n /run/current-system/sw/bin/nixos-rebuild switch --flake /nixfiles#kazuki
+```
+
+Use `/home/sinkerine/local/bin/switch-nix-os.sh` for the normal switch; it expands to the same flake target and uses the configured rule. Use the direct command above when an explicit passwordless invocation is needed. The `-n` flag prevents a password prompt and makes sudo fail immediately if the rule is unavailable. This authorization is scoped to the `kazuki` system target; do not generalize it to arbitrary flakes or rebuild commands.
+
+Home Manager switching does not require sudo and is already passwordless through `/home/sinkerine/local/bin/switch-nix-home.sh`.
+
 ## Before switching
 
 1. Confirm the working directory is `/nixfiles`.

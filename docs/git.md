@@ -5,14 +5,14 @@ This repo uses Git directly for local history, branching, and GitHub pushes.
 ## Clone
 
 ```bash
-git clone git@github.com:15cm/nixfiles.git /nixfiles
+git clone git@github.com:sinkerine/nixfiles.git /nixfiles
 cd /nixfiles
 ```
 
 For fresh machines that do not have Git yet, install Nix first and then run:
 
 ```bash
-nix shell nixpkgs#git -c git clone git@github.com:15cm/nixfiles.git /nixfiles
+nix shell nixpkgs#git -c git clone git@github.com:sinkerine/nixfiles.git /nixfiles
 ```
 
 ## Standard Daily Flow
