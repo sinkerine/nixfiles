@@ -6,7 +6,7 @@
 zmodule mollifier/cd-gitroot --fpath . --source cd-gitroot.plugin.zsh
 zmodule ohmyzsh/ohmyzsh --root plugins/git
 zmodule jeffreytse/zsh-vi-mode
-zmodule 15cm/zce.zsh --source zce.plugin.zsh
+zmodule https://github.com/sinkerine/zce.zsh.git --source zce.plugin.zsh
 zmodule zsh-users/zsh-autosuggestions
 zmodule zsh-users/zsh-syntax-highlighting
 zmodule ohmyzsh/ohmyzsh --root plugins/ssh-agent
