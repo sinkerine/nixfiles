@@ -15,7 +15,7 @@ Note: The Nix uid/gid avoid collisions with existing user (e.g. in /etc/passwd.c
 
 ## 2 Clone Repo
 ```bash
-nix shell nixpkgs#git -c git clone git@github.com:15cm/nixfiles.git /nixfiles
+nix shell nixpkgs#git -c git clone git@github.com:sinkerine/nixfiles.git /nixfiles
 sudo chown -R ${USER} /nixfiles
 cd /nixfiles
 ```

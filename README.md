@@ -17,7 +17,7 @@ This repo uses Git for local history, branching, and GitHub pushes.
 Clone the repo with:
 
 ```bash
-git clone git@github.com:15cm/nixfiles.git /nixfiles
+git clone git@github.com:sinkerine/nixfiles.git /nixfiles
 cd /nixfiles
 ```
 

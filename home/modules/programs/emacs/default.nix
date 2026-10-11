@@ -54,10 +54,10 @@ in {
       # Change the remote url after git clone to avoid dependency on `ssh` when cloning.
       home.activation.gitCloneEmacsConfig = let
         changeRemoteCmd = optionalString cfg.enableSSHConfigRepo
-          "${pkgs.git}/bin/git remote set-url origin git@github.com:15cm/doomemacs-config.git";
+          "${pkgs.git}/bin/git remote set-url origin git@github.com:sinkerine/doomemacs-config.git";
       in hm.dag.entryAfter [ "writeBoundary" ] ''
         if ! [ -d $HOME/.doom.d ]; then
-            ${pkgs.git}/bin/git clone https://github.com/15cm/doomemacs-config.git $HOME/.doom.d
+            ${pkgs.git}/bin/git clone https://github.com/sinkerine/doomemacs-config.git $HOME/.doom.d
             cd $HOME/.doom.d
             ${changeRemoteCmd}
         fi
