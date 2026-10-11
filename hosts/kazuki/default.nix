@@ -372,13 +372,13 @@ in
       LimitMEMLOCK = "infinity";
     };
   };
-  services.traefik.dynamicConfigOptions.http = mkIf strataEnabled {
-    routers.strata = {
+  services.traefik.dynamicConfigOptions.http.routers.strata = mkIf strataEnabled {
       rule = "Host(`${hostname}.m.mado.moe`)";
       middlewares = [ "lan-only@file" ];
       service = "strata";
-    };
-    services.strata.loadBalancer.servers = [
+  };
+  services.traefik.dynamicConfigOptions.http.services.strata = mkIf strataEnabled {
+    loadBalancer.servers = [
       { url = "http://127.0.0.1:8081"; }
     ];
   };
