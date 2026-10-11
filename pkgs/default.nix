@@ -4,6 +4,7 @@ with pkgs; {
   notify-lib = callPackage ./notify-lib { };
   ergodox-layout = callPackage ./ergodox-layout { };
   ccstatusline = callPackage ./ccstatusline { };
+  claude-statusbar = callPackage ./claude-statusbar { };
   clipper = callPackage ./clipper { };
   claude-notify = callPackage ./claude-notify { };
   codex-trusted = callPackage ./codex-trusted { };
@@ -22,6 +23,8 @@ with pkgs; {
   xurl = (callPackage ./xurl { });
   strata = callPackage ./strata { };
   pi-ast-grep = callPackage ./pi-ast-grep { };
+  pi-collapse-tools = callPackage ./pi-collapse-tools { };
   pi-vim = callPackage ./pi-vim { };
   pi-web-access = callPackage ./pi-web-access { };
+  pi-subagents = callPackage ./pi-subagents { };
 }
