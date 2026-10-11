@@ -1,11 +1,7 @@
-{
-  pkgs,
-  jailed-agents,
-  system,
-}:
+{ pkgs }:
 
 import ./default.nix {
-  inherit pkgs jailed-agents system;
+  inherit pkgs;
   extraPkgs = with pkgs; [
     tmux
     fzf

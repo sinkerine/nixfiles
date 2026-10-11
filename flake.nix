@@ -61,9 +61,6 @@
     llm-agents = {
       url = "github:numtide/llm-agents.nix";
     };
-    jailed-agents = {
-      url = "github:andersonjoseph/jailed-agents";
-    };
     cua = {
       url = "github:trycua/cua";
     };
@@ -93,7 +90,6 @@
       noctalia,
       nixvim,
       llm-agents,
-      jailed-agents,
       cua,
       fcitx5-vinput,
       proxmox-nixos,
@@ -383,18 +379,15 @@
       devShells = forAllSystems (system: {
         default = import ./shell/default.nix {
           pkgs = builtins.getAttr system packages;
-          inherit jailed-agents system;
         };
         tmux = import ./shell/tmux-dev.nix {
           pkgs = builtins.getAttr system packages;
-          inherit jailed-agents system;
         };
         python = import ./shell/python-dev.nix {
           pkgs = builtins.getAttr system packages;
         };
         web = import ./shell/web-dev.nix {
           pkgs = builtins.getAttr system packages;
-          inherit jailed-agents system;
         };
       });
     };
