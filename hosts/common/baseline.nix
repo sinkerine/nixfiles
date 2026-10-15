@@ -34,6 +34,7 @@ with lib;
     jq
     lm_sensors
     git
+    git-lfs
   ];
 
   nix = {
