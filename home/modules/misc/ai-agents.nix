@@ -13,6 +13,7 @@ in {
 
   config = mkIf cfg.enable {
     my.programs.codex.enable = true;
+    my.programs.pi-coding-agent.enable = true;
     home.packages = [ pkgs.codex-auth ];
     my.programs.claude-code.enable = true;
     my.programs.ai-agent-common.enable = true;
