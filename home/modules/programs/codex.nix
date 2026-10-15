@@ -129,6 +129,14 @@ with lib; let
       source = toml.generate "${profileName}.config.toml" profileSettings;
     })
   codexProfiles;
+  # Orca runs Codex with its own CODEX_HOME; give it the same profiles directly.
+  orcaCodexHome = ".config/orca/codex-runtime-home/home";
+  orcaCodexProfileFiles = mapAttrs' (profileName: profileSettings:
+    nameValuePair "${orcaCodexHome}/${profileName}.config.toml" {
+      source = toml.generate "${profileName}.config.toml" profileSettings;
+      force = true;
+    })
+  codexProfiles;
   codexProfileAliases = mapAttrs' (profileName: _:
     nameValuePair "cx-${profileName}" "codex-trusted --profile ${profileName}")
   codexProfiles;
@@ -150,6 +158,7 @@ in {
 
     home.file =
       codexProfileFiles
+      // optionalAttrs config.my.services.orca.enable orcaCodexProfileFiles
       // orcaSkillFiles
       // {
         ".codex/.orca/agent-hooks/codex-hook.sh" = {

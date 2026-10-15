@@ -14,6 +14,8 @@ let
       export PI_CODING_AGENT_PACKAGE_ROOT="${placeholder "out"}/lib/node_modules/pi-monorepo"
     '';
   });
+  piAskUser = pkgs.pi-ask-user;
+  piFooter = pkgs.pi-footer;
   piAstGrep = pkgs.pi-ast-grep;
   piCollapseTools = pkgs.pi-collapse-tools;
   piSubagents = pkgs.pi-subagents;
@@ -54,6 +56,28 @@ let
       exec pi --provider magpie --model gpt-6-astra "$@"
     '';
   };
+  piSolFast = pkgs.writeShellApplication {
+    name = "pi-sol-fast";
+    runtimeInputs = [ piCodingAgent ];
+    text = ''
+      exec pi --provider magpie --model group/sol-fast "$@"
+    '';
+  };
+  piLunaFast = pkgs.writeShellApplication {
+    name = "pi-luna-fast";
+    runtimeInputs = [ piCodingAgent ];
+    text = ''
+      exec pi --provider magpie --model group/luna-fast "$@"
+    '';
+  };
+  # pi-subagents' claude-code adapter owns its argv, so the reviewer's model
+  # and effort are pinned in the command it launches.
+  claudeReviewer = pkgs.writeShellApplication {
+    name = "claude-reviewer";
+    text = ''
+      exec claude --model claude-opus-5-5 --effort medium "$@"
+    '';
+  };
 in
 {
   options.my.programs.pi-coding-agent = {
@@ -66,9 +90,14 @@ in
       package = piCodingAgent;
       settings = {
         defaultProvider = "magpie";
-        defaultModel = "gpt-pi";
+        defaultModel = "gpt";
+        defaultThinkingLevel = "medium";
         defaultProjectTrust = "always";
-        defaultTools = [ "+codemode" ];
+        defaultTools = [
+          "+codemode"
+          "+grep"
+          "+find"
+        ];
         subagents = {
           defaultProvider = "magpie";
           agentOverrides = {
@@ -97,12 +126,14 @@ in
               thinking = "high";
             };
             delegate = {
-              model = "gpt-6-luna";
+              model = "gpt-6.1-sol";
               thinking = "medium";
             };
           };
         };
         packages = [
+          "${piAskUser}/lib/node_modules/pi-ask-user"
+          "${piFooter}/lib/node_modules/@smoose/pi-footer"
           "${piAstGrep}/lib/node_modules/pi-ast-grep"
           "${piCollapseTools}/lib/node_modules/pi-collapse-tools"
           "${piSubagents}/lib/node_modules/pi-subagents"
@@ -117,8 +148,8 @@ in
         apiKey = "magpie";
         models = [
           {
-            id = "gpt-pi";
-            name = "GPT-Pi";
+            id = "group/gpt";
+            name = "GPT";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1050000;
@@ -148,6 +179,20 @@ in
             contextWindow = 1050000;
             maxTokens = 128000;
           }
+          {
+            id = "group/luna-fast";
+            name = "Luna Fast";
+            reasoning = true;
+            input = [ "text" "image" ];
+            contextWindow = 1050000;
+          }
+          {
+            id = "group/sol-fast";
+            name = "Sol Fast";
+            reasoning = true;
+            input = [ "text" "image" ];
+            contextWindow = 1050000;
+          }
         ];
       };
     };
@@ -158,11 +203,26 @@ in
       source = "${piVim}/lib/node_modules/pi-vim";
       force = true;
     };
+    home.file.".pi/agent/extensions/e2e-feature-model.ts" = {
+      source = ./pi-coding-agent-extensions/e2e-feature-model.ts;
+      force = true;
+    };
     home.file.".pi/agent/skills/e2e-feature/SKILL.md" = {
       source = ./pi-coding-agent-skills/e2e-feature/SKILL.md;
       force = true;
     };
+    # Runs through pi-subagents' claude-code adapter, which needs the claude CLI.
+    home.file.".pi/agent/agents/claude-reviewer.md" = mkIf config.my.programs.claude-code.enable {
+      source = ./pi-coding-agent-agents/claude-reviewer.md;
+      force = true;
+    };
     xdg.configFile."pi/web-search.json".text = piWebAccessConfig;
+    xdg.configFile."pi/settings.json".text = builtins.toJSON {
+      footer = {
+        preset = "ascii";
+        separator = "ascii";
+      };
+    };
     home.file.".pi/agent/keybindings.json".text = builtins.toJSON {
       "app.interrupt" = "ctrl+g";
       "app.editor.external" = [ ];
@@ -173,6 +233,8 @@ in
       piLuna
       piSol
       piAstra
-    ];
+      piSolFast
+      piLunaFast
+    ] ++ optional config.my.programs.claude-code.enable claudeReviewer;
   };
 }

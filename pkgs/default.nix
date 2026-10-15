@@ -22,6 +22,8 @@ with pkgs; {
   orca-ide = callPackage ./orca-ide.nix { };
   xurl = (callPackage ./xurl { });
   strata = callPackage ./strata { };
+  pi-ask-user = callPackage ./pi-ask-user { };
+  pi-footer = callPackage ./pi-footer { };
   pi-ast-grep = callPackage ./pi-ast-grep { };
   pi-collapse-tools = callPackage ./pi-collapse-tools { };
   pi-vim = callPackage ./pi-vim { };
