@@ -56,10 +56,6 @@ let
       vmid=''${1:?missing VMID}
       config="/var/lib/lxc/$vmid/config"
       [[ -f $config ]] || exit 0
-      sandbox_rootfs=0
-      if [[ -r /etc/pve/lxc/$vmid.conf ]] && grep -Fq 'lxc.rootfs.mount = /run/gui-test-sandbox/rootfs/' "/etc/pve/lxc/$vmid.conf"; then
-        sandbox_rootfs=1
-      fi
 
       tmp=$(mktemp "$config.XXXXXX")
       trap 'rm -f -- "$tmp"' EXIT
@@ -68,10 +64,6 @@ let
         -e 's#^(lxc\.include = )[^[:space:]]+/share/lxc/config/userns\.conf$#\1${pveLxcUsernsConfig}#' \
         -e 's#^(lxc\.include = )[^[:space:]]+/share/lxc/config/(nesting\.conf|oci\.common\.conf)$#\1${pkgs.lxc}/share/lxc/config/\2#' \
         "$config" > "$tmp"
-      if ((sandbox_rootfs)); then
-        sed -i -E '/^lxc\.rootfs\.options[[:space:]]*=/d' "$tmp"
-        printf 'lxc.rootfs.options = rw\n' >> "$tmp"
-      fi
       if cmp -s "$config" "$tmp"; then
         exit 0
       fi

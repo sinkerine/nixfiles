@@ -9,9 +9,9 @@
 {
   home.stateVersion = "26.05";
 
-  my.programs.pi-coding-agent.enable = true;
-
   imports = [ ../common ];
+
+  my.programs.electron-vm.enable = true;
 
   programs.noctalia.settings.lockscreen.enabled = lib.mkForce false;
 
