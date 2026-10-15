@@ -253,8 +253,6 @@ in
     };
   };
 
-  my.services.guiTestSandbox.enable = false;
-
   # Keep agent-driven activation scoped to this host and flake target.
   security.sudo.extraRules = [
     {

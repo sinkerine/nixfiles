@@ -33,6 +33,7 @@
     ./ai-agent-common
     ./claude-code.nix
     ./pi-coding-agent.nix
+    ./electron-vm
     ./obsidian.nix
     ./ergodox.nix
   ];
