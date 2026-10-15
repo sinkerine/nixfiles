@@ -61,5 +61,10 @@ in
       aria2-fast = prev.aria2.overrideAttrs (old: {
         patches = (old.patches or [ ]) ++ [ ./aria2-fast.patch ];
       });
+      os-prober = prev.os-prober.overrideAttrs (old: {
+        postPatch = (old.postPatch or "") + ''
+          substituteInPlace common.sh --replace-fail 'if [ -z "$OS_PROBER_DISABLE_DEBUG" ]; then' 'if [ -n "$OS_PROBER_DEBUG" ]; then'
+        '';
+      });
   };
 }

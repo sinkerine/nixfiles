@@ -46,7 +46,7 @@
   pipewire,
   pnpmConfigHook,
   pnpm_10,
-  pnpm_12,
+  pnpm_11,
   pkg-config,
   python3,
   stdenv,
@@ -56,28 +56,28 @@
 
 let
   electron = electron_43;
-  pnpm = pnpm_12;
+  pnpm = pnpm_11;
   computerUsePython = python3.withPackages (ps: [ ps.pygobject3 ]);
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ide";
   # Keep this update method: append the date and timestamp through seconds
   # to the upstream version, and pin the matching commit from custom.
-  version = "1.4.198-20261010.180730";
+  version = "1.4.198-20261010.213956";
 
   # Always update from the custom branch commit; keep this method honored.
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "orca";
-    rev = "1e764930b54d5bd5648f6827b1d1bae197ace4f4";
-    hash = "sha256-O/bF3/ARGelOzUMwX0LRz8ycBAEjc+hgYwC3f1rW99g=";
+    rev = "dc67c8aee78d8cd70f9e86d6d9e5fb74970dd08a";
+    hash = "sha256-KGhblOi6/F8CFnt6GRuO73l6e/ZOh63/qDgc+9dzAN0=";
   };
 
   pnpmDeps = fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
     inherit pnpm;
     fetcherVersion = 4;
-    hash = "sha256-xRvxc39i1FRqZ6TdU0eYvaU2Xzwc+Fps/eRFhAwJGpg=";
+    hash = "sha256-bJZ1dmrlfXe7j0Sw+/n7fVusz/dtjejWk2HaU4Cngsw=";
   };
 
   nativeBuildInputs = [
