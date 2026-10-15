@@ -20,14 +20,7 @@ sudo chown -R ${USER} /nixfiles
 cd /nixfiles
 ```
 
-## 3 [Optional] If it's a work profile
-Fill in the `home.username` and `home.homeDirectory`of the config with your username in the corporation, e.g. /nixfiles/home/users/work/desktop/default.nix
-
-```
-cp /nixfiles/home/state/default.example.nix /nixfiles/home/state/default.nix
-```
-
-## 4 Initialize Home Manager
+## 3 Initialize Home Manager
 ```
 nix build --no-link path:/nixfiles#homeConfigurations.<username>@<hostname>.activationPackage
 "$(nix path-info path:/nixfiles#homeConfigurations.<username>@<hostname>.activationPackage)"/activate

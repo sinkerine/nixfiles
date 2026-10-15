@@ -37,8 +37,7 @@ in {
           "https://github.com/sinkerine/zce.zsh.git --source zce.plugin.zsh"
           "zsh-users/zsh-autosuggestions"
           "zsh-users/zsh-syntax-highlighting"
-        ] ++ optionals (nixinfo.configName != "work@desktop")
-          [ "ohmyzsh/ohmyzsh --root plugins/ssh-agent" ];
+        ] ++ [ "ohmyzsh/ohmyzsh --root plugins/ssh-agent" ];
       };
 
       history = {

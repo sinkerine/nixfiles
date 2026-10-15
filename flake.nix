@@ -71,6 +71,10 @@
     # Do not add inputs.nixpkgs.follows — proxmox-nixos pins nixpkgs-stable intentionally.
     proxmox-nixos.url = "github:SaumonNet/proxmox-nixos";
     proxmox-nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+    microvm = {
+      url = "github:microvm-nix/microvm.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -93,6 +97,7 @@
       cua,
       fcitx5-vinput,
       proxmox-nixos,
+      microvm,
       ...
     }:
     let
@@ -176,13 +181,6 @@
             hostname = "amane";
           };
         };
-        "work@desktop" = {
-          pkgs = packages."x86_64-linux";
-          modules = [ ./home/users/work/desktop/default.nix ];
-          extraSpecialArgs = {
-            hostname = "desktop";
-          };
-        };
       };
       homeConfigurations = nixpkgs.lib.pipe homeConfigurationArgs [
         (builtins.mapAttrs (
@@ -203,6 +201,7 @@
             extraSpecialArgs = (v.extraSpecialArgs or { }) // rec {
               inherit state;
               nixvimLib = nixvim.lib.nixvim;
+              microvmNixosModule = microvm.nixosModules.microvm;
               nixinfo = {
                 inherit configName;
                 projectRoot = "/nixfiles";

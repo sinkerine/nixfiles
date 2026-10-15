@@ -32,7 +32,7 @@ in {
       home.file.".local/share/fonts".source = "${config.home.path}/share/fonts";
       fonts.fontconfig.enable = true;
     })
-    (mkIf (cfg.enableGui && nixinfo.configName != "work@desktop") {
+    (mkIf cfg.enableGui {
       xdg.configFile."fontconfig/conf.d/90-my-fonts.conf".source = ./fonts.conf;
     })
   ]);
