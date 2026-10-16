@@ -27,6 +27,7 @@ with pkgs; {
   pi-ast-grep = callPackage ./pi-ast-grep { };
   pi-collapse-tools = callPackage ./pi-collapse-tools { };
   pi-vim = callPackage ./pi-vim { };
+  pi-goal-x = callPackage ./pi-goal-x { };
   pi-web-access = callPackage ./pi-web-access { };
   pi-subagents = callPackage ./pi-subagents { };
 }
