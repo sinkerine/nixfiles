@@ -20,6 +20,7 @@ let
   piCollapseTools = pkgs.pi-collapse-tools;
   piSubagents = pkgs.pi-subagents;
   piVim = pkgs.pi-vim;
+  piGoalX = pkgs.pi-goal-x;
   # This dependency-free extension defaults to summary mode.
   piThinkingSteps = pkgs.fetchFromGitHub {
     owner = "crustyhacker";
@@ -136,6 +137,7 @@ in
           "${piFooter}/lib/node_modules/@smoose/pi-footer"
           "${piAstGrep}/lib/node_modules/pi-ast-grep"
           "${piCollapseTools}/lib/node_modules/pi-collapse-tools"
+          "${piGoalX}/lib/node_modules/pi-goal-x"
           "${piSubagents}/lib/node_modules/pi-subagents"
           "${piThinkingSteps}"
           "${piWebAccess}/lib/node_modules/pi-web-access"
@@ -145,7 +147,7 @@ in
       models.providers.magpie = {
         baseUrl = "https://magpie-api.sachi.m.mado.moe/v1";
         api = "openai-completions";
-        apiKey = "magpie";
+        apiKey = "dummykey";
         models = [
           {
             id = "group/gpt";

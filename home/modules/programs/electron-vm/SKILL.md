@@ -22,6 +22,7 @@ description: "Test an Electron app's GUI end to end inside an ephemeral microvm:
    - `--setup` defaults to the lockfile's install command (`pnpm install --frozen-lockfile`, `yarn install --frozen-lockfile`, `npm ci`, or `npm install`). Add build steps when the app needs them, e.g. `--setup 'npm ci && npm run build'`.
    - `--cmd` defaults to `npm start`. Use the project's real launch script from `package.json`.
    - `--timeout` (default 60 minutes) hard-kills the VM.
+   - Setup runs in the VM's RAM by default. For projects with large dependency trees, downloads or builds, keep them on host storage as described in [Storage and memory](#storage-and-memory).
    - It blocks until a window is visible, then prints the window list, whether CDP is available, and a first screenshot. On failure it prints the relevant log tail; fix the cause and run `start` again.
    - Its last line is `run=sN-XXXXXXXX`: this run's id.
 
@@ -94,11 +95,111 @@ electron-vm start --setup 'nix shell nixpkgs#nodejs_20 -c npm ci' --cmd 'nix she
 - Packages download from cache.nixos.org into the VM's RAM-backed store; the host is never involved. Never install anything on the host for the test.
 - Report the extra packages with your results so they can become part of the project's documented setup.
 
+## Storage and memory
+
+The guest has 8 GiB of RAM and no disk. Its root filesystem (`~/app`, `~/.cache`, `~/.npm`, `/tmp`) is a tmpfs of about 4 GiB, and packages added with `nix shell` go to another tmpfs. Dependencies, package-manager caches, downloaded binaries and build outputs therefore compete with the running app for the same memory. A large install or build fails with `ENOSPC`, or the kernel OOM-kills a process, usually a renderer, which Chromium marks as the first to kill. Those are environment failures, not app bugs: confirm them with `electron-vm --run ID logs vm` (look for `Out of memory: Killed process`) and report them as such.
+
+### How the job share works
+
+- `start` copies the project into the slot's job directory on the host. The guest mounts that directory read-write over 9p at `/job`: source at `/job/src`, results at `/job/out`. Files written there are stored on the host, not in guest RAM.
+- At boot the guest copies `/job/src` to `~/app`, then runs `--setup` and `--cmd` as two separate `bash -euo pipefail` scripts that each start in `~/app`. A `cd` or `export` in setup does not carry over to the launch command.
+- `exec` also starts in `~/app`, with neither script's environment and a shorter `PATH`: the `git`, `pnpm`, `yarn`, `python3`, `make` and `gcc` that setup and launch get are missing.
+- Only the launch command gets the CDP wrapper, through `ELECTRON_OVERRIDE_DIST_PATH`; setup runs Electron's own install scripts unwrapped. The wrapper looks up the project's Electron from its working directory, falling back to `~/app`, so launch from inside the project.
+
+### Check what backs the share
+
+Before relying on it, check the host filesystem that holds the job directories:
+
+```bash
+findmnt -T /var/tmp/electron-vm -o TARGET,SOURCE,FSTYPE   # on the host
+```
+
+- A disk-backed filesystem (ext4, xfs, btrfs, zfs, ...) holds the files without using RAM, apart from reclaimable page cache. Check its free space with `df -h /var/tmp/electron-vm`.
+- `tmpfs` means the files consume host RAM instead: moving work there only shifts memory from the VM to the host, which other users and VMs share. Keep the guest default in that case unless the host has clearly spare memory, and say so in your report.
+
+### Decide what to install and build
+
+Read `package.json` before choosing commands, along with the files it delegates to:
+
+- `scripts`: the project's own install hooks (`preinstall`, `postinstall`, `prepare`), build, dev/start and test scripts, and any launcher scripts they call. Use these commands rather than reconstructing their steps. Read custom launchers for the environment variables and flags they honor, such as a debugging port, a headless or background mode, or a build they run first.
+- `packageManager`, `engines` and the lockfile: which package manager and version to use, and with which frozen-lockfile flag.
+- `workspaces` or the package manager's workspace file: in a monorepo, install and build only the packages the app under test needs, if the package manager supports filtering.
+- Native modules (`node-gyp`, `prebuild-install`, `@electron/rebuild`, `electron-builder install-app-deps`, or the project's own rebuild script): run the project's rebuild in setup, where the CDP wrapper is not set. A command inside `--cmd` that runs Electron as Node (`ELECTRON_RUN_AS_NODE=1`) or rebuilds against it must run with `env -u ELECTRON_OVERRIDE_DIST_PATH`, or the wrapper's extra flags make it fail with `bad option: --remote-debugging-port=9222`.
+- CDP: `electron-vm cdp` connects to port 9222. If the project's launcher passes its own `--remote-debugging-port` or picks a port from an environment variable, set it to 9222 through that mechanism; a port given later on Electron's command line overrides the wrapper's.
+
+Add only the build steps the launch or test actually needs, and only the extra `nix shell` packages a failing step proves are missing ([Extra dependencies](#extra-dependencies)).
+
+### Keep writable files on the share
+
+Select the host-backed directory in setup **before installing**, select it again in the launch command, and select it explicitly in every later `exec`. Never move an installed tree or a running app between locations. A shared environment file keeps the three in sync:
+
+```bash
+electron-vm start \
+  --setup '
+    mkdir -p /job/work/cache /job/work/tmp
+    cat > /job/work/env.sh <<"EOF"
+cd /job/src
+export XDG_CACHE_HOME=/job/work/cache TMPDIR=/job/work/tmp
+export npm_config_cache=/job/work/cache/npm
+EOF
+    # exec shells lack the build tools on the setup and launch PATH.
+    printf "export PATH=%q\n" "$PATH" >> /job/work/env.sh
+    . /job/work/env.sh
+    npm ci
+    npm run build
+  ' \
+  --cmd '. /job/work/env.sh; npm start'
+
+electron-vm --run ID exec '. /job/work/env.sh && npm test'
+```
+
+Replace `npm ci`, `npm run build` and `npm start` with the project's own commands, and add each cache the project uses to `env.sh`:
+
+| Writer | Default location | Redirect |
+| --- | --- | --- |
+| npm | `~/.npm` | `npm_config_cache` |
+| pnpm store | `~/.local/share/pnpm/store`; `/job/.pnpm-store` when the project is on the share | `--store-dir /job/work/pnpm-store` on `pnpm install` |
+| Yarn 1 and Yarn 2+ cache | `~/.cache/yarn`, `~/.yarn/berry/cache` | `YARN_CACHE_FOLDER` |
+| Electron, electron-builder, node-gyp, Playwright and other tools following XDG | `~/.cache/...` | `XDG_CACHE_HOME` |
+| Temporary files of builds and tests | `/tmp` | `TMPDIR` |
+| Build outputs and `node_modules` | project directory | already on the share via `cd /job/src` |
+
+Confirm the result instead of trusting the table: after setup, `exec '. /job/work/env.sh && df -h / /job && du -sh ~ /tmp /job/src /job/work'` should show the guest root nearly unchanged and the growth under `/job`. Package managers report their location with `npm config get cache`, `pnpm store path` or `yarn cache dir`, run in the same environment.
+
+### What still uses guest RAM
+
+Moving files does not make a project fit; it only removes their storage from the budget.
+
+- Processes: Node, bundlers and compilers, the Electron main, GPU and renderer processes, and test runners and their workers.
+- Packages added with `nix shell`/`nix-shell -p`, which stay in the guest's tmpfs store. `exec 'nix store gc'` frees those no running command still uses.
+- The initial source copy in `~/app`, which the harness always makes. It is usually small; a source tree with large tracked assets still costs that much RAM.
+- The app's own user data directory (`~/.config/<app name>`), unless the project lets you relocate it.
+- Page cache for files read from or written to `/job`. It is reclaimable, so judge headroom by the `available` column of `free -m`, not `free`.
+
+Measure instead of assuming: record `free -m`, `df -h / /job` and `du -sh` of the large directories before and after setup and each build. Do not state that a project fits in the VM, or name a memory threshold, unless you measured that workload.
+
+### Known 9p behavior
+
+- Small-file I/O is slower than in tmpfs: installs and builds with many files take noticeably longer.
+- File watching: changes made inside the guest raise inotify events, so dev-server reloads after edits made through `exec` work. Edits made on the host to the slot directory do not reach guest watchers; make edits in the guest or restart the app.
+- Executable bits and symlinks (`node_modules/.bin`, Electron's binary) work. Files belong to the host user, so tools that change ownership can fail.
+- Hard links, FIFOs and Unix sockets work on the share. If a tool still fails on one there, switch it to copying (for pnpm, `--package-import-method copy`) or point its `TMPDIR` back at `/tmp`.
+
+### Build and test sequentially
+
+- Run installs, builds and test suites one at a time, and not beside a running dev app when memory is tight. The app runs as `tester` and is not restarted by the harness, so `exec` can end its processes to free memory for a later build.
+- Cap parallelism with each tool's own option: the test runner's worker count, `make -j`, the bundler's or compiler's thread settings.
+- Do not use the CDP-wrapped Electron for builds, native rebuilds or test-runner launches of Electron; see the native-module note above.
+
+### Storage cleanup
+
+Everything under `/job`, including `node_modules`, caches, `TMPDIR` and build outputs, survives `stop` and occupies host disk until `electron-vm --run ID clean` or the next `start` in the same slot. `clean` deletes the whole job directory, including read-only directories some tools create. Keep run-owned files under `/job` so `clean` removes them; nothing else in the guest is shared with the host.
+
 ## Debugging
 
 ```bash
 electron-vm --run ID logs app|setup|vm [-n N]   # app.log includes renderer console messages
-electron-vm --run ID exec 'CMD'                 # shell in the guest at ~/app as tester; no root; nix available
+electron-vm --run ID exec 'CMD'                 # shell in the guest at ~/app as tester; no root; nix available; cd elsewhere explicitly
 electron-vm --run ID screenshot LABEL           # full screen, outside cua
 electron-vm --run ID windows
 electron-vm --run ID status
@@ -117,12 +218,14 @@ electron-vm --run ID stop     # if not already stopped
 electron-vm --run ID clean    # deletes the run's source copy and results on the host
 ```
 
-- Everything fetched inside the guest (`nix shell`, `nix-shell -p`, `npm` caches) lives in the VM's RAM and disappears with `stop`; there is no host Nix store or cache to clean for it.
+- Packages fetched with `nix shell` or `nix-shell -p`, and anything written outside `/job`, live in the VM's RAM and disappear with `stop`; there is no host Nix store or cache to clean for them.
+- Anything written under `/job` (dependencies, caches and build outputs placed on the share) stays on the host until `clean`, which removes all of it.
 - During a long run, `electron-vm --run ID exec 'nix store gc'` frees guest memory taken by dependencies no running command still uses. It needs no root: the guest's Nix daemon performs it.
 - If you built anything on the host with Nix for this test, delete the `result` symlinks you created. Do not run host-wide garbage collection (`nix-collect-garbage`, `nix store gc` on the host); it affects every other project and user on the machine.
 
 ## Limits
 
+- 8 GiB of RAM with a RAM-backed root filesystem; see [Storage and memory](#storage-and-memory) before installing or building anything large.
 - Slots are limited (3 by default). If `start` reports that all slots are busy, wait and retry rather than stopping other runs.
 - No GPU: rendering is software-only, so WebGL and performance observations are not representative. GPU-process errors in `app.log` are expected.
 - X11 with the openbox window manager; Wayland-specific behavior is not covered.

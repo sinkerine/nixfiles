@@ -209,7 +209,7 @@ in {
       }
       // optionalAttrs cfg.enableCLIProxyAPI {
         ".codex/auth.json".text = builtins.toJSON {
-          OPENAI_API_KEY = "magpie";
+          OPENAI_API_KEY = "dummykey";
         };
       };
 

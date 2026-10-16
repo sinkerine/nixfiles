@@ -39,8 +39,9 @@ Inspect and drive the app:
   screenshot [LABEL]   Full 1280x800 screen.
   windows              List visible windows with geometry.
 
-  clean                Delete a stopped run's files on the host (source copy and
-                       results). Copy any evidence you need first.
+  clean                Delete a stopped run's job dir on the host: source copy,
+                       results, and anything the guest wrote under /job. Copy any
+                       evidence you need first.
 
 Debugging:
   exec CMD...          Run a shell command in the guest (as unprivileged tester, DISPLAY=:0).
@@ -138,6 +139,15 @@ tail_log() {
     echo "--- $name.log (last $lines lines) ---" >&2
     tail -n "$lines" "$OUT_DIR/$name.log" >&2
   fi
+}
+
+# Delete the slot's host job dir. Guest tools can leave read-only directories
+# (module caches, build outputs) that rm -rf cannot empty; chmod -R ignores
+# symlinks found while recursing, so it stays inside the job dir.
+remove_job_dir() {
+  [ -e "$JOB_DIR" ] || return 0
+  chmod -R u+w "$JOB_DIR" 2>/dev/null || true
+  rm -rf "$JOB_DIR"
 }
 
 default_setup() {
@@ -244,7 +254,7 @@ cmd_start() {
   RUN_ID="s$SLOT-$(od -An -tx4 -N4 /dev/urandom | tr -d ' ')"
   echo "$RUN_ID" > "$SLOT_STATE/run-id"
 
-  rm -rf "$JOB_DIR"
+  remove_job_dir
   mkdir -p "$JOB_DIR/src" "$OUT_DIR/steps"
   cp "$KEY.pub" "$JOB_DIR/authorized_keys"
   if git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -399,7 +409,7 @@ stop_slot() {
 cmd_clean() {
   resolve_slot 0
   is_running && die "slot $SLOT is still running; stop it first"
-  rm -rf "$JOB_DIR"
+  remove_job_dir
   rm -f "$SLOT_STATE/run-id"
   echo "Removed $JOB_DIR" >&2
 }
