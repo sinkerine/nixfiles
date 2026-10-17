@@ -11,6 +11,11 @@
 
   imports = [ ../common ];
 
+  my.services.loopx = {
+    enable = true;
+    domain = "loopx.kazuki.m.mado.moe";
+  };
+
   my.programs.electron-vm.enable = true;
 
   programs.noctalia.settings.lockscreen.enabled = lib.mkForce false;

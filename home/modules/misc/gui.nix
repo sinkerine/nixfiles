@@ -103,7 +103,6 @@ in
           antimicrox
           unzip
           sqlite
-          kooha
           goldendict-ng
           yt-dlp
           feishin

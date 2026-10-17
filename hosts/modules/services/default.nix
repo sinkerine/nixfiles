@@ -1,6 +1,7 @@
 {
   imports = [
     ./gateway
+    ./loopx.nix
     ./nix-serve
     ./zrepl
     ./docker.nix
