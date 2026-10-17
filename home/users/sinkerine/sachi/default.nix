@@ -5,6 +5,11 @@
 
   imports = [ ../common ];
 
+  my.services.loopx = {
+    enable = true;
+    domain = "loopx.sachi.m.mado.moe";
+  };
+
   my.profiles.trusted.enable = true;
 
   programs.zsh.shellAliases = {

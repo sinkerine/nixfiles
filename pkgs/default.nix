@@ -6,6 +6,7 @@ with pkgs; {
   ccstatusline = callPackage ./ccstatusline { };
   claude-statusbar = callPackage ./claude-statusbar { };
   clipper = callPackage ./clipper { };
+  loopx = callPackage ./loopx { };
   claude-notify = callPackage ./claude-notify { };
   codex-trusted = callPackage ./codex-trusted { };
   codex-notify = callPackage ./codex-notify { };

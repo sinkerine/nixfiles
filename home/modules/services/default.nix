@@ -22,5 +22,6 @@
     ./gpg.nix
     ./hyprlock.nix
     ./orca.nix
+    ./loopx.nix
   ];
 }
