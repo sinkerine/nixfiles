@@ -6,7 +6,7 @@ import { readdirSync, writeFileSync } from "node:fs";
 const PORT = process.env.CDP_PORT || "9222";
 const STEPS_DIR = "/job/out/steps";
 
-const USAGE = `electron-vm-cdp [--target N|TEXT] COMMAND
+const USAGE = `vm-test-cdp [--target N|TEXT] COMMAND
 
   targets                    List debuggable targets (pages are numbered from 0)
   snapshot                   Visible interactive elements with selectors and bounds
@@ -19,7 +19,7 @@ const USAGE = `electron-vm-cdp [--target N|TEXT] COMMAND
   screenshot [LABEL]         Capture the page into ${STEPS_DIR}`;
 
 function die(message) {
-  console.error(`electron-vm-cdp: ${message}`);
+  console.error(`vm-test-cdp: ${message}`);
   process.exit(1);
 }
 

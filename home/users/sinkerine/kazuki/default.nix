@@ -16,7 +16,7 @@
     domain = "loopx.kazuki.m.mado.moe";
   };
 
-  my.programs.electron-vm.enable = true;
+  my.programs.vm-test.enable = true;
 
   programs.noctalia.settings.lockscreen.enabled = lib.mkForce false;
 

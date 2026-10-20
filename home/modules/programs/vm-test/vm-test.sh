@@ -1,20 +1,20 @@
-# SLOTS and slot_config are defined by the electron-vm home module.
-STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/electron-vm
-CUA_SESSION=electron-vm
+# SLOTS and slot_config are defined by the vm-test home module.
+STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/vm-test
+CUA_SESSION=vm-test
 KEY=$STATE_DIR/id_ed25519
-# Set by --run/ELECTRON_VM_RUN or --slot/ELECTRON_VM_SLOT; otherwise
+# Set by --run/VM_TEST_RUN or --slot/VM_TEST_SLOT; otherwise
 # resolved from running VMs.
-REQUESTED_RUN=${ELECTRON_VM_RUN:-}
-REQUESTED_SLOT=${ELECTRON_VM_SLOT:-}
+REQUESTED_RUN=${VM_TEST_RUN:-}
+REQUESTED_SLOT=${VM_TEST_SLOT:-}
 
 usage() {
   cat <<'EOF'
-electron-vm - drive an Electron app inside an ephemeral microvm
+vm-test - test an app inside an ephemeral microvm
 
-Usage: electron-vm [--run ID | --slot N] COMMAND ...
+Usage: vm-test [--run ID | --slot N] COMMAND ...
 
 Several VMs can run at once, one per slot. 'start' claims a free slot and
-prints a run id (run=sN-XXXXXXXX). Pass '--run ID' (or ELECTRON_VM_RUN) on
+prints a run id (run=sN-XXXXXXXX). Pass '--run ID' (or VM_TEST_RUN) on
 every later command: it fails once that run's slot is reused, so a stale id
 never reaches another run's VM. '--slot N' targets whatever runs in slot N.
 Without either, commands use the only running VM.
@@ -24,6 +24,8 @@ Lifecycle:
                        Copy DIR (default: cwd; git-tracked + untracked, not ignored)
                        into a fresh VM, run setup (default: from lockfile), then
                        start the app (default: npm start). Waits until a window shows.
+                       Without package.json, both --setup and --cmd are required.
+                       Use --no-wait for CLI tools, services, and batch tests.
   wait [--timeout SEC] Wait until setup finished and a window is visible.
   status               With a slot: that VM's setup/app state. Without: all slots.
   stop [--all]         Power off the VM (or every VM). Results stay in the slot's
@@ -52,7 +54,7 @@ EOF
 }
 
 die() {
-  echo "electron-vm: $*" >&2
+  echo "vm-test: $*" >&2
   exit 1
 }
 
@@ -64,7 +66,7 @@ use_slot() {
   local config
   config=$(slot_config "$1") || die "no slot $1 (slots are 1-$SLOTS)"
   SLOT=$1
-  read -r JOB_DIR RUNNER SSH_PORT VNC_PORT <<<"$config"
+  read -r JOB_DIR LAUNCHER RUNNER SSH_PORT VNC_PORT <<<"$config"
   OUT_DIR=$JOB_DIR/out
   SLOT_STATE=$STATE_DIR/slot-$SLOT
   PID_FILE=$SLOT_STATE/pid
@@ -103,7 +105,7 @@ resolve_slot() {
   if [ -n "$REQUESTED_SLOT" ]; then
     use_slot "$REQUESTED_SLOT"
     if [ "$require" = 1 ] && ! is_running; then
-      die "slot $SLOT is not running; use 'electron-vm start'"
+      die "slot $SLOT is not running; use 'vm-test start'"
     fi
     return
   fi
@@ -114,7 +116,7 @@ resolve_slot() {
       if [ "$require" = 0 ] && [ -f "$STATE_DIR/last-slot" ]; then
         use_slot "$(cat "$STATE_DIR/last-slot")"
       else
-        die "no VM is running; use 'electron-vm start'"
+        die "no VM is running; use 'vm-test start'"
       fi
       ;;
     *) die "VMs are running in slots ${running[*]}; pass the --run ID that 'start' printed" ;;
@@ -179,7 +181,7 @@ shot() {
 }
 
 cmd_cdp() {
-  remote electron-vm-cdp "$@" | sed "s|/job/out|$OUT_DIR|g"
+  remote vm-test-cdp "$@" | sed "s|/job/out|$OUT_DIR|g"
 }
 
 cmd_cua() {
@@ -216,12 +218,12 @@ cmd_cua() {
 }
 
 cmd_start() {
-  local dir=$PWD setup="" app_cmd="npm start" timeout_min=60 wait=1
+  local dir=$PWD setup="" app_cmd="npm start" timeout_min=60 wait=1 explicit_cmd=0
   while [ $# -gt 0 ]; do
     case $1 in
       -C) dir=$2; shift 2 ;;
       --setup) setup=$2; shift 2 ;;
-      --cmd) app_cmd=$2; shift 2 ;;
+      --cmd) app_cmd=$2; explicit_cmd=1; shift 2 ;;
       --timeout) timeout_min=$2; shift 2 ;;
       --no-wait) wait=0; shift ;;
       --slot) REQUESTED_SLOT=$2; shift 2 ;;
@@ -229,14 +231,18 @@ cmd_start() {
     esac
   done
   dir=$(realpath "$dir")
-  [ -f "$dir/package.json" ] || die "$dir has no package.json"
+  [ -d "$dir" ] || die "$dir is not a directory"
+  if [ ! -f "$dir/package.json" ]; then
+    [ -n "$setup" ] || die "without package.json, pass --setup CMD (use ':' for no setup)"
+    [ "$explicit_cmd" = 1 ] || die "without package.json, pass --cmd CMD"
+  fi
   [ -n "$setup" ] || setup=$(default_setup "$dir")
 
   mkdir -p "$STATE_DIR"
   # Serialize slot selection so concurrent starts never claim the same slot.
   exec 9>"$STATE_DIR/lock"
   flock 9
-  [ -f "$KEY" ] || ssh-keygen -q -t ed25519 -N "" -C electron-vm -f "$KEY"
+  [ -f "$KEY" ] || ssh-keygen -q -t ed25519 -N "" -C vm-test -f "$KEY"
   if [ -n "$REQUESTED_SLOT" ]; then
     use_slot "$REQUESTED_SLOT"
     is_running && die "slot $SLOT is already running; stop it or pick another slot"
@@ -267,10 +273,11 @@ cmd_start() {
   printf 'set -euo pipefail\n%s\n' "$app_cmd" > "$JOB_DIR/start.sh"
   printf 'run=%s\nsource=%s\nsetup=%s\ncmd=%s\n' "$RUN_ID" "$dir" "$setup" "$app_cmd" > "$OUT_DIR/job.txt"
 
-  # microvm-run keeps its control socket in the working directory. The VM
-  # must not inherit the lock descriptor.
+  # The launcher starts virtiofsd for the job share, then microvm-run, which
+  # keeps its control socket in the working directory. The VM must not
+  # inherit the lock descriptor.
   (cd "$SLOT_STATE" && exec setsid timeout --kill-after=30s "${timeout_min}m" \
-    "$RUNNER" </dev/null >"$OUT_DIR/vm.log" 2>&1 9>&-) &
+    "$LAUNCHER" </dev/null >"$OUT_DIR/vm.log" 2>&1 9>&-) &
   echo $! > "$PID_FILE"
   echo "$SLOT" > "$STATE_DIR/last-slot"
   flock -u 9
@@ -281,7 +288,7 @@ cmd_start() {
     die "VM failed to start (ports $SSH_PORT/$VNC_PORT in use?)"
   fi
   echo "Run $RUN_ID: VM started in slot $SLOT (pid $(cat "$PID_FILE"), hard timeout ${timeout_min}m)" >&2
-  echo "  use:    electron-vm --run $RUN_ID ..." >&2
+  echo "  use:    vm-test --run $RUN_ID ..." >&2
   echo "  source: $dir" >&2
   echo "  setup:  $setup" >&2
   echo "  start:  $app_cmd" >&2
@@ -323,10 +330,10 @@ cmd_wait() {
         remote test -S /run/user/1000/cua-driver.sock 2>/dev/null; then
         echo "Run $(slot_run_id "$SLOT") ready in slot $SLOT. App window is visible." >&2
         cmd_windows
-        if remote electron-vm-cdp targets >/dev/null 2>&1; then
-          echo "CDP: available (electron-vm cdp ...)" >&2
+        if remote vm-test-cdp targets >/dev/null 2>&1; then
+          echo "CDP: available (vm-test cdp ...)" >&2
         else
-          echo "CDP: unavailable; the app was not launched through the npm electron package. Use electron-vm cua ..." >&2
+          echo "CDP: unavailable; the app was not launched through the npm electron package. Use vm-test cua ..." >&2
         fi
         shot ready
         echo "run=$(slot_run_id "$SLOT")"
