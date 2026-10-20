@@ -1,5 +1,5 @@
 # Ephemeral microvm for driving Electron apps through CDP and cua-driver.
-# The electron-vm CLI fills the job share and boots this guest; nothing
+# The vm-test CLI fills the job share and boots this guest; nothing
 # persists in the guest between runs.
 # Each slot gets its own job share and host ports; the guest system itself is
 # identical across slots, so they share one store image.
@@ -80,7 +80,7 @@ let
   # Electron through the npm package starts it with CDP and the accessibility
   # tree enabled.
   electronDist = pkgs.writeTextFile {
-    name = "electron-vm-dist";
+    name = "vm-test-dist";
     destination = "/electron";
     executable = true;
     text = ''
@@ -94,18 +94,18 @@ let
         real=$(${pkgs.findutils}/bin/find "$HOME/app" -path '*/node_modules/electron/dist/electron' -type f -print -quit)
       fi
       if [ -z "$real" ]; then
-        echo "electron-vm: cannot find the npm Electron binary" >&2
+        echo "vm-test: cannot find the npm Electron binary" >&2
         exit 1
       fi
       exec "$real" --remote-debugging-port=9222 --force-renderer-accessibility "$@"
     '';
   };
-  cdpHelper = pkgs.writeShellScriptBin "electron-vm-cdp" ''
+  cdpHelper = pkgs.writeShellScriptBin "vm-test-cdp" ''
     exec ${pkgs.nodejs}/bin/node ${./cdp.mjs} "$@"
   '';
 in
 {
-  networking.hostName = "electron-vm";
+  networking.hostName = "vm-test";
   system.stateVersion = "26.05";
 
   microvm = {
@@ -116,7 +116,7 @@ in
     interfaces = [
       {
         type = "user";
-        id = "electron-vm";
+        id = "vm-test";
         mac = "02:00:00:e1:ec:01";
       }
     ];
@@ -134,8 +134,11 @@ in
     ];
     shares = [
       {
-        proto = "9p";
+        # vm-test starts virtiofsd itself, unprivileged, next to qemu; the
+        # socket path is relative to the slot state dir it runs in.
+        proto = "virtiofs";
         tag = "job";
+        socket = "job.sock";
         source = jobDir;
         mountPoint = "/job";
       }
@@ -170,7 +173,7 @@ in
 
   users.users.tester = {
     isNormalUser = true;
-    # Matches the host user so files written to /job stay owned by them.
+    # virtiofsd shows the host user's files in /job as owned by this uid.
     uid = 1000;
     extraGroups = [ "video" ];
     # Starts user@1000 at boot for a session bus shared by the app and cua-driver.
@@ -182,7 +185,7 @@ in
 
   services.openssh = {
     enable = true;
-    # electron-vm writes a fresh key for each run into the job share.
+    # vm-test writes a fresh key for each run into the job share.
     authorizedKeysFiles = [ "/job/authorized_keys" ];
     settings = {
       PasswordAuthentication = false;
@@ -253,7 +256,7 @@ in
     };
   };
 
-  systemd.services.electron-app = {
+  systemd.services.vm-test-app = {
     wantedBy = [ "multi-user.target" ];
     after = sessionUnits ++ [
       "openbox.service"
