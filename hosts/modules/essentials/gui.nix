@@ -62,6 +62,8 @@ in
       programs.dconf.enable = true;
       # Provide the AT-SPI accessibility bus used by CUA for UI inspection.
       services.gnome.at-spi2-core.enable = true;
+      # SSH authentication is provided by the Home Manager OpenSSH agent.
+      services.gnome.gcr-ssh-agent.enable = lib.mkForce false;
       programs.nix-ld.enable = true;
       security.rtkit.enable = true;
       services.pipewire = {

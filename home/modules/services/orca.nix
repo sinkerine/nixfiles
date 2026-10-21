@@ -16,14 +16,14 @@ let
         "claude-agent-teams"
       ];
       agentCmdOverrides = {
-        codex = "codex-trusted";
+        codex = "cx-luna-medium";
       };
       agentStatusHooksEnabled = true;
       agentDefaultArgs = {
         claude = "--dangerously-skip-permissions";
         "claude-agent-teams" = "--dangerously-skip-permissions";
         openclaude = "--dangerously-skip-permissions";
-        codex = "--profile luna-medium";
+        codex = "";
         gemini = "--yolo";
         antigravity = "--dangerously-skip-permissions";
         aider = "--yes-always";
@@ -56,7 +56,7 @@ let
 
     if [ -f "$target" ]; then
       tmp="$target.tmp.$$"
-      ${pkgs.jq}/bin/jq --arg codexCommand codex-trusted -s '
+      ${pkgs.jq}/bin/jq --arg codexCommand cx-luna-medium -s '
         def deepmerge(a; b):
           if (a | type) == "object" and (b | type) == "object" then
             reduce (b | keys_unsorted[]) as $key
@@ -71,7 +71,7 @@ let
         . as $documents
         | deepmerge($documents[0]; $documents[1])
         | .settings.agentCmdOverrides.codex = $codexCommand
-        | .settings.agentDefaultArgs.codex = "--profile luna-medium"
+        | .settings.agentDefaultArgs.codex = ""
       ' "$target" "$defaults" > "$tmp"
       chmod --reference="$target" "$tmp"
       mv "$tmp" "$target"

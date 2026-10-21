@@ -39,6 +39,9 @@ let
   screenshotDir = "${config.home.homeDirectory}/Screenshots";
   noctalia = lib.getExe config.programs.noctalia.package;
   screenshot = command: "mkdir -p ${escapeShellArg screenshotDir}; ${command} ${screenshotDir}/$(date +%Y-%m-%d-%H%M%S.png)";
+  delayedScreenshot = pkgs.writeShellScript "niri-delayed-screenshot" ''
+    ${pkgs.systemd}/bin/systemd-run --user --collect --on-active=3s --no-block ${pkgs.runtimeShell} -c ${escapeShellArg "${noctalia} msg screenshot-region"}
+  '';
   playerCommand = action: [ "playerctl" "-p" cfg.musicPlayer action ];
   focusOrLaunchOrca = pkgs.writeShellScript "focus-or-launch-orca" ''
     set -eu
@@ -224,6 +227,7 @@ in
         - { key: c, desc: Chrome, cmd: google-chrome-stable }
         - { key: d, desc: Nemo, cmd: nemo }
         - { key: s, desc: Screenshot, cmd: ${noctalia} msg screenshot-region }
+        - { key: S, desc: Screenshot in 3 seconds, cmd: ${toString delayedScreenshot} }
         - { key: m, desc: Music, cmd: dex "$HOME/.nix-profile/share/applications/feishin.desktop" }
         - { key: n, desc: Dismiss notifications, cmd: ${noctalia} msg notification-clear-active }
         - { key: h, desc: Notification history, cmd: ${noctalia} msg panel-toggle control-center notifications }

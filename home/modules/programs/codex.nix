@@ -50,7 +50,6 @@ with lib; let
     "SubagentStop"
     "Stop"
   ];
-  toml = pkgs.formats.toml {};
   codexModels = {
     sol = "gpt-6.1-sol";
     luna = "gpt-6-luna";
@@ -123,26 +122,29 @@ with lib; let
       plan_mode_reasoning_effort = effort;
       model_providers.strata = strataProvider;
     }) [ "low" "medium" "high" ]);
-  codexProfiles = defaultReasoningProfiles // defaultUltraProfile // reasoningProfiles // ultraProfiles // strataProfiles;
-  codexProfileFiles = mapAttrs' (profileName: profileSettings:
-    nameValuePair ".codex/${profileName}.config.toml" {
-      source = toml.generate "${profileName}.config.toml" profileSettings;
-    })
-  codexProfiles;
-  # Orca runs Codex with its own CODEX_HOME; give it the same profiles directly.
-  orcaCodexHome = ".config/orca/codex-runtime-home/home";
-  orcaCodexProfileFiles = mapAttrs' (profileName: profileSettings:
-    nameValuePair "${orcaCodexHome}/${profileName}.config.toml" {
-      source = toml.generate "${profileName}.config.toml" profileSettings;
-      force = true;
-    })
-  codexProfiles;
-  codexProfileAliases = mapAttrs' (profileName: _:
-    nameValuePair "cx-${profileName}" "codex-trusted --profile ${profileName}")
-  codexProfiles;
+  codexVariants = defaultReasoningProfiles // defaultUltraProfile // reasoningProfiles // ultraProfiles // strataProfiles;
+  # Pass native config overrides so these commands also work with alternate
+  # CODEX_HOME directories and app-server, without installing profile files.
+  configArgs = prefix: settings: concatLists (mapAttrsToList (key: value:
+    let name = if prefix == "" then key else "${prefix}.${key}";
+    in if isAttrs value then configArgs name value
+       else [ "-c" "${name}=${builtins.toJSON value}" ]
+  ) settings);
+  wrapperSettings = mapAttrs' (name: value: nameValuePair "cx-${name}" value) codexVariants
+    // mapAttrs' (name: _: nameValuePair "cx-${name}" codexVariants."${name}-medium") codexModels
+    // { cx = codexVariants."${defaultCodexModelName}-medium"; };
+  codexWrappers = mapAttrs (name: settings: pkgs.writeShellScriptBin name ''
+    exec ${lib.getExe pkgs.codex-trusted} ${escapeShellArgs (configArgs "" settings)} "$@"
+  '') wrapperSettings;
 in {
   options.my.programs.codex = {
     enable = mkEnableOption "Codex";
+    wrappers = mkOption {
+      type = types.attrsOf types.package;
+      readOnly = true;
+      default = codexWrappers;
+      description = "Executable Codex model and reasoning variants.";
+    };
     enableCLIProxyAPI = mkOption {
       type = types.bool;
       default = true;
@@ -154,12 +156,10 @@ in {
     home.packages = [
       pkgs.codex-notify
       pkgs.codex-trusted
-    ];
+    ] ++ attrValues codexWrappers;
 
     home.file =
-      codexProfileFiles
-      // optionalAttrs config.my.services.orca.enable orcaCodexProfileFiles
-      // orcaSkillFiles
+      orcaSkillFiles
       // {
         ".codex/.orca/agent-hooks/codex-hook.sh" = {
           executable = true;
@@ -213,12 +213,7 @@ in {
         };
       };
 
-    programs.zsh.shellAliases =
-      {
-        codex = "codex-trusted";
-        cx = "codex-trusted --profile luna-medium";
-      }
-      // codexProfileAliases;
+    programs.zsh.shellAliases.codex = "codex-trusted";
 
     programs.codex = {
       enable = true;
