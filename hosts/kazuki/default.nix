@@ -321,11 +321,6 @@ in
     enable = true;
     useRoutingFeatures = "client";
   };
-  my.services.loopx = {
-    enable = true;
-    domain = "loopx.kazuki.m.mado.moe";
-  };
-
   my.services.gateway = {
     enableIPv6 = true;
     enable = true;

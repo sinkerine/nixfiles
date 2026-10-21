@@ -265,11 +265,6 @@ in
     sopsKeyFile = ./zrepl/sachi.m.mado.moe.key;
   };
 
-  my.services.loopx = {
-    enable = true;
-    domain = "loopx.sachi.m.mado.moe";
-  };
-
   my.services.gateway = {
     enableIPv6 = true;
     enable = true;

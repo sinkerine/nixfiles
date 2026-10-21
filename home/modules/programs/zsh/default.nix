@@ -37,7 +37,7 @@ in {
           "https://github.com/sinkerine/zce.zsh.git --source zce.plugin.zsh"
           "zsh-users/zsh-autosuggestions"
           "zsh-users/zsh-syntax-highlighting"
-        ] ++ [ "ohmyzsh/ohmyzsh --root plugins/ssh-agent" ];
+        ];
       };
 
       history = {
@@ -83,9 +83,6 @@ in {
           # This allows us to override the zvm keybindings later.
           # https://github.com/jeffreytse/zsh-vi-mode#initialization-mode
           export ZVM_INIT_MODE=sourcing
-
-          zstyle :omz:plugins:ssh-agent lazy yes
-          zstyle :omz:plugins:ssh-agent quiet yes
         '')
         (mkOrder 650 (builtins.readFile ./zshrc))
         (mkAfter ''

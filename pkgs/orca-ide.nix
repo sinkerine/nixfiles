@@ -61,24 +61,45 @@ let
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "orca-ide";
-  # Keep this update method: append the date and timestamp through seconds
-  # to the upstream version, and pin the matching commit from custom.
-  version = "1.4.198-20261119.000000";
+  # Keep the upstream version with the update date and time through seconds.
+  version = "1.4.214-20261120.000000";
 
-  # Always update from the custom branch commit; keep this method honored.
+  # Always update from the upstream main branch commit.
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "orca";
-    rev = "8d01bcb38a068c5f2dd0ecc8ec380f59b8fb13f3";
-    hash = "sha256-oDfwXQhf4C+ipTAcrM/M75+cIS7gsO/b86Si0b8+cHA=";
+    rev = "245736431255bf0809c572e8d69aad92d2ea44e3";
+    hash = "sha256-stOrwmHK1AGnuuv00sEV5Ja3rollTIyN/WH2r+7m/t8=";
   };
 
-  pnpmDeps = fetchPnpmDeps {
+  pnpmDeps = (fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
     inherit pnpm;
     fetcherVersion = 4;
-    hash = "sha256-bJZ1dmrlfXe7j0Sw+/n7fVusz/dtjejWk2HaU4Cngsw=";
-  };
+    hash = "sha256-NKJY6o1w2j+iaUhuiM2x2SprQ+5eKgHEalEV57jrJh0=";
+    pnpmInstallFlags = [ "--config.package-import-method=copy" ];
+  }).overrideAttrs (old: {
+    fixupPhase = lib.replaceStrings
+      [ "find $storePath -name \"*.json\"" ]
+      [ "find $storePath -path \"$storePath/v11/links\" -prune -o -name \"*.json\" -print
+              find \"$storePath/v11/links\" -type f -name esbuild -exec chmod 555 {} +" ]
+      old.fixupPhase;
+  });
+
+  passthru.mobileDeps = (fetchPnpmDeps {
+    pname = "orca-mobile";
+    inherit (finalAttrs) version src;
+    inherit pnpm;
+    sourceRoot = "source/mobile";
+    fetcherVersion = 4;
+    hash = "sha256-ghOPbJgOg2HvS/wb1s4uBiy8iuZajESljaeq8yh9pfc=";
+    pnpmInstallFlags = [ "--config.package-import-method=copy" ];
+  }).overrideAttrs (old: {
+    fixupPhase = lib.replaceStrings
+      [ "find $storePath -name \"*.json\"" ]
+      [ "find $storePath -path \"$storePath/v11/links\" -prune -o -name \"*.json\" -print" ]
+      old.fixupPhase;
+  });
 
   nativeBuildInputs = [
     autoPatchelfHook
@@ -147,26 +168,65 @@ stdenv.mkDerivation (finalAttrs: {
       --replace-fail \
         "  beforeBuild: electronBuilderNativeRebuild," \
         "beforeBuild: null,"
-    # Static musl helper binaries have no dynamic symbol table. Keep the
-    # upstream relocated-symbol check for binaries with DT_NEEDED entries.
-    substituteInPlace config/scripts/verify-linux-glibc-floor.cjs \
+    # GitHub source archives have no .git directory; retain the pinned identity.
+    substituteInPlace config/scripts/build-source-commit.mjs \
       --replace-fail \
-        "const providerViolations = Object.values(RELOCATED_SYMBOL_PROVIDERS).some(" \
-        "const providerViolations = neededLibraries.size > 0 && Object.values(RELOCATED_SYMBOL_PROVIDERS).some("
-    # Nix's current Electron and compiler target the host nixpkgs glibc, not
-    # the upstream Ubuntu 20.04 compatibility floor.
-    sed -i \
-      '/^[[:space:]]*verifyLinuxGlibcFloor(context.appOutDir, {$/,+2c\\      void context.appOutDir' \
-      config/electron-builder.config.cjs
+        "execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()" \
+        "'${finalAttrs.src.rev}'"
+    # Use the installed TypeScript compiler for the CLI's typecheck as well.
+    substituteInPlace config/scripts/build-cli.mjs \
+      --replace-fail "selectTypecheckCompiler('bun'," "selectTypecheckCompiler('native',"
+    # Nix builds the helper and supplies Node; avoid Docker and runtime downloads.
+    # Native binaries target nixpkgs glibc rather than the Ubuntu release floor.
+    substituteInPlace config/electron-builder.config.cjs \
+      --replace-fail "ensureWaylandClipboard(context.arch)" "void context.arch" \
+      --replace-fail \
+        "placeAppImageNodeRuntime(resourcesDir, targetArch)" \
+        "placeAppImageNodeRuntime(resourcesDir, targetArch, async () => '${nodejs_24}/bin/node')" \
+      --replace-fail "verifyLinuxGlibcFloor(context.appOutDir, { targetArch })" "void context.appOutDir" \
+      --replace-fail \
+        "prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)" \
+        "prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch); for (const base of ['node_modules', 'app.asar.unpacked/node_modules']) { const dest = join(resourcesDir, base, 'node-pty/build/Release'); require('node:fs').mkdirSync(dest, { recursive: true }); require('node:fs').cpSync(join(__dirname, '../node_modules/node-pty/build/Release'), dest, { recursive: true }); }"
   '';
 
   buildPhase = ''
     runHook preBuild
 
-    export npm_config_nodedir=${nodejs_24}
-    pnpm rebuild node-pty
+    desktopStore="$STORE_PATH"
+    desktopDeps="$pnpmDeps"
+    pnpmRoot=mobile
+    pnpmDeps=${finalAttrs.passthru.mobileDeps}
+    pnpmConfigHook
+    pnpmRoot=
+    pnpmDeps="$desktopDeps"
+    export STORE_PATH="$desktopStore"
 
-    pnpm run build:desktop
+    # pnpm 11's restored links store can lose executable bits during import.
+    # Restore native tools (including esbuild, TypeScript, and Bun) by ELF magic.
+    python3 - <<'PY'
+    import os
+    from pathlib import Path
+
+    for path in Path(os.environ["STORE_PATH"], "v11/links").rglob("*"):
+        if path.is_file():
+            with path.open("rb") as executable:
+                if executable.read(4) == b"\x7fELF":
+                    path.chmod(path.stat().st_mode | 0o111)
+    PY
+
+    export npm_config_nodedir=${nodejs_24}
+    (cd node_modules/node-pty && node-gyp rebuild --nodedir=${nodejs_24})
+
+    pnpm --dir mobile run postinstall
+    pnpm run typecheck --compiler=native
+    pnpm run build:desktop:assets
+
+    mkdir -p native/wayland-clipboard/.build/x64
+    $CC -O2 -Wall -Wextra -Werror -fstack-protector-strong \
+      -D_FORTIFY_SOURCE=2 -fPIE -pie -Wl,-z,relro,-z,now \
+      native/wayland-clipboard/wayland-clipboard.c \
+      native/wayland-clipboard/x11-clipboard-publisher.c \
+      -ldl -o native/wayland-clipboard/.build/x64/orca-wayland-clipboard
 
     cp -r ${electron.dist} electron-dist
     chmod -R u+w electron-dist
@@ -186,6 +246,10 @@ stdenv.mkDerivation (finalAttrs: {
 
     mkdir -p $out/opt/orca-ide
     cp -r dist/*-unpacked/resources $out/opt/orca-ide/
+    # Keep Nix's Node runtime and its existing library paths intact.
+    ln -sf ${nodejs_24}/bin/node $out/opt/orca-ide/resources/node-runtime/bin/node
+    # The glibc host uses the matching watcher; musl variants cannot load here.
+    rm -rf $out/opt/orca-ide/resources/app.asar.unpacked/node_modules/@parcel/watcher-linux-*-musl
     mkdir -p $out/bin
     install -Dm444 resources/build/icon.png \
       $out/share/icons/hicolor/1024x1024/apps/orca-ide.png

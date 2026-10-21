@@ -11,11 +11,6 @@
 
   imports = [ ../common ];
 
-  my.services.loopx = {
-    enable = true;
-    domain = "loopx.kazuki.m.mado.moe";
-  };
-
   my.programs.vm-test.enable = true;
 
   programs.noctalia.settings.lockscreen.enabled = lib.mkForce false;
