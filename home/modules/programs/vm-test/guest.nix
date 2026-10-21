@@ -285,10 +285,14 @@ in
       out=/job/out
       # Service PATHs omit system packages such as nix and nix-shell.
       export PATH="$PATH:/run/current-system/sw/bin"
-      cp -a /job/src ~/app
-      cd ~/app
       rc=0
-      bash /job/setup.sh > "$out/setup.log" 2>&1 || rc=$?
+      cp -a --no-preserve=ownership /job/src ~/app > "$out/setup.log" 2>&1 || rc=$?
+      if [ "$rc" -ne 0 ]; then
+        echo "$rc" > "$out/setup-exit"
+        exit "$rc"
+      fi
+      cd ~/app
+      bash /job/setup.sh >> "$out/setup.log" 2>&1 || rc=$?
       echo "$rc" > "$out/setup-exit"
       if [ "$rc" -ne 0 ]; then
         exit "$rc"
