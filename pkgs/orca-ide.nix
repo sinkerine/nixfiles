@@ -68,8 +68,8 @@ stdenv.mkDerivation (finalAttrs: {
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "orca";
-    rev = "fc749bdc1efb0926d9a64e42aa248ca0e381de16";
-    hash = "sha256-6vTxDNrl+MQKp7803V4tY8zSkwOb/O1n7Gs1KL/5CzM=";
+    rev = "afc74f2d0116aa0d30a35ce79c61b0c828eda558";
+    hash = "sha256-h/00A6Jtyt6zx2x0s1/r/T+ST34suVnXovDCkq+pezE=";
   };
 
   pnpmDeps = (fetchPnpmDeps {
@@ -162,6 +162,34 @@ stdenv.mkDerivation (finalAttrs: {
   # Nix supplies Electron and its native runtime. Orca's release hook would
   # otherwise try to download Electron and rebuild native modules online.
   postPatch = ''
+    # Shared Nix Electron keeps resourcesPath in its own store directory.
+    # Resolve the clipboard helper beside Orca's app.asar instead.
+    substituteInPlace src/main/window/clipboard-text-publisher.ts \
+      --replace-fail "join(process.resourcesPath, 'bin', 'orca-wayland-clipboard')" \
+        "join(app.getAppPath(), '..', 'bin', 'orca-wayland-clipboard')"
+    # These libraries are loaded with dlopen, so autoPatchelf cannot discover them.
+    substituteInPlace native/wayland-clipboard/wayland-clipboard.c \
+      --replace-fail '"libwayland-client.so.0"' '"${lib.getLib wayland}/lib/libwayland-client.so.0"'
+    substituteInPlace native/wayland-clipboard/x11-clipboard-publisher.c \
+      --replace-fail '"libgtk-3.so.0"' '"${lib.getLib gtk3}/lib/libgtk-3.so.0"'
+    cp ${./orca-nix-settings.ts} src/main/persistence/loading-store/nix-settings.ts
+    python3 - <<'PY'
+    from pathlib import Path
+
+    path = Path('src/main/persistence/loading-store/loaded-state-parsing.ts')
+    source = path.read_text()
+    source = "import { mergeNixSettings } from './nix-settings'\n" + source
+    anchor = "    const workspaceSession = pruneWorkspaceSessionBrowserHistory("
+    assert source.count(anchor) == 1
+    source = source.replace(anchor, """    const nixSettings = mergeNixSettings(result.settings)
+        if (nixSettings !== result.settings) {
+          result = { ...result, settings: nixSettings }
+          this.runtime.loadNeedsSave = true
+        }
+
+    """ + anchor.lstrip())
+    path.write_text(source)
+    PY
     # The Nix Electron runtime is supplied by nixpkgs; avoid the upstream
     # release hook's online Electron download and native rebuild.
     substituteInPlace config/electron-builder.config.cjs \
@@ -271,14 +299,38 @@ stdenv.mkDerivation (finalAttrs: {
       --unset NODE_REPL_EXTERNAL_MODULE \
       --add-flags $out/opt/orca-ide/resources/app.asar.unpacked/out/cli/index.js
 
-    makeWrapper ${lib.getExe electron} $out/bin/orca-ide \
+    # no_new_privs is irreversible and inherited by Orca's terminal daemon.
+    # Re-enter through the user manager if launched from a restricted terminal.
+    # Keep the normal Electron wrapper separate so the service cannot recurse.
+    makeWrapper ${lib.getExe electron} $out/bin/orca-ide-unrestricted \
       --inherit-argv0 \
       --set ELECTRON_FORCE_IS_PACKAGED 1 \
+      --run 'export ORCA_NIX_SETTINGS_FILE="''${ORCA_NIX_SETTINGS_FILE:-''${XDG_CONFIG_HOME:-$HOME/.config}/orca/nix-settings.json}"' \
       --set ORCA_CLI_COMMAND orca-ide-cli \
       --prefix PATH : ${computerUsePython}/bin \
       --prefix GI_TYPELIB_PATH : ${gobject-introspection}/lib/girepository-1.0:${at-spi2-core}/lib/girepository-1.0 \
       --add-flags --no-sandbox \
       --add-flags $out/opt/orca-ide/resources/app.asar
+
+    cat > $out/bin/orca-ide <<'EOF'
+    #!${stdenv.shell}
+    while IFS=: read -r key value; do
+      if [[ "$key" == NoNewPrivs && "$value" == *1* ]]; then
+        environment=()
+        for name in DISPLAY WAYLAND_DISPLAY XAUTHORITY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS XDG_SESSION_TYPE XDG_CURRENT_DESKTOP NIXOS_OZONE_WL ELECTRON_OZONE_PLATFORM_HINT ORCA_PROFILE_ID ORCA_NIX_SETTINGS_FILE; do
+          if [[ -v "$name" ]]; then
+            environment+=("--setenv=$name=''${!name}")
+          fi
+        done
+        exec ${systemd}/bin/systemd-run --user --collect --wait --pipe \
+          --same-dir --service-type=exec --property=NoNewPrivileges=false \
+          "''${environment[@]}" -- @out@/bin/orca-ide-unrestricted "$@"
+      fi
+    done < /proc/self/status
+    exec @out@/bin/orca-ide-unrestricted "$@"
+    EOF
+    substituteInPlace $out/bin/orca-ide --replace-fail '@out@' "$out"
+    chmod +x $out/bin/orca-ide
   '';
 
   desktopItems = [

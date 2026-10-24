@@ -38,5 +38,43 @@
     ];
     mode = lib.mkDefault (if config.my.essentials.gui.enable then "gui" else "headless");
     pairingAddress = "${hostname}.m.mado.moe";
+    settings = {
+      # Keep these settings shared between GUI and headless Orca hosts.
+      theme = "dark";
+      disabledTuiAgents = [
+        "claude"
+        "claude-agent-teams"
+      ];
+      agentCmdOverrides = {
+        codex = "cx-luna-medium";
+      };
+      agentStatusHooksEnabled = true;
+      agentDefaultArgs = {
+        claude = "--dangerously-skip-permissions";
+        "claude-agent-teams" = "--dangerously-skip-permissions";
+        openclaude = "--dangerously-skip-permissions";
+        codex = "";
+        gemini = "--yolo";
+        antigravity = "--dangerously-skip-permissions";
+        aider = "--yes-always";
+        amp = "--dangerously-allow-all";
+        kiro = "--trust-all-tools";
+        crush = "--yolo";
+        autohand = "--unrestricted";
+        cline = "--auto-approve true";
+        "command-code" = "--yolo";
+        continue = "--allow \"*\"";
+        cursor = "--yolo";
+        kimi = "--yolo";
+        "mistral-vibe" = "--agent auto-approve";
+        "qwen-code" = "--approval-mode yolo";
+        rovo = "--yolo";
+        hermes = "--yolo";
+        copilot = "--yolo";
+        grok = "--permission-mode bypassPermissions";
+        devin = "--permission-mode bypass";
+        ante = "--yolo";
+      };
+    };
   };
 }

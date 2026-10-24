@@ -93,6 +93,7 @@ in
         defaultProvider = "magpie";
         defaultModel = "gpt";
         defaultThinkingLevel = "medium";
+        tuiMode = "regular";
         defaultProjectTrust = "always";
         defaultTools = [
           "+codemode"

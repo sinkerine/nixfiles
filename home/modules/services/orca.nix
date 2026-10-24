@@ -7,78 +7,7 @@
 
 let
   cfg = config.my.services.orca;
-  orcaSettings = pkgs.writeText "orca-settings.json" (builtins.toJSON {
-    settings = {
-      # Keep these settings shared between GUI and headless Orca hosts.
-      theme = "dark";
-      disabledTuiAgents = [
-        "claude"
-        "claude-agent-teams"
-      ];
-      agentCmdOverrides = {
-        codex = "cx-luna-medium";
-      };
-      agentStatusHooksEnabled = true;
-      agentDefaultArgs = {
-        claude = "--dangerously-skip-permissions";
-        "claude-agent-teams" = "--dangerously-skip-permissions";
-        openclaude = "--dangerously-skip-permissions";
-        codex = "";
-        gemini = "--yolo";
-        antigravity = "--dangerously-skip-permissions";
-        aider = "--yes-always";
-        amp = "--dangerously-allow-all";
-        kiro = "--trust-all-tools";
-        crush = "--yolo";
-        autohand = "--unrestricted";
-        cline = "--auto-approve true";
-        "command-code" = "--yolo";
-        continue = "--allow \"*\"";
-        cursor = "--yolo";
-        kimi = "--yolo";
-        "mistral-vibe" = "--agent auto-approve";
-        "qwen-code" = "--approval-mode yolo";
-        rovo = "--yolo";
-        hermes = "--yolo";
-        copilot = "--yolo";
-        grok = "--permission-mode bypassPermissions";
-        devin = "--permission-mode bypass";
-        ante = "--yolo";
-      };
-    };
-  });
-  mergeOrcaSettings = pkgs.writeShellScript "merge-orca-settings" ''
-    set -euo pipefail
-
-    target="$HOME/.config/orca/profiles/local-default/orca-data.json"
-    defaults=${orcaSettings}
-    mkdir -p "$(dirname "$target")"
-
-    if [ -f "$target" ]; then
-      tmp="$target.tmp.$$"
-      ${pkgs.jq}/bin/jq --arg codexCommand cx-luna-medium -s '
-        def deepmerge(a; b):
-          if (a | type) == "object" and (b | type) == "object" then
-            reduce (b | keys_unsorted[]) as $key
-              (a;
-                .[$key] = if has($key)
-                  then deepmerge(.[$key]; b[$key])
-                  else b[$key]
-                end)
-          else b
-          end;
-
-        . as $documents
-        | deepmerge($documents[0]; $documents[1])
-        | .settings.agentCmdOverrides.codex = $codexCommand
-        | .settings.agentDefaultArgs.codex = ""
-      ' "$target" "$defaults" > "$tmp"
-      chmod --reference="$target" "$tmp"
-      mv "$tmp" "$target"
-    else
-      cp "$defaults" "$target"
-    fi
-  '';
+  settingsFormat = pkgs.formats.json { };
   orcaCli = pkgs.writeShellScriptBin "orca" ''
     set -euo pipefail
     # Resolve the active profile target instead of capturing cfg.package's
@@ -114,6 +43,19 @@ in
 
     package = lib.mkPackageOption pkgs "orca-ide" { };
 
+    settings = lib.mkOption {
+      type = settingsFormat.type;
+      default = { };
+      description = ''
+        Global Orca settings merged into each profile at startup through Orca's
+        SQLite persistence. Objects merge recursively; declared scalars and
+        arrays replace existing values. Unspecified settings are preserved.
+        Removing a declaration leaves its last saved value in the profile.
+        Restart Orca after switching to apply changes. Do not put secrets here:
+        this file is stored in the world-readable Nix store.
+      '';
+    };
+
     mode = lib.mkOption {
       type = lib.types.enum [
         "gui"
@@ -143,9 +85,8 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    home.activation.orcaSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      ${mergeOrcaSettings}
-    '';
+    xdg.configFile."orca/nix-settings.json".source =
+      settingsFormat.generate "orca-nix-settings.json" cfg.settings;
     home.file.".local/bin/orca" = {
       source = "${orcaCli}/bin/orca";
       force = true;
