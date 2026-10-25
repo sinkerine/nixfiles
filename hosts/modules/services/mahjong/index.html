@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14532d">
+<title>日麻计分</title>
+<style>
+  :root {
+    --bg: #f3f4f1; --card: #ffffff; --fg: #1c1f1d; --muted: #6b726d;
+    --line: #dde1dc; --accent: #15803d; --accent-fg: #fff; --table: #1f6b45;
+    --pos: #15803d; --neg: #c2410c; --riichi: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101311; --card: #1a1f1c; --fg: #e8ece9; --muted: #95a09a;
+      --line: #2b332e; --accent: #22c55e; --accent-fg: #062b14; --table: #173d2a;
+      --pos: #4ade80; --neg: #fb923c; --riichi: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.4 system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif; }
+  body { padding: env(safe-area-inset-top) 16px calc(16px + env(safe-area-inset-bottom)); max-width: 560px; margin: 0 auto; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; }
+  h1 { font-size: 18px; margin: 0; }
+  .status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--neg); }
+  .dot.on { background: var(--pos); }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--fg);
+    border-radius: 10px; padding: 8px 12px; cursor: pointer; touch-action: manipulation; }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+  button.danger { color: var(--neg); }
+  button:disabled { opacity: .4; }
+  input, select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; width: 100%; min-width: 0; }
+
+  .table { display: grid; grid-template-columns: 1fr 1.1fr 1fr; grid-template-rows: auto auto auto;
+    gap: 8px; background: var(--table); border-radius: 16px; padding: 10px; }
+  .seat { background: var(--card); border-radius: 12px; padding: 8px; text-align: center; min-width: 0;
+    display: flex; flex-direction: column; gap: 4px; justify-content: center; }
+  .seat.top { grid-column: 2; grid-row: 1; }
+  .seat.left { grid-column: 1; grid-row: 2; }
+  .seat.right { grid-column: 3; grid-row: 2; }
+  .seat.bottom { grid-column: 2; grid-row: 3; outline: 2px solid var(--accent); }
+  .seat .wind { font-size: 12px; color: var(--muted); }
+  .seat .wind b { color: var(--fg); }
+  .seat .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seat .score { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .seat .diff { font-size: 12px; font-variant-numeric: tabular-nums; }
+  .seat .rank { font-size: 11px; color: var(--muted); }
+  .seat button { padding: 4px 8px; font-size: 13px; color: var(--riichi); }
+  .center { grid-column: 2; grid-row: 2; color: #e6f4ea; text-align: center; display: flex;
+    flex-direction: column; justify-content: center; gap: 6px; font-size: 14px; }
+  .center .round { font-size: 18px; font-weight: 700; }
+  .center .row { display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .center button { padding: 2px 9px; background: rgba(255,255,255,.12); color: inherit; border-color: rgba(255,255,255,.25); }
+  .pos { color: var(--pos); } .neg { color: var(--neg); }
+
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+  .actions .wide { grid-column: span 2; padding: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+  .card h2 { font-size: 15px; margin: 0 0 8px; }
+  .grid2 { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; }
+  .grid2 label { font-size: 14px; color: var(--muted); }
+  .hist { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  .hist li { padding: 6px 0; border-top: 1px solid var(--line); display: flex; gap: 8px; }
+  .hist li:first-child { border-top: 0; }
+  .hist .t { color: var(--muted); flex: none; }
+  .empty { color: var(--muted); font-size: 13px; }
+
+  dialog { border: 0; border-radius: 16px; padding: 16px; width: min(480px, calc(100vw - 32px));
+    background: var(--card); color: var(--fg); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h2 { margin: 0 0 12px; font-size: 17px; }
+  .entry { display: grid; grid-template-columns: 1fr auto 1.2fr; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .entry .sign { width: 44px; padding: 8px 0; font-weight: 700; }
+  .sum { font-size: 13px; color: var(--muted); margin: 8px 0; }
+  .sum.bad { color: var(--neg); }
+  .dlg-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-bottom: 8px; }
+  .seg button { border-radius: 0; }
+  .seg button:first-child { border-radius: 10px 0 0 10px; }
+  .seg button:last-child { border-radius: 0 10px 10px 0; }
+  .seg button.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+  .hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
+  .check { display: flex; align-items: center; gap: 6px; color: var(--fg) !important; }
+  .check input { width: auto; }
+  dialog.draw .winOnly { display: none; }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .quick button { padding: 4px 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>日麻计分 · 半庄</h1>
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">连接中</span></div>
+</header>
+
+<div class="table" id="table"></div>
+
+<div class="actions">
+  <button class="primary wide" id="btnHand">记一局</button>
+  <button id="btnUndo">撤销上一步</button>
+  <button class="danger" id="btnReset">重置分数</button>
+</div>
+
+<div class="card">
+  <h2>设置</h2>
+  <div class="grid2">
+    <label for="startPts">起始点数</label>
+    <input id="startPts" type="number" inputmode="numeric" step="1000" min="0">
+    <label>玩家（起家起）</label><span></span>
+    <label for="n0">东</label><input id="n0" maxlength="16">
+    <label for="n1">南</label><input id="n1" maxlength="16">
+    <label for="n2">西</label><input id="n2" maxlength="16">
+    <label for="n3">北</label><input id="n3" maxlength="16">
+    <label for="mySeat">我坐在</label>
+    <select id="mySeat"></select>
+  </div>
+</div>
+
+<div class="card">
+  <h2>记录</h2>
+  <ul class="hist" id="hist"></ul>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog" id="handForm">
+    <h2>记一局</h2>
+    <div class="seg" id="kind">
+      <button type="button" data-k="win" class="on">和了</button>
+      <button type="button" data-k="draw">流局</button>
+    </div>
+    <p class="hint" id="kindHint"></p>
+    <div class="quick" id="quick"></div>
+    <div id="entries"></div>
+    <div class="sum" id="sum"></div>
+    <div class="grid2" style="margin-top:8px">
+      <label for="potTo" class="winOnly">供托给</label>
+      <select id="potTo" class="winOnly"></select>
+      <label class="winOnly">本场点</label>
+      <label class="winOnly check"><input type="checkbox" id="honbaPts"> <span id="honbaPreview"></span></label>
+      <label for="honbaNext">之后本场</label>
+      <select id="honbaNext">
+        <option value="keep">不变</option>
+        <option value="inc">+1（连庄/流局）</option>
+        <option value="reset">清零（闲家和了）</option>
+      </select>
+      <label for="advance">局数</label>
+      <select id="advance">
+        <option value="no">不变（连庄）</option>
+        <option value="yes">下一局（轮庄）</option>
+      </select>
+    </div>
+    <div class="sum" id="preview"></div>
+    <div class="dlg-btns">
+      <button value="cancel" formnovalidate>取消</button>
+      <button class="primary" value="ok" id="okBtn">确定</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const WINDS = ["东", "南", "西", "北"];
+const POS = ["bottom", "right", "top", "left"];
+const $ = (id) => document.getElementById(id);
+
+const defaultState = () => ({
+  startPoints: 25000,
+  names: ["玩家1", "玩家2", "玩家3", "玩家4"],
+  scores: [25000, 25000, 25000, 25000],
+  riichi: [false, false, false, false],
+  pot: 0, honba: 0, round: 0, // round 0..7 = 东1..南4, dealer = round % 4
+  history: [],
+});
+
+let version = 0;
+let state = defaultState();
+let mySeat = 0;
+try { mySeat = +localStorage.getItem("mySeat") || 0; } catch {}
+
+const fmt = (n) => n.toLocaleString("en-US");
+const signed = (n) => (n > 0 ? "+" : "") + fmt(n);
+const roundName = (r) => (r < 4 ? "东" : r < 8 ? "南" : "西") + ((r % 4) + 1) + "局";
+const now = () => new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+const snapshot = (s) => ({ scores: [...s.scores], riichi: [...s.riichi], pot: s.pot, honba: s.honba, round: s.round });
+
+function log(s, text) {
+  s.history.push({ t: now(), text, before: snapshot(s) });
+  if (s.history.length > 300) s.history.shift();
+}
+
+// Apply a mutation; on version conflict, re-apply it on the server's newer state.
+let queue = Promise.resolve();
+function mutate(fn) {
+  queue = queue.then(async () => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const next = structuredClone(state);
+      if (fn(next) === false) return;
+      state = next; render();
+      try {
+        const r = await fetch("api/state", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ baseVersion: version, state: next }),
+        });
+        const data = await r.json();
+        if (r.ok || r.status === 409) accept(data, true);
+        if (r.ok) return;
+        if (r.status !== 409) throw new Error(r.status);
+      } catch (e) {
+        setStatus(false, "保存失败");
+        await refetch();
+        return;
+      }
+    }
+  });
+}
+
+function accept(data, force) {
+  if (!force && data.version <= version) return;
+  version = data.version;
+  state = Object.assign(defaultState(), data.state || {});
+  render();
+}
+
+async function refetch() {
+  try { accept(await (await fetch("api/state", { cache: "no-store" })).json(), true); } catch {}
+}
+
+function setStatus(on, text) {
+  $("dot").classList.toggle("on", on);
+  $("statusText").textContent = text;
+}
+
+let es;
+function connect() {
+  es?.close();
+  es = new EventSource("api/events");
+  es.onopen = () => setStatus(true, "已同步");
+  es.onmessage = (e) => accept(JSON.parse(e.data), false);
+  es.onerror = () => setStatus(false, "重连中");
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") { refetch(); if (es?.readyState === 2) connect(); }
+});
+
+function ranks(scores) {
+  return scores.map((s, i) => 1 + scores.filter((t, j) => t > s || (t === s && j < i)).length);
+}
+
+function render() {
+  const s = state, dealer = s.round % 4, rk = ranks(s.scores);
+  const table = $("table");
+  table.innerHTML = "";
+  for (let k = 0; k < 4; k++) {
+    const i = (mySeat + k) % 4, wind = WINDS[(i - dealer + 4) % 4];
+    const d = s.scores[i] - s.startPoints;
+    const el = document.createElement("div");
+    el.className = "seat " + POS[k];
+    el.innerHTML = `
+      <div class="wind"><b>${wind}</b>${i === dealer ? " · 庄" : ""}</div>
+      <div class="name"></div>
+      <div class="score">${fmt(s.scores[i])}</div>
+      <div class="diff ${d > 0 ? "pos" : d < 0 ? "neg" : ""}">${signed(d)}</div>
+      <div class="rank">第${rk[i]}位</div>`;
+    el.querySelector(".name").textContent = s.names[i];
+    const b = document.createElement("button");
+    b.textContent = s.riichi[i] ? "取消立直" : "立直";
+    b.onclick = () => mutate((n) => toggleRiichi(n, i));
+    el.append(b);
+    table.append(el);
+  }
+  const c = document.createElement("div");
+  c.className = "center";
+  c.innerHTML = `
+    <div class="row"><button data-r="-1">‹</button><span class="round">${roundName(s.round)}</span><button data-r="1">›</button></div>
+    <div class="row"><button data-h="-1">−</button><span>${s.honba} 本场</span><button data-h="1">+</button></div>
+    <div>供托 ${s.pot} 根</div>`;
+  c.querySelectorAll("[data-r]").forEach((b) => b.onclick = () => mutate((n) => {
+    n.round = Math.max(0, Math.min(11, n.round + +b.dataset.r));
+  }));
+  c.querySelectorAll("[data-h]").forEach((b) => b.onclick = () => mutate((n) => {
+    n.honba = Math.max(0, n.honba + +b.dataset.h);
+  }));
+  table.append(c);
+
+  for (let i = 0; i < 4; i++) {
+    const inp = $("n" + i);
+    if (document.activeElement !== inp) inp.value = s.names[i];
+  }
+  if (document.activeElement !== $("startPts")) $("startPts").value = s.startPoints;
+  const sel = $("mySeat");
+  sel.innerHTML = s.names.map((n, i) => `<option value="${i}">${WINDS[i]}起 · ${escapeHtml(n)}</option>`).join("");
+  sel.value = mySeat;
+
+  const h = $("hist");
+  h.innerHTML = s.history.length ? "" : '<li class="empty">还没有记录</li>';
+  for (const e of [...s.history].reverse()) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="t">${e.t}</span><span></span>`;
+    li.lastChild.textContent = e.text;
+    h.append(li);
+  }
+  $("btnUndo").disabled = !s.history.length;
+}
+
+function escapeHtml(t) {
+  return t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function toggleRiichi(n, i) {
+  if (n.riichi[i]) {
+    log(n, `${n.names[i]} 取消立直`);
+    n.riichi[i] = false; n.scores[i] += 1000; n.pot -= 1;
+  } else {
+    log(n, `${n.names[i]} 立直`);
+    n.riichi[i] = true; n.scores[i] -= 1000; n.pot += 1;
+  }
+}
+
+// Settings
+$("startPts").onchange = (e) => {
+  const v = Math.round(+e.target.value);
+  if (!Number.isFinite(v) || v < 0) return render();
+  mutate((n) => {
+    if (v === n.startPoints) return false;
+    const untouched = n.history.length === 0;
+    n.startPoints = v;
+    if (untouched) n.scores = [v, v, v, v];
+  });
+};
+for (let i = 0; i < 4; i++) {
+  $("n" + i).onchange = (e) => {
+    const v = e.target.value.trim() || `玩家${i + 1}`;
+    mutate((n) => { if (n.names[i] === v) return false; n.names[i] = v; });
+  };
+}
+$("mySeat").onchange = (e) => {
+  mySeat = +e.target.value;
+  try { localStorage.setItem("mySeat", mySeat); } catch {}
+  render();
+};
+
+$("btnUndo").onclick = () => mutate((n) => {
+  const e = n.history.pop();
+  if (!e) return false;
+  Object.assign(n, e.before);
+});
+
+$("btnReset").onclick = () => {
+  if (!confirm(`把四家分数重置为 ${fmt(state.startPoints)} 并清空记录？`)) return;
+  mutate((n) => {
+    const v = n.startPoints;
+    Object.assign(n, { scores: [v, v, v, v], riichi: [false, false, false, false], pot: 0, honba: 0, round: 0, history: [] });
+  });
+};
+
+// Hand entry dialog
+const sign = [1, 1, 1, 1];
+let kind = "win";
+let touched = {}; // selects the user changed by hand keep their value
+
+function setKind(k) {
+  kind = k;
+  $("dlg").classList.toggle("draw", k === "draw");
+  $("kind").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.k === k));
+  $("kindHint").textContent = k === "win"
+    ? "只填这手牌的点数，不含立直棒和本场：供托和本场点会按下面的选项自动加给和了的人。"
+    : "填不听罚符（如 +3000 / −1000×3），全听或全不听就都不填。供托留到下一局。";
+  touched = {};
+  updateSum();
+}
+$("kind").querySelectorAll("button").forEach((b) => b.onclick = () => setKind(b.dataset.k));
+for (const id of ["potTo", "honbaNext", "advance"]) $(id).addEventListener("change", () => { touched[id] = true; updateSum(); });
+$("honbaPts").addEventListener("change", () => { touched.honbaPts = true; updateSum(); });
+
+function buildDialog() {
+  const s = state, box = $("entries");
+  box.innerHTML = "";
+  for (let i = 0; i < 4; i++) {
+    sign[i] = 1;
+    const row = document.createElement("div");
+    row.className = "entry";
+    row.innerHTML = `<span class="name"></span><button type="button" class="sign">+</button>
+      <input type="number" inputmode="numeric" step="100" min="0" placeholder="0" data-i="${i}">`;
+    row.querySelector(".name").textContent = s.names[i];
+    const sb = row.querySelector(".sign");
+    sb.onclick = () => { sign[i] *= -1; sb.textContent = sign[i] > 0 ? "+" : "−"; sb.classList.toggle("neg", sign[i] < 0); updateSum(); };
+    row.querySelector("input").oninput = updateSum;
+    box.append(row);
+  }
+  $("potTo").innerHTML = `<option value="-1">不分（留到下一局）</option>` +
+    s.names.map((n, i) => `<option value="${i}">${escapeHtml(n)}</option>`).join("");
+  const q = $("quick");
+  q.innerHTML = "";
+  for (const v of [1000, 2000, 3900, 7700, 8000, 12000, 18000]) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = fmt(v);
+    b.onclick = () => {
+      const target = [...box.querySelectorAll("input")].find((x) => document.activeElement === x) || lastFocused;
+      if (target) { target.value = v; updateSum(); }
+    };
+    q.append(b);
+  }
+  lastFocused = null;
+  setKind("win");
+}
+let lastFocused = null;
+$("entries").addEventListener("focusin", (e) => { if (e.target.tagName === "INPUT") lastFocused = e.target; });
+document.querySelector("#quick").addEventListener("mousedown", (e) => e.preventDefault());
+
+function deltas() {
+  return [...$("entries").querySelectorAll("input")].map((x, i) => sign[i] * Math.round(+x.value || 0));
+}
+
+// Infer who won from the deltas. Ron: one loser; with several winners
+// (double ron) the one nearest the loser in turn order (头跳) takes
+// riichi sticks and honba. Tsumo: one winner, three payers.
+function analyze(d) {
+  const win = [0, 1, 2, 3].filter((i) => d[i] > 0), lose = [0, 1, 2, 3].filter((i) => d[i] < 0);
+  if (lose.length === 1 && win.length >= 1) {
+    const l = lose[0], w = [1, 2, 3].map((k) => (l + k) % 4).find((i) => d[i] > 0);
+    return { winner: w, winners: win, ron: l };
+  }
+  if (win.length === 1 && lose.length === 3) return { winner: win[0], winners: win, ron: null };
+  return null;
+}
+
+// Extra points per seat from honba for a win.
+function honbaDeltas(a, honba) {
+  const x = [0, 0, 0, 0];
+  if (!a || !honba) return x;
+  if (a.ron !== null) { x[a.winner] += 300 * honba; x[a.ron] -= 300 * honba; }
+  else for (let i = 0; i < 4; i++) x[i] += i === a.winner ? 300 * honba : -100 * honba;
+  return x;
+}
+
+function plan() {
+  const s = state, d = deltas();
+  const a = kind === "win" ? analyze(d) : null;
+  const potTo = kind === "win" ? +$("potTo").value : -1;
+  const hb = kind === "win" && $("honbaPts").checked ? honbaDeltas(a, s.honba) : [0, 0, 0, 0];
+  const total = d.map((x, i) => x + hb[i] + (i === potTo ? s.pot * 1000 : 0));
+  return { d, a, potTo, total };
+}
+
+function updateSum() {
+  const s = state, d = deltas(), dealer = s.round % 4;
+  const t = d.reduce((x, y) => x + y, 0), el = $("sum");
+  el.textContent = t === 0 ? "合计 0 ✓" : `合计 ${signed(t)}（四家增减之和应为 0）`;
+  el.classList.toggle("bad", t !== 0);
+
+  // Defaults derived from the deltas, unless the user picked something.
+  const a = kind === "win" ? analyze(d) : null;
+  if (kind === "win") {
+    if (!touched.potTo) $("potTo").value = a && s.pot ? a.winner : -1;
+    if (!touched.honbaPts) $("honbaPts").checked = !!a && s.honba > 0;
+    $("honbaPts").disabled = !a || !s.honba;
+    const dealerWon = a ? a.winners.includes(dealer) : false;
+    if (!touched.honbaNext) $("honbaNext").value = a ? (dealerWon ? "inc" : "reset") : "keep";
+    if (!touched.advance) $("advance").value = a && !dealerWon ? "yes" : "no";
+  } else {
+    if (!touched.honbaNext) $("honbaNext").value = "inc";
+    if (!touched.advance) $("advance").value = d[dealer] < 0 ? "yes" : "no";
+  }
+
+  const p = plan();
+  $("honbaPreview").textContent = !s.honba ? "0 本场，无"
+    : !a ? `${s.honba} 本场（先填点数）`
+    : a.ron !== null ? `${s.names[a.winner]} +${300 * s.honba}，${s.names[a.ron]} −${300 * s.honba}`
+    : `${s.names[a.winner]} +${300 * s.honba}，其余各 −${100 * s.honba}`;
+  const changes = p.total.map((x, i) => x ? `${s.names[i]} ${signed(x)}` : null).filter(Boolean);
+  $("preview").textContent = changes.length ? "实际变动：" + changes.join("，") : "";
+}
+
+$("btnHand").onclick = () => { buildDialog(); $("dlg").showModal(); };
+$("dlg").addEventListener("close", () => {
+  if ($("dlg").returnValue !== "ok") return;
+  const p = plan(), honba = $("honbaNext").value, adv = $("advance").value === "yes", k = kind;
+  const withHonba = k === "win" && $("honbaPts").checked;
+  if (p.total.every((x) => x === 0) && honba === "keep" && !adv) return;
+  mutate((n) => {
+    // Recompute against the latest shared state in case it changed meanwhile.
+    const potTo = p.potTo, hb = withHonba ? honbaDeltas(p.a, n.honba) : [0, 0, 0, 0];
+    const parts = p.d.map((x, i) => x ? `${n.names[i]} ${signed(x)}` : null).filter(Boolean);
+    if (hb.some((x) => x)) parts.push(`本场 ${n.names[p.a.winner]} +${hb[p.a.winner]}`);
+    if (potTo >= 0 && n.pot) parts.push(`${n.names[potTo]} 收供托 ${n.pot * 1000}`);
+    log(n, `${roundName(n.round)} ${n.honba}本场 ${k === "win" ? "和了" : "流局"}：` + (parts.join("，") || "无点数变动"));
+    p.d.forEach((x, i) => n.scores[i] += x + hb[i]);
+    if (potTo >= 0) { n.scores[potTo] += n.pot * 1000; n.pot = 0; }
+    n.honba = honba === "inc" ? n.honba + 1 : honba === "reset" ? 0 : n.honba;
+    if (adv) n.round = Math.min(11, n.round + 1);
+    n.riichi = [false, false, false, false];
+  });
+});
+
+render();
+refetch().then(connect);
+</script>
+</body>
+</html>

@@ -356,6 +356,10 @@ in
     enable = true;
     enableReverseProxy = true;
   };
+  my.services.mahjong = {
+    enable = true;
+    enableReverseProxy = true;
+  };
   my.services.vsftpd = {
     enable = true;
     enableSsl = true;
