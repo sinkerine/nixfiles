@@ -68,8 +68,8 @@ stdenv.mkDerivation (finalAttrs: {
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "orca";
-    rev = "afc74f2d0116aa0d30a35ce79c61b0c828eda558";
-    hash = "sha256-h/00A6Jtyt6zx2x0s1/r/T+ST34suVnXovDCkq+pezE=";
+    rev = "9df5b7efd0318e679c02e19c01fa84e5228c8d10";
+    hash = "sha256-tsoh1gB2oVaSaC1zj1DU794inusTlZlwuuM3bFKWudw=";
   };
 
   pnpmDeps = (fetchPnpmDeps {

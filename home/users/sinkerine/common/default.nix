@@ -42,7 +42,6 @@
       # Keep these settings shared between GUI and headless Orca hosts.
       theme = "dark";
       disabledTuiAgents = [
-        "claude"
         "claude-agent-teams"
       ];
       agentCmdOverrides = {

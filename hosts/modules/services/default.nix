@@ -15,7 +15,6 @@
     ./lock.nix
     ./aria2
     ./ariang.nix
-    ./mahjong
     ./openrgb.nix
     ./vsftpd
     ./proxmox
