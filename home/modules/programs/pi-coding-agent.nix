@@ -13,6 +13,11 @@ let
     postWrapper = (old.postWrapper or "") + ''
       export PI_CODING_AGENT_PACKAGE_ROOT="${placeholder "out"}/lib/node_modules/pi-monorepo"
     '';
+    # pi-goal-x waits for the soonest magpie quota reset after a usage limit.
+    postFixup = (old.postFixup or "") + ''
+      wrapProgram $out/bin/pi \
+        --set-default PI_GOAL_QUOTA_URL https://magpie.sachi.m.mado.moe/api/usage/quotas
+    '';
   });
   piAskUser = pkgs.pi-ask-user;
   piFooter = pkgs.pi-footer;
@@ -95,6 +100,16 @@ in
         defaultThinkingLevel = "medium";
         tuiMode = "regular";
         defaultProjectTrust = "always";
+        compaction = {
+          enabled = true;
+          # Reserve 40% so each configured model compacts above 60% usage.
+          modelOverrides = listToAttrs (concatLists (mapAttrsToList
+            (provider: providerConfig: map (model: {
+              name = "${provider}/${model.id}";
+              value.reserveTokens = builtins.div (model.contextWindow * 40) 100;
+            }) providerConfig.models)
+            config.programs.pi-coding-agent.models.providers));
+        };
         defaultTools = [
           "+codemode"
           "+grep"

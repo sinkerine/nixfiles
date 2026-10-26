@@ -1,0 +1,614 @@
+diff --git a/extensions/goal-events.ts b/extensions/goal-events.ts
+index a5d4c85..a820d6d 100644
+--- a/extensions/goal-events.ts
++++ b/extensions/goal-events.ts
+@@ -8,6 +8,7 @@ import {
+ 	hasAbortedAssistantMessage,
+ 	hasErrorAssistantMessage,
+ 	hasNetworkErrorAssistantMessage,
++	endsWithUsageLimitAssistantMessage,
+ 	isAbortedAssistantMessage,
+ 	isErrorAssistantMessage,
+ 	isMeaningfulProgressToolCall,
+@@ -35,6 +36,7 @@ import { syncTerminalInputPause } from "./goal-widget.ts";
+ import type { GoalCore } from "./goal-state.ts";
+ import { filterGoalSessionContext } from "./goal-session-safety.ts";
+ import type { GoalMutationOutcome } from "./goal-service.ts";
++import { fetchQuotaRetryPlan, formatQuotaRetryTime, quotaRetryUrl } from "./quota-retry.ts";
+ 
+ /** Normalize checkpoints independently: deleting old markers shifts the cached prefix. */
+ export function compactGoalCheckpointContext(
+@@ -70,6 +72,7 @@ export function registerGoalEvents(core: GoalCore): void {
+ 	pi.on("before_provider_request", (event, ctx) => cacheGoalHistory(event.payload, liveRetention.contents(sessionKeyFor(ctx as ExtensionContext | undefined))));
+ 	let continuationAfterSettleFor: string | null = null;
+ 	let networkErrorRecoveryAfterSettleFor: string | null = null;
++	let quotaRecoveryAfterSettleFor: string | null = null;
+ 
+ 	pi.on("context", async (event, ctx) => {
+ 		const filtered = filterGoalSessionContext(event.messages);
+@@ -380,6 +383,7 @@ export function registerGoalEvents(core: GoalCore): void {
+ 			core.runtime.setCheckpoint(null);
+ 			core.clearContinuationState();
+ 			networkErrorRecoveryAfterSettleFor = null;
++			quotaRecoveryAfterSettleFor = null;
+ 		}
+ 
+ 		core.reconcileFocusedGoalFromDisk(ctx);
+@@ -495,6 +499,7 @@ export function registerGoalEvents(core: GoalCore): void {
+ 		core.runningGoalId = null;
+ 		continuationAfterSettleFor = null;
+ 		networkErrorRecoveryAfterSettleFor = null;
++		quotaRecoveryAfterSettleFor = null;
+ 
+ 		// Account for any tokens from aborted in-flight assistant messages so
+ 		// they are not silently lost (but charge them to the original goal).
+@@ -523,6 +528,14 @@ export function registerGoalEvents(core: GoalCore): void {
+ 		// Provider failures are not completed work: persist and refresh the
+ 		// display, but never queue a continuation for a run whose messages
+ 		// include an assistant error (danim47c pattern).
++		// A usage limit waits for the provider's quota reset instead of the
++		// network-error ladder when a quota endpoint is configured.
++		if (quotaRetryUrl() && endsWithUsageLimitAssistantMessage(event.messages)) {
++			core.persist(ctx);
++			core.updateUI(ctx);
++			quotaRecoveryAfterSettleFor = core.state.goal.id;
++			return;
++		}
+ 		if (hasNetworkErrorAssistantMessage(event.messages) || hasAbortedAssistantMessage(event.messages)) {
+ 			core.persist(ctx);
+ 			core.updateUI(ctx);
+@@ -551,8 +564,21 @@ export function registerGoalEvents(core: GoalCore): void {
+ 		continuationAfterSettleFor = null;
+ 		const networkErrorGoalId = networkErrorRecoveryAfterSettleFor;
+ 		networkErrorRecoveryAfterSettleFor = null;
++		const quotaGoalId = quotaRecoveryAfterSettleFor;
++		quotaRecoveryAfterSettleFor = null;
+ 		core.scheduler.settled(ctx, !!goalId && core.isActionableContinuationGoal(goalId));
+ 		if (goalId && core.isActionableContinuationGoal(goalId)) return;
++		const quotaUrl = quotaRetryUrl();
++		if (quotaGoalId && quotaUrl && core.isActionableContinuationGoal(quotaGoalId)) {
++			void fetchQuotaRetryPlan(quotaUrl).then(plan => {
++				// The user may have taken over while the quota was being read.
++				if (!core.isActionableContinuationGoal(quotaGoalId) || core.state.goal?.id !== quotaGoalId) return;
++				if (!core.runtime.scheduleQuotaRetry(ctx, core.state.goal, plan.at)) return;
++				ctx.ui.notify(`Provider usage limit reached. Retrying the goal at ${formatQuotaRetryTime(plan.at)} (${plan.reason}).`, "warning");
++				core.updateUI(ctx);
++			});
++			return;
++		}
+ 		if (!networkErrorGoalId || !core.isActionableContinuationGoal(networkErrorGoalId)) return;
+ 		const recovery = loadGoalSettings(ctx.cwd).networkRecovery;
+ 		const policy = recovery
+@@ -579,6 +605,7 @@ export function registerGoalEvents(core: GoalCore): void {
+ 		core.scheduler.shutdown();
+ 		continuationAfterSettleFor = null;
+ 		networkErrorRecoveryAfterSettleFor = null;
++		quotaRecoveryAfterSettleFor = null;
+ 		core.accountProgress(ctx);
+ 		core.clearContinuationState();
+ 		core.terminalInputUnsubscribe?.();
+diff --git a/extensions/goal-format.ts b/extensions/goal-format.ts
+index 5727899..d9d4feb 100644
+--- a/extensions/goal-format.ts
++++ b/extensions/goal-format.ts
+@@ -279,6 +279,26 @@ export function isNetworkErrorAssistantMessage(message: unknown): boolean {
+ 	return TRANSIENT_PROVIDER_ERROR_RE.test(details);
+ }
+ 
++/** A provider usage limit (Codex/magpie "usage limit has been reached", quota exhaustion). */
++const USAGE_LIMIT_ERROR_RE = /\busage limit\b|\binsufficient[_\s]?quota\b|\bquota exceeded\b|\bout of budget\b|UsageLimitError/i;
++
++export function isUsageLimitAssistantMessage(message: unknown): boolean {
++	if (!isErrorAssistantMessage(message)) return false;
++	const raw = asRecord(message);
++	const details = [raw?.rawStopReason, raw?.errorMessage]
++		.filter((value): value is string => typeof value === "string")
++		.join(" ");
++	return USAGE_LIMIT_ERROR_RE.test(details);
++}
++
++/** Only the run's final assistant message decides: a later success supersedes an earlier limit. */
++export function endsWithUsageLimitAssistantMessage(messages: unknown[]): boolean {
++	for (let i = messages.length - 1; i >= 0; i--) {
++		if (asRecord(messages[i])?.role === "assistant") return isUsageLimitAssistantMessage(messages[i]);
++	}
++	return false;
++}
++
+ export function isToolUseAssistantMessage(message: unknown): boolean {
+ 	const raw = asRecord(message);
+ 	return raw?.role === "assistant" && raw.stopReason === "toolUse";
+diff --git a/extensions/goal-runtime.ts b/extensions/goal-runtime.ts
+index 7a59d1a..779f73a 100644
+--- a/extensions/goal-runtime.ts
++++ b/extensions/goal-runtime.ts
+@@ -38,6 +38,7 @@ export class GoalRuntime {
+ 	private networkErrorRetryGoalId: string | null = null;
+ 	private networkErrorRetryAttempt = 0;
+ 	private networkErrorRetryTimer: ReturnType<typeof setTimeout> | null = null;
++	private quotaRetryAt: number | null = null;
+ 
+ 	// ── turn-stop guard ──────────────────────────────────────────────────
+ 	private turnSeq = 0;
+@@ -134,12 +135,45 @@ export class GoalRuntime {
+ 		return plan;
+ 	}
+ 
++	/**
++	 * Schedule recovery after a provider usage limit at an absolute time.
++	 * It shares the network-error timer slot, so every path that cancels
++	 * network recovery (user turns, pause, clear, focus change) cancels it.
++	 */
++	scheduleQuotaRetry(ctx: ExtensionContext, goal: GoalRecord, at: number): boolean {
++		if (goal.status !== "active" || !goal.autoContinue) return false;
++		this.clearNetworkErrorBackoff();
++		this.networkErrorRetryGoalId = goal.id;
++		this.quotaRetryAt = at;
++		const arm = (): void => {
++			const remaining = at - Date.now();
++			this.networkErrorRetryTimer = setTimeout(() => {
++				this.networkErrorRetryTimer = null;
++				if (Date.now() < at) { arm(); return; } // setTimeout caps near 24.8 days
++				this.quotaRetryAt = null;
++				if (!this.hooks.isActionable(goal.id)) return;
++				const currentGoal = this.hooks.getGoal();
++				if (!currentGoal || currentGoal.id !== goal.id) return;
++				this.hooks.recover?.(ctx);
++			}, Math.min(2_147_483_647, Math.max(0, remaining)));
++			this.networkErrorRetryTimer.unref?.();
++		};
++		arm();
++		return true;
++	}
++
++	/** When a pending usage-limit recovery fires, or null. */
++	getQuotaRetryAt(): number | null {
++		return this.networkErrorRetryTimer ? this.quotaRetryAt : null;
++	}
++
+ 	/** Cancel and forget all goal-level network-error recovery state. */
+ 	clearNetworkErrorBackoff(): void {
+ 		if (this.networkErrorRetryTimer) clearTimeout(this.networkErrorRetryTimer);
+ 		this.networkErrorRetryTimer = null;
+ 		this.networkErrorRetryGoalId = null;
+ 		this.networkErrorRetryAttempt = 0;
++		this.quotaRetryAt = null;
+ 	}
+ 
+ 	/**
+diff --git a/extensions/goal-state.ts b/extensions/goal-state.ts
+index 76f0692..ac61a69 100644
+--- a/extensions/goal-state.ts
++++ b/extensions/goal-state.ts
+@@ -36,6 +36,7 @@ import { GoalAccounting } from "./goal-accounting.ts";
+ import { newGoalScheduler } from "./goal-scheduler-state.ts";
+ import { GoalScheduler } from "./goal-scheduler.ts";
+ import { GoalRuntime } from "./goal-runtime.ts";
++import { formatQuotaRetryTime } from "./quota-retry.ts";
+ import { GoalAuditMessages } from "./goal-session-safety.ts";
+ import {
+ 	focusedGoalFromPool,
+@@ -48,6 +49,8 @@ import { GOAL_WIDGET_KEY, GoalWidgetComponent, liveDisplayGoal, makeGoalWidgetFa
+ import type { AuditVerdict } from "./widgets/auditor-dashboard-model.ts";
+ import { runGoalCompletionAuditor } from "./goal-auditor.ts";
+ 
++const QUOTA_RETRY_STATUS_KEY = "goal-quota-retry";
++
+ 
+ 
+ /**
+@@ -571,6 +574,7 @@ export function createGoalCore(
+ 		lastUiCtx = null;
+ 		if (ctx.hasUI) {
+ 			ctx.ui.setStatus("goal", undefined);
++			ctx.ui.setStatus(QUOTA_RETRY_STATUS_KEY, undefined);
+ 			ctx.ui.setWidget(GOAL_WIDGET_KEY, undefined);
+ 		}
+ 		widgetRegistered = false;
+@@ -652,6 +656,8 @@ export function createGoalCore(
+ 	}
+ 
+ 	function renderUI(ctx: ExtensionContext): void {
++		const quotaRetryAt = runtime.getQuotaRetryAt();
++		ctx.ui.setStatus(QUOTA_RETRY_STATUS_KEY, quotaRetryAt === null ? undefined : `goal: usage limit, retry ${formatQuotaRetryTime(quotaRetryAt)}`);
+ 		const goalCwd = ctx.cwd;
+ 		const storage = goalStorageContext(ctx);
+ 		const totalOpen = otherOpenGoalCount(goalsById, null);
+diff --git a/extensions/quota-retry.ts b/extensions/quota-retry.ts
+new file mode 100644
+index 0000000..5013aeb
+--- /dev/null
++++ b/extensions/quota-retry.ts
+@@ -0,0 +1,81 @@
++/**
++ * Goal-level recovery after a provider usage limit.
++ *
++ * A usage limit outlasts the network-error ladder by hours, so retrying it
++ * every 80s only burns autonomous runs. When PI_GOAL_QUOTA_URL points at a
++ * magpie quota endpoint (`/api/usage/quotas` or `/v1/magpie/quotas`), the
++ * goal instead waits until the first account's exhausted windows reset.
++ * Without it, usage limits stay on the network-error ladder.
++ */
++
++export const QUOTA_RETRY_URL_ENV = "PI_GOAL_QUOTA_URL";
++export const QUOTA_RESET_GRACE_MS = 60_000;
++/** Used when the endpoint can't be read or reports allowance left. */
++export const QUOTA_FALLBACK_DELAY_MS = 10 * 60_000;
++
++export interface QuotaWindow {
++	unlimited?: boolean;
++	used?: number;
++	resetsAt?: string;
++}
++
++export interface QuotaCard {
++	provider?: string;
++	user?: string;
++	name?: string;
++	windows?: QuotaWindow[];
++}
++
++export interface QuotaRetryPlan {
++	at: number;
++	reason: string;
++}
++
++export function quotaRetryUrl(env: NodeJS.ProcessEnv = process.env): string | undefined {
++	const url = env[QUOTA_RETRY_URL_ENV]?.trim();
++	return url ? url : undefined;
++}
++
++/**
++ * An account is usable again once every exhausted window on it has reset;
++ * the goal can retry when the first account becomes usable.
++ */
++export function quotaAvailablePlan(cards: QuotaCard[], now = Date.now()): QuotaRetryPlan | undefined {
++	let best: QuotaRetryPlan | undefined;
++	for (const card of cards) {
++		const windows = (card.windows ?? []).filter(w => !w.unlimited);
++		if (windows.length === 0) continue;
++		let availableAt = now;
++		let known = true;
++		for (const w of windows) {
++			if ((w.used ?? 0) < 100) continue;
++			const reset = w.resetsAt ? Date.parse(w.resetsAt) : NaN;
++			if (!Number.isFinite(reset)) { known = false; break; }
++			availableAt = Math.max(availableAt, reset);
++		}
++		if (!known) continue;
++		if (!best || availableAt < best.at) {
++			best = { at: availableAt, reason: `${card.provider ?? "?"} ${card.user ?? card.name ?? "account"}` };
++		}
++	}
++	return best;
++}
++
++export async function fetchQuotaRetryPlan(url: string, now = Date.now()): Promise<QuotaRetryPlan> {
++	try {
++		const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
++		if (!res.ok) throw new Error(`HTTP ${res.status}`);
++		const body = (await res.json()) as unknown;
++		const data = Array.isArray(body) ? body : (body as { data?: unknown } | null)?.data;
++		const plan = quotaAvailablePlan(Array.isArray(data) ? (data as QuotaCard[]) : [], now);
++		if (!plan) return { at: now + QUOTA_FALLBACK_DELAY_MS, reason: "no quota windows reported" };
++		if (plan.at <= now) return { at: now + QUOTA_FALLBACK_DELAY_MS, reason: `${plan.reason} reports allowance left` };
++		return { at: plan.at + QUOTA_RESET_GRACE_MS, reason: `${plan.reason} resets` };
++	} catch (error) {
++		return { at: now + QUOTA_FALLBACK_DELAY_MS, reason: `quota read failed: ${error instanceof Error ? error.message : String(error)}` };
++	}
++}
++
++export function formatQuotaRetryTime(at: number): string {
++	return new Date(at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
++}
+diff --git a/tests/goal-quota-retry.test.ts b/tests/goal-quota-retry.test.ts
+new file mode 100644
+index 0000000..7e48413
+--- /dev/null
++++ b/tests/goal-quota-retry.test.ts
+@@ -0,0 +1,305 @@
++/**
++ * Usage-limit recovery: with PI_GOAL_QUOTA_URL set, a goal stopped by a
++ * provider usage limit waits for the soonest quota reset reported by magpie
++ * instead of retrying on the network-error ladder.
++ */
++
++import assert from "node:assert/strict";
++import test from "node:test";
++import { createServer } from "node:http";
++import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++
++import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
++
++import piGoalExtension from "../extensions/goal.ts";
++import {
++	createGoal,
++	goalFocusDetails,
++	type GoalRecord,
++	type GoalStateEntry,
++} from "../extensions/goal-record.ts";
++import { endsWithUsageLimitAssistantMessage, isNetworkErrorAssistantMessage } from "../extensions/goal-format.ts";
++import { saveGoalSettingsFileConfig } from "../extensions/goal-settings.ts";
++import type { GoalCore } from "../extensions/goal-state.ts";
++import {
++	QUOTA_FALLBACK_DELAY_MS,
++	QUOTA_RESET_GRACE_MS,
++	QUOTA_RETRY_URL_ENV,
++	fetchQuotaRetryPlan,
++	quotaAvailablePlan,
++} from "../extensions/quota-retry.ts";
++
++const USAGE_LIMIT_MESSAGE =
++	'429: {"code":null,"message":"Codex: The usage limit has been reached","param":null,"type":"rate_limit_error"}';
++
++const FIXTURE_GOAL = readFileSync(
++	new URL("./fixtures/goals/active_goal_fixture.md", import.meta.url),
++	"utf8",
++);
++
++// ── Harness (mirrors tests/goal-stale-continuation-golden.test.ts) ──────────
++
++interface HandlerMap {
++	[key: string]: (event: any, ctx: ExtensionContext) => Promise<unknown> | unknown;
++}
++
++function createHarness(cwd: string) {
++	const handlers: HandlerMap = {};
++	const sentMessages: Array<{ customType?: string; details?: unknown }> = [];
++	const notifications: Array<{ message: string; level?: string }> = [];
++	let aborts = 0;
++
++	const mockPi = {
++		registerTool: () => {},
++		registerCommand: () => {},
++		on: (event: string, handler: (...args: never[]) => unknown) => {
++			handlers[event] = handler as HandlerMap[string];
++		},
++		appendEntry: () => {},
++		registerMessageRenderer: () => {},
++		sendMessage: (msg: { customType?: string; details?: unknown }) => {
++			sentMessages.push(msg);
++		},
++		sendUserMessage: () => {},
++		getActiveTools: () => ["read", "bash", "edit", "write"],
++		setActiveTools: () => {},
++		hasUI: false,
++	};
++
++	const ctx = {
++		cwd,
++		hasUI: false,
++		sessionManager: {
++			getBranch: () => [],
++			getCwd: () => cwd,
++			getSessionId: () => "test-session",
++			getRoot: () => cwd,
++			append: () => {},
++			appendModelChange: () => {},
++			appendThinkingLevelChange: () => {},
++			appendCompetingWriteCheck: () => {},
++			buildSessionContext: () => ({ messages: [], sessionId: "test", model: null, thinkingLevel: "medium" }),
++		},
++		getSystemPrompt: () => "",
++		isIdle: () => false,
++		hasPendingMessages: () => true,
++		abort: () => {
++			aborts++;
++		},
++		ui: { notify: (message: string, level?: string) => notifications.push({ message, level }) },
++	} as unknown as ExtensionContext & { abort: () => void };
++
++	piGoalExtension(mockPi as never);
++
++	return {
++		core: (mockPi as unknown as { _goalCore: GoalCore })._goalCore,
++		handlers,
++		sentMessages,
++		notifications,
++		get aborts() {
++			return aborts;
++		},
++		ctx,
++	};
++}
++
++function fixtureCwd(): { cwd: string; goal: GoalRecord } {
++	const cwd = mkdtempSync(path.join(tmpdir(), "goal-quota-retry-"));
++	mkdirSync(path.join(cwd, ".pi", "goals", "archived"), { recursive: true });
++	writeFileSync(path.join(cwd, ".pi", "goals", "active_goal_fixture.md"), FIXTURE_GOAL);
++	const parsed = createGoal(
++		{ objective: "Golden fixture goal objective", autoContinue: true, sisyphus: false },
++		Date.UTC(2026, 7, 3, 9, 0, 0),
++	);
++	return { cwd, goal: { ...parsed, id: "golden_fixture_goal" } };
++}
++
++function sessionEntriesFor(goal: GoalRecord) {
++	const stateEntry: GoalStateEntry = {
++		version: 3,
++		goal: {
++			...goal,
++			activePath: ".pi/goals/active_goal_fixture.md",
++			usage: { tokensUsed: 0, activeSeconds: 0 },
++			taskList: undefined,
++			verificationContract: undefined,
++		},
++	};
++	return [
++		{ type: "custom", customType: "pi-goal-focus", data: goalFocusDetails(goal.id, "created") },
++		{ type: "custom", customType: "pi-goal-state", data: stateEntry },
++	];
++}
++
++async function startSession(handlers: HandlerMap, ctx: ExtensionContext, entries: unknown[]) {
++	const ss = handlers["session_start"];
++	assert.ok(ss, "session_start handler must be registered");
++	await ss({ reason: "start" }, {
++		...ctx,
++		sessionManager: { ...ctx.sessionManager, getBranch: () => entries },
++	} as unknown as ExtensionContext);
++}
++
++/** Idle ctx: continuation fires immediately instead of rescheduling. */
++function idleCtx(ctx: ExtensionContext): ExtensionContext {
++	return {
++		...ctx,
++		isIdle: () => true,
++		hasPendingMessages: () => false,
++	} as unknown as ExtensionContext;
++}
++
++async function countCheckpoints(h: ReturnType<typeof createHarness>): Promise<number> {
++	await new Promise((resolve) => setTimeout(resolve, 20));
++	return h.sentMessages.filter(
++		(m) => m.customType === "pi-goal-event" && (m.details as { kind?: string } | undefined)?.kind === "checkpoint",
++	).length;
++}
++
++async function markGoalWork(h: ReturnType<typeof createHarness>): Promise<void> {
++	await h.handlers["turn_start"]!({}, h.ctx);
++	await h.handlers["tool_call"]!({ toolName: "bash", args: { command: "ls" } }, h.ctx);
++	await h.handlers["tool_execution_end"]!({}, h.ctx);
++	assert.equal(h.core.scheduler.declare(h.ctx, { kind: "ready" }).terminate, true);
++}
++
++
++async function serveQuotas(body: unknown): Promise<{ url: string; close: () => void }> {
++	const server = createServer((_req, res) => {
++		res.setHeader("content-type", "application/json");
++		res.end(JSON.stringify(body));
++	});
++	await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
++	const address = server.address();
++	assert.ok(address && typeof address === "object");
++	return { url: `http://127.0.0.1:${address.port}/api/usage/quotas`, close: () => server.close() };
++}
++
++async function startGoalRun(h: ReturnType<typeof createHarness>, goal: GoalRecord): Promise<void> {
++	await startSession(h.handlers, h.ctx, sessionEntriesFor(goal));
++	await h.handlers["before_agent_start"]!({
++		systemPrompt: "base",
++		prompt: "user typed: continue",
++		systemPromptOptions: {},
++	}, h.ctx);
++}
++
++async function failOnUsageLimit(h: ReturnType<typeof createHarness>): Promise<void> {
++	await h.handlers["agent_end"]!({
++		messages: [{ role: "assistant", stopReason: "error", errorMessage: USAGE_LIMIT_MESSAGE }],
++	}, idleCtx(h.ctx));
++	await h.handlers["agent_settled"]!({}, idleCtx(h.ctx));
++}
++
++async function until(check: () => boolean, ms = 2_000): Promise<void> {
++	const deadline = Date.now() + ms;
++	while (!check()) {
++		if (Date.now() > deadline) throw new Error("condition not reached");
++		await new Promise(resolve => setTimeout(resolve, 5));
++	}
++}
++
++// ── Planning ────────────────────────────────────────────────────────────────
++
++test("plan: an account returns once all its exhausted windows reset; the soonest account wins", () => {
++	const now = Date.parse("2026-10-25T19:00:00-07:00");
++	const plan = quotaAvailablePlan([
++		{ provider: "codex", user: "a", windows: [
++			{ used: 100, resetsAt: "2026-10-25T20:00:00-07:00" },
++			{ used: 100, resetsAt: "2026-10-26T00:00:00-07:00" },
++		] },
++		{ provider: "codex", user: "b", windows: [
++			{ used: 100, resetsAt: "2026-10-25T22:00:00-07:00" },
++			{ used: 10, resetsAt: "2026-10-31T00:00:00-07:00" },
++		] },
++		{ provider: "key", user: "unlimited", windows: [{ unlimited: true, used: 0 }] },
++		{ provider: "codex", user: "unknown reset", windows: [{ used: 100 }] },
++	], now);
++	assert.deepEqual(plan, { at: Date.parse("2026-10-25T22:00:00-07:00"), reason: "codex b" });
++	assert.equal(quotaAvailablePlan([{ windows: [{ used: 40 }] }], now)?.at, now, "an account with allowance is available now");
++	assert.equal(quotaAvailablePlan([], now), undefined);
++});
++
++test("plan: reads both the GUI array and the /v1/magpie/quotas list shape, with fallbacks", async () => {
++	const now = Date.now();
++	const reset = new Date(now + 3_600_000).toISOString();
++	const cards = [{ provider: "codex", user: "a", windows: [{ used: 100, resetsAt: reset }] }];
++	for (const body of [cards, { object: "list", data: cards }]) {
++		const server = await serveQuotas(body);
++		try {
++			const plan = await fetchQuotaRetryPlan(server.url, now);
++			assert.equal(plan.at, Date.parse(reset) + QUOTA_RESET_GRACE_MS);
++			assert.match(plan.reason, /codex a resets/);
++		} finally { server.close(); }
++	}
++	const left = await serveQuotas([{ provider: "codex", user: "a", windows: [{ used: 20 }] }]);
++	try {
++		assert.equal((await fetchQuotaRetryPlan(left.url, now)).at, now + QUOTA_FALLBACK_DELAY_MS);
++	} finally { left.close(); }
++	const failed = await fetchQuotaRetryPlan("http://127.0.0.1:1/api/usage/quotas", now);
++	assert.equal(failed.at, now + QUOTA_FALLBACK_DELAY_MS);
++	assert.match(failed.reason, /quota read failed/);
++});
++
++test("classification: the magpie Codex usage limit is a usage limit (and still transient)", () => {
++	assert.equal(endsWithUsageLimitAssistantMessage([{ role: "assistant", stopReason: "error", errorMessage: USAGE_LIMIT_MESSAGE }]), true);
++	assert.equal(isNetworkErrorAssistantMessage({ role: "assistant", stopReason: "error", errorMessage: USAGE_LIMIT_MESSAGE }), true);
++	assert.equal(endsWithUsageLimitAssistantMessage([
++		{ role: "assistant", stopReason: "error", errorMessage: USAGE_LIMIT_MESSAGE },
++		{ role: "assistant", stopReason: "stop" },
++	]), false, "a later successful reply supersedes the limit");
++	assert.equal(endsWithUsageLimitAssistantMessage([{ role: "assistant", stopReason: "error", errorMessage: "503 server_error" }]), false);
++});
++
++// ── Lifecycle ───────────────────────────────────────────────────────────────
++
++test("lifecycle: a usage limit schedules recovery at the quota reset and a user turn cancels it", async () => {
++	const reset = Date.now() + 3_600_000;
++	const server = await serveQuotas([{ provider: "codex", user: "a", windows: [{ used: 100, resetsAt: new Date(reset).toISOString() }] }]);
++	process.env[QUOTA_RETRY_URL_ENV] = server.url;
++	const { cwd, goal } = fixtureCwd();
++	saveGoalSettingsFileConfig(cwd, { maxAutonomousRuns: 100 });
++	const h = createHarness(cwd);
++	try {
++		await startGoalRun(h, goal);
++		await failOnUsageLimit(h);
++		await until(() => h.core.runtime.getQuotaRetryAt() !== null);
++		assert.equal(h.core.runtime.getQuotaRetryAt(), reset + QUOTA_RESET_GRACE_MS);
++		assert.match(h.notifications.at(-1)?.message ?? "", /usage limit reached\. Retrying the goal at .*codex a resets/);
++		assert.equal(h.notifications.some(n => /Retrying the goal in \d+s/.test(n.message)), false, "the network ladder stays off");
++		assert.equal(h.core.state.goal?.status, "active", "the goal stays active while it waits");
++
++		await h.handlers["before_agent_start"]!({ systemPrompt: "base", prompt: "user typed: something else", systemPromptOptions: {} }, h.ctx);
++		assert.equal(h.core.runtime.getQuotaRetryAt(), null, "a user turn takes over from the wait");
++	} finally {
++		delete process.env[QUOTA_RETRY_URL_ENV];
++		server.close();
++	}
++});
++
++test("lifecycle: the quota retry recovers the goal when it fires", async () => {
++	const { cwd, goal } = fixtureCwd();
++	saveGoalSettingsFileConfig(cwd, { maxAutonomousRuns: 100 });
++	const h = createHarness(cwd);
++	await startGoalRun(h, goal);
++	await h.handlers["agent_end"]!({ messages: [{ role: "assistant", stopReason: "stop" }] }, idleCtx(h.ctx));
++	await h.handlers["agent_settled"]!({}, idleCtx(h.ctx));
++	const before = await countCheckpoints(h);
++	assert.equal(h.core.runtime.scheduleQuotaRetry(idleCtx(h.ctx), h.core.state.goal!, Date.now() + 20), true);
++	await new Promise(resolve => setTimeout(resolve, 60));
++	assert.ok(await countCheckpoints(h) > before, "recovery dispatches a goal checkpoint");
++	assert.equal(h.core.runtime.getQuotaRetryAt(), null);
++});
++
++test("lifecycle: without PI_GOAL_QUOTA_URL a usage limit keeps the network-error ladder", async () => {
++	delete process.env[QUOTA_RETRY_URL_ENV];
++	const { cwd, goal } = fixtureCwd();
++	saveGoalSettingsFileConfig(cwd, { maxAutonomousRuns: 100 });
++	const h = createHarness(cwd);
++	await startGoalRun(h, goal);
++	await failOnUsageLimit(h);
++	assert.match(h.notifications.at(-1)?.message ?? "", /Retrying the goal in 5s/);
++	assert.equal(h.core.runtime.getQuotaRetryAt(), null);
++});

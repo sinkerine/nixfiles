@@ -49,6 +49,7 @@ with lib; let
     "SubagentStart"
     "SubagentStop"
     "Stop"
+    "Interrupt"
   ];
   codexModels = {
     sol = "gpt-6.1-sol";

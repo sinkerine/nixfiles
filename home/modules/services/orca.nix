@@ -34,7 +34,7 @@ let
     exec ${pkgs.xvfb-run}/bin/xvfb-run \
       --auto-servernum \
       --server-args="-screen 0 1920x1080x24 -nolisten tcp" \
-      ${cfg.package}/bin/orca-ide ${lib.escapeShellArgs serveArgs}
+      ${cfg.package}/bin/orca-ide-cli ${lib.escapeShellArgs serveArgs}
   '';
 in
 {
@@ -108,6 +108,10 @@ in
         Environment = [
           "LIBGL_ALWAYS_SOFTWARE=1"
           "ORCA_CLI_COMMAND=orca-ide-cli"
+          "ORCA_SETTINGS_FILE=${config.xdg.configHome}/orca/nix-settings.json"
+          # The CLI must launch the packaged app wrapper, not bare Electron.
+          "ORCA_APP_EXECUTABLE=${cfg.package}/bin/orca-ide"
+          "ORCA_ELECTRON_NO_SANDBOX=1"
         ];
         StandardOutput = "journal";
         StandardError = "journal";

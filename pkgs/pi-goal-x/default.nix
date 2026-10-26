@@ -11,6 +11,9 @@ stdenvNoCC.mkDerivation {
     hash = "sha256-d0IRFiK5JH/VDimVEdJFE/+5i4lDlPLXITvcbCpixt0=";
   };
 
+  # Wait for the soonest magpie quota reset after a provider usage limit.
+  patches = [ ./quota-retry.patch ];
+
   dontConfigure = true;
   dontBuild = true;
 

@@ -49,6 +49,7 @@
   pnpm_11,
   pkg-config,
   python3,
+  ripgrep,
   stdenv,
   systemd,
   wayland,
@@ -68,15 +69,15 @@ stdenv.mkDerivation (finalAttrs: {
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "orca";
-    rev = "9df5b7efd0318e679c02e19c01fa84e5228c8d10";
-    hash = "sha256-tsoh1gB2oVaSaC1zj1DU794inusTlZlwuuM3bFKWudw=";
+    rev = "a70ea2647c63c6767c625451148f998471d6f2d9";
+    hash = "sha256-k/H01UNM6SGKqSBR7F0GcRejN1mVBjGfRpfboejBO3k=";
   };
 
   pnpmDeps = (fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
     inherit pnpm;
     fetcherVersion = 4;
-    hash = "sha256-NKJY6o1w2j+iaUhuiM2x2SprQ+5eKgHEalEV57jrJh0=";
+    hash = "sha256-F6RIOI2vNRoNqfMWQ2KC2w/bp5Kc5kDXht34trJtw5I=";
     pnpmInstallFlags = [ "--config.package-import-method=copy" ];
   }).overrideAttrs (old: {
     fixupPhase = lib.replaceStrings
@@ -157,53 +158,24 @@ stdenv.mkDerivation (finalAttrs: {
 
   strictDeps = true;
 
-  env.ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
+  env = {
+    ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
+    ORCA_BUILD_COMMIT = finalAttrs.src.rev;
+    ORCA_TYPECHECK_COMPILER = "native";
+  };
 
-  # Nix supplies Electron and its native runtime. Orca's release hook would
-  # otherwise try to download Electron and rebuild native modules online.
   postPatch = ''
-    # Shared Nix Electron keeps resourcesPath in its own store directory.
-    # Resolve the clipboard helper beside Orca's app.asar instead.
-    substituteInPlace src/main/window/clipboard-text-publisher.ts \
-      --replace-fail "join(process.resourcesPath, 'bin', 'orca-wayland-clipboard')" \
-        "join(app.getAppPath(), '..', 'bin', 'orca-wayland-clipboard')"
     # These libraries are loaded with dlopen, so autoPatchelf cannot discover them.
     substituteInPlace native/wayland-clipboard/wayland-clipboard.c \
       --replace-fail '"libwayland-client.so.0"' '"${lib.getLib wayland}/lib/libwayland-client.so.0"'
     substituteInPlace native/wayland-clipboard/x11-clipboard-publisher.c \
       --replace-fail '"libgtk-3.so.0"' '"${lib.getLib gtk3}/lib/libgtk-3.so.0"'
-    cp ${./orca-nix-settings.ts} src/main/persistence/loading-store/nix-settings.ts
-    python3 - <<'PY'
-    from pathlib import Path
-
-    path = Path('src/main/persistence/loading-store/loaded-state-parsing.ts')
-    source = path.read_text()
-    source = "import { mergeNixSettings } from './nix-settings'\n" + source
-    anchor = "    const workspaceSession = pruneWorkspaceSessionBrowserHistory("
-    assert source.count(anchor) == 1
-    source = source.replace(anchor, """    const nixSettings = mergeNixSettings(result.settings)
-        if (nixSettings !== result.settings) {
-          result = { ...result, settings: nixSettings }
-          this.runtime.loadNeedsSave = true
-        }
-
-    """ + anchor.lstrip())
-    path.write_text(source)
-    PY
     # The Nix Electron runtime is supplied by nixpkgs; avoid the upstream
     # release hook's online Electron download and native rebuild.
     substituteInPlace config/electron-builder.config.cjs \
       --replace-fail \
         "  beforeBuild: electronBuilderNativeRebuild," \
         "beforeBuild: null,"
-    # GitHub source archives have no .git directory; retain the pinned identity.
-    substituteInPlace config/scripts/build-source-commit.mjs \
-      --replace-fail \
-        "execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()" \
-        "'${finalAttrs.src.rev}'"
-    # Use the installed TypeScript compiler for the CLI's typecheck as well.
-    substituteInPlace config/scripts/build-cli.mjs \
-      --replace-fail "selectTypecheckCompiler('bun'," "selectTypecheckCompiler('native',"
     # Nix builds the helper and supplies Node; avoid Docker and runtime downloads.
     # Native binaries target nixpkgs glibc rather than the Ubuntu release floor.
     substituteInPlace config/electron-builder.config.cjs \
@@ -247,6 +219,10 @@ stdenv.mkDerivation (finalAttrs: {
 
     pnpm --dir mobile run postinstall
     pnpm run typecheck --compiler=native
+    ORCA_BACKGROUND_LAUNCH=1 ORCA_RIPGREP_PATH=${lib.getExe ripgrep} pnpm exec vitest run \
+      config/build-plugins/app-resources-banner.test.ts \
+      src/main/ripgrep/text-search-unicode-real.test.ts \
+      src/main/ripgrep/ripgrep-filename-identity-real.test.ts
     pnpm run build:desktop:assets
 
     mkdir -p native/wayland-clipboard/.build/x64
@@ -291,6 +267,7 @@ stdenv.mkDerivation (finalAttrs: {
     makeWrapper ${lib.getExe electron} $out/bin/orca-ide-cli \
       --set ELECTRON_RUN_AS_NODE 1 \
       --set ORCA_CLI_COMMAND orca-ide-cli \
+      --set ORCA_RIPGREP_PATH ${lib.getExe ripgrep} \
       --prefix PATH : ${computerUsePython}/bin \
       --prefix GI_TYPELIB_PATH : ${gobject-introspection}/lib/girepository-1.0:${at-spi2-core}/lib/girepository-1.0 \
       --run 'export ORCA_NODE_OPTIONS="''${NODE_OPTIONS-}"' \
@@ -305,8 +282,9 @@ stdenv.mkDerivation (finalAttrs: {
     makeWrapper ${lib.getExe electron} $out/bin/orca-ide-unrestricted \
       --inherit-argv0 \
       --set ELECTRON_FORCE_IS_PACKAGED 1 \
-      --run 'export ORCA_NIX_SETTINGS_FILE="''${ORCA_NIX_SETTINGS_FILE:-''${XDG_CONFIG_HOME:-$HOME/.config}/orca/nix-settings.json}"' \
+      --run 'export ORCA_SETTINGS_FILE="''${ORCA_SETTINGS_FILE:-''${ORCA_NIX_SETTINGS_FILE:-''${XDG_CONFIG_HOME:-$HOME/.config}/orca/nix-settings.json}}"' \
       --set ORCA_CLI_COMMAND orca-ide-cli \
+      --set ORCA_RIPGREP_PATH ${lib.getExe ripgrep} \
       --prefix PATH : ${computerUsePython}/bin \
       --prefix GI_TYPELIB_PATH : ${gobject-introspection}/lib/girepository-1.0:${at-spi2-core}/lib/girepository-1.0 \
       --add-flags --no-sandbox \
@@ -317,7 +295,7 @@ stdenv.mkDerivation (finalAttrs: {
     while IFS=: read -r key value; do
       if [[ "$key" == NoNewPrivs && "$value" == *1* ]]; then
         environment=()
-        for name in DISPLAY WAYLAND_DISPLAY XAUTHORITY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS XDG_SESSION_TYPE XDG_CURRENT_DESKTOP NIXOS_OZONE_WL ELECTRON_OZONE_PLATFORM_HINT ORCA_PROFILE_ID ORCA_NIX_SETTINGS_FILE; do
+        for name in DISPLAY WAYLAND_DISPLAY XAUTHORITY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS XDG_SESSION_TYPE XDG_CURRENT_DESKTOP NIXOS_OZONE_WL ELECTRON_OZONE_PLATFORM_HINT ORCA_PROFILE_ID ORCA_SETTINGS_FILE ORCA_NIX_SETTINGS_FILE; do
           if [[ -v "$name" ]]; then
             environment+=("--setenv=$name=''${!name}")
           fi
