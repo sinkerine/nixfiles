@@ -25,7 +25,7 @@
     ignores = [ ".pi/" ];
     settings = {
       user.name = "sinkerine";
-      user.email = "git@sinkerine.net";
+      user.email = "git@15cm.net";
       core.excludesFile = "${config.xdg.configHome}/git/ignore";
     };
   };
