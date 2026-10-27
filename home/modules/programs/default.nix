@@ -35,6 +35,7 @@
     ./pi-coding-agent.nix
     ./vm-test
     ./obsidian.nix
+    ./paseo.nix
     ./ergodox.nix
   ];
 }

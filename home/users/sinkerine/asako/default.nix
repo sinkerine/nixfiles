@@ -7,17 +7,16 @@
 
   my.profiles.trusted.enable = true;
 
+  my.programs.paseo = {
+    enable = true;
+    daemon.enable = true;
+    desktop.enable = true;
+    integrations.enable = true;
+  };
+
   my.essentials.gui.enable = true;
 
   home.packages = with pkgs; [ radeontop ];
-
-  wayland.windowManager.hyprland.settings.window_rule = [
-    {
-      name = "focus-orca";
-      match.class = "orca";
-      focus_on_activate = true;
-    }
-  ];
 
   my.display.monitors = {
     one = {

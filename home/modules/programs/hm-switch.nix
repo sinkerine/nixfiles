@@ -12,14 +12,25 @@ in {
     home.file."local/bin/switch-nix-home.sh".source =
       let homeFlakeUri = with nixinfo; "path:${projectRoot}#${configName}";
       in pkgs.writeShellScript "switch-nix-home.sh" ''
-        home-manager switch "$@" ${
-          optionalString cfg.useImpure "--impure "
-        }--flake ${homeFlakeUri}
+        # A Paseo-hosted switch must survive restarting its parent daemon.
+        exec ${pkgs.systemd}/bin/systemd-run --user --quiet --wait --pipe --collect \
+          --property=Type=exec --working-directory="$PWD" \
+          --setenv=PATH="$PATH" \
+          --setenv=SSH_AUTH_SOCK="''${SSH_AUTH_SOCK-}" \
+          --setenv=NIX_SSHOPTS="''${NIX_SSHOPTS-}" \
+          home-manager switch "$@" ${
+            optionalString cfg.useImpure "--impure "
+          }--flake ${homeFlakeUri}
       '';
     home.file."local/bin/switch-nix-os.sh".source =
       let osFlakeUri = with nixinfo; "path:${projectRoot}#${hostname}";
       in pkgs.writeShellScript "switch-nix-os.sh" ''
-        sudo nixos-rebuild switch "$@" --flake ${osFlakeUri}
+        ${if hostname == "kazuki" then ''
+          # Match the existing passwordless sudo rule exactly.
+          sudo -n /run/current-system/sw/bin/nixos-rebuild switch "$@" --flake ${nixinfo.projectRoot}#${hostname}
+        '' else ''
+          sudo nixos-rebuild switch "$@" --flake ${osFlakeUri}
+        ''}
       '';
     home.file."local/bin/build-nix-home.sh".source = let
       homeTopLevelFlakeUri = with nixinfo;

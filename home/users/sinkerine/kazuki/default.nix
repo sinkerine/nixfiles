@@ -12,6 +12,13 @@
   imports = [ ../common ];
 
   my.programs.vm-test.enable = true;
+  my.programs.paseo = {
+    enable = true;
+    desktop.enable = true;
+    daemon.enable = true;
+    daemon.hostnames = [ "paeso.kazuki.m.mado.moe" ];
+    integrations.enable = true;
+  };
 
   programs.noctalia.settings.lockscreen.enabled = lib.mkForce false;
 
@@ -41,14 +48,6 @@
     NVD_BACKEND = "direct";
     ELECTRON_OZONE_PLATFORM_HINT = "auto";
   };
-
-  wayland.windowManager.hyprland.settings.window_rule = [
-    {
-      name = "focus-orca";
-      match.class = "orca";
-      focus_on_activate = true;
-    }
-  ];
 
   my.display.monitors = {
     one = {

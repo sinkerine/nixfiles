@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reconcile explicitly managed AAAA records without changing IPv4 DNS."""
+"""Reconcile explicitly managed public IPv6 and Tailscale DNS records."""
 import ipaddress
 import json
 import socket
@@ -64,7 +64,8 @@ def public_address(config):
 
 
 def reconcile(token, zone, record, address):
-    query = urllib.parse.urlencode({"type": "AAAA", "name": record["name"]})
+    record_type = "A" if ipaddress.ip_address(address).version == 4 else "AAAA"
+    query = urllib.parse.urlencode({"type": record_type, "name": record["name"]})
     existing = request(token, f"/zones/{zone}/dns_records?{query}")
     if len(existing) > 1:
         raise RuntimeError("Multiple AAAA records exist for " + record["name"])
@@ -72,7 +73,7 @@ def reconcile(token, zone, record, address):
     if existing and existing[0].get("comment") != comment:
         raise RuntimeError("Unmanaged AAAA record exists for " + record["name"])
     body = {
-        "type": "AAAA", "name": record["name"], "content": address,
+        "type": record_type, "name": record["name"], "content": address,
         "proxied": record.get("proxied", False), "ttl": record.get("ttl", 1), "comment": comment,
     }
     if existing:
@@ -82,11 +83,12 @@ def reconcile(token, zone, record, address):
         request(token, f"/zones/{zone}/dns_records/{current['id']}", "PATCH", body)
     else:
         request(token, f"/zones/{zone}/dns_records", "POST", body)
-    print("Updated AAAA:", record["name"], flush=True)
+    print("Updated " + record_type + ":", record["name"], flush=True)
 
 
 def remove_managed(token, zone, record):
-    query = urllib.parse.urlencode({"type": "AAAA", "name": record["name"]})
+    record_type = "A" if ":" not in record.get("address", "::") else "AAAA"
+    query = urllib.parse.urlencode({"type": record_type, "name": record["name"]})
     for current in request(token, f"/zones/{zone}/dns_records?{query}"):
         if current.get("comment") == "nixfiles-native-ipv6":
             request(token, f"/zones/{zone}/dns_records/{current['id']}", "DELETE")
@@ -108,9 +110,10 @@ def main():
         return
     # Tailnet AAAA is independent of public ISP address availability.
     for record in config.get("staticRecords", []):
-        address = ipaddress.IPv6Address(record["address"])
-        if address not in ipaddress.IPv6Network("fd7a:115c:a1e0::/48"):
-            raise RuntimeError("Private record must use verified Tailscale IPv6")
+        address = ipaddress.ip_address(record["address"])
+        tailnet = ipaddress.ip_network("100.64.0.0/10" if address.version == 4 else "fd7a:115c:a1e0::/48")
+        if address not in tailnet:
+            raise RuntimeError("Private record must use a Tailscale address")
         reconcile(token, zone, record, str(address))
     if config.get("publicRecords"):
         try:

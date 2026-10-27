@@ -991,6 +991,26 @@
         "type": "github"
       }
     },
+    "paseo": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1793091466,
+        "narHash": "sha256-utSgyk42/lKPNwuxZqaME33ThuqZ2zau/Q8uv+WVOR0=",
+        "owner": "sinkerine",
+        "repo": "paseo",
+        "rev": "9d1edd31fdeaa2d763f654107181619422c94bda",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sinkerine",
+        "repo": "paseo",
+        "type": "github"
+      }
+    },
     "pre-commit-hooks": {
       "inputs": {
         "flake-compat": "flake-compat_2",
@@ -1070,6 +1090,7 @@
         "nixvim": "nixvim",
         "noctalia": "noctalia",
         "nur": "nur",
+        "paseo": "paseo",
         "proxmox-nixos": "proxmox-nixos",
         "proxmox-nixpkgs": "proxmox-nixpkgs",
         "sops-nix": "sops-nix"

@@ -61,6 +61,27 @@ allowlists and a generated dynamic configuration. `gateway-ipv6-config.timer`
 refreshes the current LAN prefix each minute, retaining existing router/service
 configuration and access rules. Enabled only on kazuki and sachi.
 
+## Paseo access from home Wi-Fi and Tailscale
+
+Paseo uses `paeso.kazuki.m.mado.moe` and `paeso.sachi.m.mado.moe` on TLS
+port 443. Public DNS publishes Tailscale A and AAAA records for these names.
+Traefik's `lan-only` middleware accepts the configured home LAN and Tailscale
+ranges, including the current native LAN IPv6 prefix.
+
+Import the idempotent `routeros-paseo-dns.rsc` to make the home router return
+`192.168.88.29` and `192.168.88.30` for those exact names. The existing prefix
+sync script generates their native LAN AAAA records. Phones without Tailscale
+must use the home router's DNS; Android Private DNS or browser secure DNS can
+bypass these local overrides.
+
+```sh
+scp routeros-paseo-dns.rsc router:paseo-dns.rsc
+ssh router '/import file-name=paseo-dns.rsc'
+```
+
+Use `tcp://paeso.<hostname>.m.mado.moe:443?ssl=true` in Paseo Android for both
+networks. No router static route to the Tailscale IPv6 prefix is needed.
+
 ## Rollback
 
 Stop sachi's DNS timer first. Get its ExecStart from

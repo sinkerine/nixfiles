@@ -11,6 +11,10 @@ let
     staticRecords = [
       { name = "sachi.m.mado.moe"; address = "fd7a:115c:a1e0::1"; }
       { name = "kazuki.m.mado.moe"; address = "fd7a:115c:a1e0::2"; }
+      { name = "paeso.sachi.m.mado.moe"; address = "100.64.0.1"; }
+      { name = "paeso.kazuki.m.mado.moe"; address = "100.64.0.2"; }
+      { name = "paeso.sachi.m.mado.moe"; address = "fd7a:115c:a1e0::1"; }
+      { name = "paeso.kazuki.m.mado.moe"; address = "fd7a:115c:a1e0::2"; }
       { name = "asako.m.mado.moe"; address = "fd7a:115c:a1e0::3"; }
       { name = "yumiko.m.mado.moe"; address = "fd7a:115c:a1e0::5"; }
     ];

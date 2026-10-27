@@ -72,6 +72,7 @@ in
   system.stateVersion = "22.05";
   imports = [
     ./hardware-configuration.nix
+    ../modules/services/gateway/paseo.nix
     ../common/baseline.nix
     ../common/boot-loader.nix
     ../common/users.nix

@@ -23,6 +23,7 @@ in
   imports = [
     ../modules/services/networking/ipv6
     ./hardware-configuration.nix
+    ../modules/services/gateway/paseo.nix
     ../common/baseline.nix
     ../common/boot-loader.nix
     ../common/users.nix

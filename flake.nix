@@ -64,6 +64,10 @@
     cua = {
       url = "github:trycua/cua";
     };
+    paseo = {
+      url = "github:sinkerine/paseo";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     fcitx5-vinput = {
       url = "github:xifan2333/fcitx5-vinput";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -95,6 +99,7 @@
       nixvim,
       llm-agents,
       cua,
+      paseo,
       fcitx5-vinput,
       proxmox-nixos,
       microvm,
@@ -117,6 +122,7 @@
           llm-agents
           fcitx5-vinput
           cua
+          paseo
           ;
       };
       packages = forAllSystems (

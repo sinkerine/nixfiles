@@ -3,6 +3,7 @@
   llm-agents,
   fcitx5-vinput,
   cua,
+  paseo,
   ...
 }:
 
@@ -42,6 +43,8 @@ in
           ln -s cua-driver "$out/bin/cua"
         '';
       });
+      paseo = paseo.packages.${final.stdenv.hostPlatform.system}.paseo;
+      paseo-desktop = paseo.packages.${final.stdenv.hostPlatform.system}.desktop;
       inherit (llmAgentsPkgs) codex;
       "claude-code" = llmAgentsPkgs.claude-code;
       inherit (fcitx5VinputFor final.stdenv.hostPlatform.system) fcitx5-vinput;
