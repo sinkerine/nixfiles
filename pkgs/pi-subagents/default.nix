@@ -9,26 +9,19 @@
 
 buildNpmPackage {
   pname = "pi-subagents";
-  version = "0.71.0";
+  version = "0.84.0";
 
   src = fetchFromGitHub {
     owner = "nicobailon";
     repo = "pi-subagents";
-    rev = "v0.71.0";
-    hash = "sha256-KUnrfinRPiEPPdj0pd06MWnYncQmjiQvGySmGqdvwEg=";
+    rev = "v0.84.0";
+    hash = "sha256-yJHclk8TqJX0OGDteZYAbcW9qGDY9a8BSVy0kxcRpEU=";
   };
 
-  npmDepsHash = "sha256-IwQZju9R2n0XxcPVVHzQejQ/Gihijy30Pq7cZ4kqN8E=";
+  npmDepsHash = "sha256-4iHfVe/7y5xTT3tu8hhbrjOMr8OpkvgpCiDdWqMGVoQ=";
   npmFlags = [ "--omit=dev" ];
   dontNpmBuild = true;
   dontStrip = true;
-
-  # Pi 1.x removed agent-core/node. This release only lists it in the
-  # runner's required aliases; nothing imports it. Keep all used aliases.
-  postPatch = ''
-    substituteInPlace src/runs/background/runner-aliases.ts \
-      --replace-fail '{ specifier: "@earendil-works/pi-agent-core/node", pkg: "@earendil-works/pi-agent-core", subpath: "./node" },' ""
-  '';
 
   # Pi supplies typebox at runtime. Keep it as a peer dependency so the
   # package does not ship a second copy that can conflict with Pi's version.
