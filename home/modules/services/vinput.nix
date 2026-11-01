@@ -35,79 +35,32 @@ in
         else
           "sha256-u7XqXkuRb4xL5m8gdS7omOY9zTuexCK1p3YLZToWVaM=";
       asrProviderPath = "${config.home.homeDirectory}/.local/share/vinput/providers/openai-compatible/${asrProvider}";
-      pangu = pkgs.python3Packages.buildPythonPackage {
-        pname = "pangu";
-        version = "5.0.0";
-        format = "wheel";
-        src = pkgs.fetchPypi {
-          pname = "pangu";
-          version = "5.0.0";
-          format = "wheel";
-          dist = "py3";
-          python = "py3";
-          hash = "sha256-Z5ozHnEw/X1VF3c/6eRRDrJ6AT/1lJQbxAU/+bQjOLg=";
-        };
-        pythonImportsCheck = [ "pangu" ];
-      };
-      asrPostprocessorPython = pkgs.python3.withPackages (_: [
-        pangu
-        pkgs.python3Packages.opencc
-      ]);
-      asrPostprocessor = pkgs.writeText "vinput-asr-postprocessor.py" ''
-        import json
-        import subprocess
-        import sys
+      postprocessingPrompt = ''
+        You are a multilingual transcription post-processor supporting English, Simplified Chinese, Traditional Chinese, Japanese, and mixed-language speech.
 
-        import pangu
-        from opencc import OpenCC
+        Your task is to clean up raw speech-to-text transcripts while preserving their original meaning and spoken languages.
 
-        opencc = OpenCC("t2s")
+        Rules:
+        1. Support English, Chinese, Japanese, and code-switching between all three languages.
+        2. **Always convert ALL Traditional Chinese characters and vocabulary to Simplified Chinese** in Chinese-language segments. Never output Traditional Chinese in Chinese text.
+        3. Preserve standard Japanese writing, including kanji, hiragana, katakana, and Japanese punctuation. Do not mistakenly convert Japanese kanji into Simplified Chinese characters.
+        4. Preserve the original spoken language. Do not translate between English, Chinese, and Japanese unless explicitly requested.
+        5. Correct obvious transcription errors, punctuation, capitalization, spacing, and grammatical mistakes without changing the intended meaning.
+        6. Remove unnecessary filler words, repetitions, and speech disfluencies while preserving meaningful content and natural conversational tone.
+        7. Preserve technical terminology, product names, proper nouns, numbers, and acronyms. Normalize any Chinese-script portions to Simplified Chinese.
+        8. Use natural, language-appropriate punctuation and spacing for English, Simplified Chinese, and Japanese.
+        9. For Japanese, correctly handle particles, conjugations, kanji conversions, and sentence boundaries based on context. Preserve natural Japanese expressions and politeness levels.
+        10. For mixed-language sentences, maintain the original language boundaries and avoid unnecessary translation or rewriting.
+        11. Preserve the speaker's intent, tone, and sentence structure as much as possible.
+        12. Do not add explanations, commentary, or information not present in the transcript.
+        13. Output ONLY the cleaned transcript, without quotes, labels, or Markdown formatting.
 
-
-        def format_text(text):
-            return pangu.spacing_text(opencc.convert(text))
-
-
-        def terminate_provider(provider):
-            if provider.poll() is not None:
-                return
-
-            provider.terminate()
-            try:
-                provider.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                provider.kill()
-                provider.wait()
-
-
-        provider_path, mode = sys.argv[1:3]
-        if mode not in ("batch", "streaming"):
-            raise SystemExit(f"unsupported ASR provider mode: {mode}")
-
-        provider = subprocess.Popen(
-            [sys.executable, provider_path],
-            stdin=sys.stdin.buffer,
-            stdout=subprocess.PIPE,
-            stderr=sys.stderr,
-        )
-
-        try:
-            if mode == "streaming":
-                for line in provider.stdout:
-                    event = json.loads(line)
-                    if isinstance(event, dict) and isinstance(event.get("text"), str):
-                        event["text"] = format_text(event["text"])
-                    sys.stdout.write(json.dumps(event, ensure_ascii=False) + "\n")
-                    sys.stdout.flush()
-            else:
-                transcript = provider.stdout.read().decode("utf-8")
-                sys.stdout.write(format_text(transcript))
-                sys.stdout.flush()
-        except BaseException:
-            terminate_provider(provider)
-            raise
-
-        raise SystemExit(provider.wait())
+        Critical requirements:
+        - All Chinese text MUST use Simplified Chinese, never Traditional Chinese.
+        - Japanese text MUST retain correct Japanese orthography, including Japanese-specific kanji forms, even when those characters overlap with Traditional Chinese.
+        - English text MUST remain English.
+        - Never translate or change the original language of a segment.
+        - Prioritize transcription accuracy, minimal edits, and low processing latency.
       '';
       asrEnv = {
         VINPUT_ASR_API_KEY = config.sops.placeholder.vinputOpenAIAPIKey;
@@ -170,19 +123,17 @@ in
                 {
                   "id": "${asrProviderId}",
                   "type": "command",
-                  "command": "${asrPostprocessorPython}/bin/python3",
+                  "command": "${pkgs.python3}/bin/python3",
                   "args": ${
                     builtins.toJSON [
-                      asrPostprocessor
                       asrProviderPath
-                      asrProvider
                     ]
                   },
                   "env": ${
                     builtins.toJSON (
                       asrEnv
                       // {
-                        VINPUT_ASR_PROMPT = "Transcribe speech in English, Simplified Chinese, or any mix of them. Always render Chinese content using Simplified Chinese characters; never use Traditional Chinese characters. Always separate adjacent Chinese and English text with a single space.";
+                        VINPUT_ASR_PROMPT = "Transcribe speech in English, Chinese, Japanese, or any mix of them. Preserve each segment's spoken language and standard orthography. Use Simplified Chinese for Chinese segments and preserve Japanese kanji, hiragana, and katakana for Japanese segments.";
                       }
                     )
                   },
@@ -211,7 +162,7 @@ in
               "adapters": []
             },
             "scenes": {
-              "active_scene": "__raw__",
+              "active_scene": "default",
               "definitions": [
                 {
                   "id": "__raw__",
@@ -220,10 +171,12 @@ in
                 {
                   "id": "default",
                   "label": "Magpie correction",
-                  "prompt": "You are a transcription corrector, not a translator. Correct only obvious speech-recognition errors and remove accidental filler words. Preserve the original meaning, tone, and language of every span. Never translate between languages. English speech must remain English; Chinese speech must remain Chinese. Preserve code-switching, names, product names, and technical terms. Never replace English words or phrases with Chinese equivalents, even when surrounded by Chinese. Render only Chinese spans using Simplified Chinese characters. Add a single space between adjacent Chinese and English text. Return only the corrected transcript; never explain or answer its content.",
+                  "prompt": ${builtins.toJSON postprocessingPrompt},
                   "provider_id": "Magpie",
                   "model": "group/gpt",
                   "context_lines": 3,
+                  "raw_cand": false,
+                  "raw_prev": false,
                   "candidate_count": 1,
                   "timeout_ms": 60000
                 },
