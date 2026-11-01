@@ -32,6 +32,8 @@ in
       llmAgentsPkgs = llmAgentsFor final.stdenv.hostPlatform.system;
       cuaPkgs = cua.packages.${final.stdenv.hostPlatform.system};
       cuaDriver = cuaPkgs.cua-driver;
+      paseoPkgs = paseo.packages.${final.stdenv.hostPlatform.system};
+      paseoPackage = paseoPkgs.paseo;
     in
     (import ../pkgs {
       pkgs = final;
@@ -43,8 +45,14 @@ in
           ln -s cua-driver "$out/bin/cua"
         '';
       });
-      paseo = paseo.packages.${final.stdenv.hostPlatform.system}.paseo;
-      paseo-desktop = paseo.packages.${final.stdenv.hostPlatform.system}.desktop;
+      paseo = paseoPackage.overrideAttrs (old: {
+        version = "${old.version}-${paseo.shortRev}";
+        __intentionallyOverridingVersion = true;
+      });
+      paseo-desktop = (paseoPkgs.desktop.override { paseo = paseoPackage; }).overrideAttrs (old: {
+        version = "${old.version}-${paseo.shortRev}";
+        __intentionallyOverridingVersion = true;
+      });
       inherit (llmAgentsPkgs) codex;
       "claude-code" = llmAgentsPkgs.claude-code;
       inherit (fcitx5VinputFor final.stdenv.hostPlatform.system) fcitx5-vinput;
