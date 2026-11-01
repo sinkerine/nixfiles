@@ -339,8 +339,7 @@ in
   systemd.services.llama-qwen35.enable = false;
 
   # Local OpenAI-compatible Strata endpoint for Hermes and other agents.
-  systemd.services.strata = {
-    enable = strataEnabled;
+  systemd.services.strata = mkIf strataEnabled {
     description = "Strata API: Qwen3.8 Flash-Next IQ2_XS";
     wantedBy = [ "multi-user.target" ];
     after = [ "network-online.target" ];
