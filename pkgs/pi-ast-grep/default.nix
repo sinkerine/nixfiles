@@ -7,13 +7,13 @@
 
 buildNpmPackage {
   pname = "pi-ast-grep";
-  version = "0.1.1-unstable-20260924";
+  version = "0.1.1-unstable-20261025";
 
   src = fetchFromGitHub {
     owner = "code-yeongyu";
     repo = "pi-ast-grep";
-    rev = "ddd87a7ab524dc16af5da9abc44011be82493ed6";
-    hash = "sha256-N/5nGduQc65x50JcUjbjrgBEx+/lOOkMnQFcVFvaTlA=";
+    rev = "ef3a92816a2d5d8c578a6189dc20282415dcfcbe";
+    hash = "sha256-xQuxd+ffkTMBmOV8jIcN0Wefan37lbVRyH9FBQZnrMc=";
   };
 
   npmDepsHash = "sha256-joDeeKVvYjJBh0LgoA6XFzYQTZSJqgUUHt3ahaWkHbg=";
