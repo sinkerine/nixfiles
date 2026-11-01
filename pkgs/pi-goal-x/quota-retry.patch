@@ -1,8 +1,7 @@
 diff --git a/extensions/goal-events.ts b/extensions/goal-events.ts
-index a5d4c85..a820d6d 100644
 --- a/extensions/goal-events.ts
 +++ b/extensions/goal-events.ts
-@@ -8,6 +8,7 @@ import {
+@@ -10,6 +10,7 @@
  	hasAbortedAssistantMessage,
  	hasErrorAssistantMessage,
  	hasNetworkErrorAssistantMessage,
@@ -10,23 +9,31 @@ index a5d4c85..a820d6d 100644
  	isAbortedAssistantMessage,
  	isErrorAssistantMessage,
  	isMeaningfulProgressToolCall,
-@@ -35,6 +36,7 @@ import { syncTerminalInputPause } from "./goal-widget.ts";
- import type { GoalCore } from "./goal-state.ts";
- import { filterGoalSessionContext } from "./goal-session-safety.ts";
+@@ -38,6 +39,7 @@
+ import { filterGoalSessionContext, isStaleExtensionContextError } from "./goal-session-safety.ts";
+ import { registerGoalContext } from "./goal-context.ts";
  import type { GoalMutationOutcome } from "./goal-service.ts";
 +import { fetchQuotaRetryPlan, formatQuotaRetryTime, quotaRetryUrl } from "./quota-retry.ts";
  
  /** Normalize checkpoints independently: deleting old markers shifts the cached prefix. */
  export function compactGoalCheckpointContext(
-@@ -70,6 +72,7 @@ export function registerGoalEvents(core: GoalCore): void {
- 	pi.on("before_provider_request", (event, ctx) => cacheGoalHistory(event.payload, liveRetention.contents(sessionKeyFor(ctx as ExtensionContext | undefined))));
+@@ -84,6 +86,7 @@
+  });
  	let continuationAfterSettleFor: string | null = null;
  	let networkErrorRecoveryAfterSettleFor: string | null = null;
 +	let quotaRecoveryAfterSettleFor: string | null = null;
  
- 	pi.on("context", async (event, ctx) => {
- 		const filtered = filterGoalSessionContext(event.messages);
-@@ -380,6 +383,7 @@ export function registerGoalEvents(core: GoalCore): void {
+ 	registerGoalContext(pi, (input, ctx) => {
+ 		const filtered = filterGoalSessionContext(input);
+@@ -304,6 +307,7 @@
+   run(() => core.invalidateSession());
+   continuationAfterSettleFor = null;
+   networkErrorRecoveryAfterSettleFor = null;
++  quotaRecoveryAfterSettleFor = null;
+   run(() => core.interruption.settled());
+   run(() => core.interruption.reset());
+   run(() => core.auditMessages.clear());
+@@ -445,6 +449,7 @@
  			core.runtime.setCheckpoint(null);
  			core.clearContinuationState();
  			networkErrorRecoveryAfterSettleFor = null;
@@ -34,15 +41,15 @@ index a5d4c85..a820d6d 100644
  		}
  
  		core.reconcileFocusedGoalFromDisk(ctx);
-@@ -495,6 +499,7 @@ export function registerGoalEvents(core: GoalCore): void {
+@@ -560,6 +565,7 @@
  		core.runningGoalId = null;
  		continuationAfterSettleFor = null;
  		networkErrorRecoveryAfterSettleFor = null;
 +		quotaRecoveryAfterSettleFor = null;
+ 		if (core.scheduler.isDenied()) return;
  
  		// Account for any tokens from aborted in-flight assistant messages so
- 		// they are not silently lost (but charge them to the original goal).
-@@ -523,6 +528,14 @@ export function registerGoalEvents(core: GoalCore): void {
+@@ -590,6 +596,14 @@
  		// Provider failures are not completed work: persist and refresh the
  		// display, but never queue a continuation for a run whose messages
  		// include an assistant error (danim47c pattern).
@@ -57,19 +64,34 @@ index a5d4c85..a820d6d 100644
  		if (hasNetworkErrorAssistantMessage(event.messages) || hasAbortedAssistantMessage(event.messages)) {
  			core.persist(ctx);
  			core.updateUI(ctx);
-@@ -551,8 +564,21 @@ export function registerGoalEvents(core: GoalCore): void {
+@@ -617,6 +631,8 @@
  		continuationAfterSettleFor = null;
  		const networkErrorGoalId = networkErrorRecoveryAfterSettleFor;
  		networkErrorRecoveryAfterSettleFor = null;
 +		const quotaGoalId = quotaRecoveryAfterSettleFor;
 +		quotaRecoveryAfterSettleFor = null;
+ 		if (core.scheduler.isDenied()) {
+ 			core.runningGoalId = null;
+ 			core.runtime.setCheckpoint(null);
+@@ -626,7 +642,7 @@
+ 		const resumedInterruptedTurn = core.interruption.ignoreAbort() && !core.interruption.isHeld();
+ 		// Startup cancellation may leave no assistant message or request signal.
+ 		if (event.aborted) {
+-			const abortedGoalId = goalId ?? networkErrorGoalId ?? core.runningGoalId;
++			const abortedGoalId = goalId ?? networkErrorGoalId ?? quotaGoalId ?? core.runningGoalId;
+ 			core.runningGoalId = null;
+ 			if (abortedGoalId && !core.interruption.ignoreAbort(abortedGoalId) && !core.interruption.isHeld(abortedGoalId) && core.state.goal?.id === abortedGoalId && core.state.goal.status === "active") core.pauseActiveGoal(ctx);
+ 			core.scheduler.settled(ctx, false);
+@@ -638,6 +654,18 @@
  		core.scheduler.settled(ctx, !!goalId && core.isActionableContinuationGoal(goalId));
+ 		if (resumedInterruptedTurn) core.scheduler.schedule(ctx);
  		if (goalId && core.isActionableContinuationGoal(goalId)) return;
 +		const quotaUrl = quotaRetryUrl();
 +		if (quotaGoalId && quotaUrl && core.isActionableContinuationGoal(quotaGoalId)) {
++			const owner = core.sessionOwner;
 +			void fetchQuotaRetryPlan(quotaUrl).then(plan => {
-+				// The user may have taken over while the quota was being read.
-+				if (!core.isActionableContinuationGoal(quotaGoalId) || core.state.goal?.id !== quotaGoalId) return;
++				// Ignore results after a session change or user takeover.
++				if (core.sessionOwner !== owner || !core.isActionableContinuationGoal(quotaGoalId) || core.state.goal?.id !== quotaGoalId) return;
 +				if (!core.runtime.scheduleQuotaRetry(ctx, core.state.goal, plan.at)) return;
 +				ctx.ui.notify(`Provider usage limit reached. Retrying the goal at ${formatQuotaRetryTime(plan.at)} (${plan.reason}).`, "warning");
 +				core.updateUI(ctx);
@@ -79,19 +101,10 @@ index a5d4c85..a820d6d 100644
  		if (!networkErrorGoalId || !core.isActionableContinuationGoal(networkErrorGoalId)) return;
  		const recovery = loadGoalSettings(ctx.cwd).networkRecovery;
  		const policy = recovery
-@@ -579,6 +605,7 @@ export function registerGoalEvents(core: GoalCore): void {
- 		core.scheduler.shutdown();
- 		continuationAfterSettleFor = null;
- 		networkErrorRecoveryAfterSettleFor = null;
-+		quotaRecoveryAfterSettleFor = null;
- 		core.accountProgress(ctx);
- 		core.clearContinuationState();
- 		core.terminalInputUnsubscribe?.();
 diff --git a/extensions/goal-format.ts b/extensions/goal-format.ts
-index 5727899..d9d4feb 100644
 --- a/extensions/goal-format.ts
 +++ b/extensions/goal-format.ts
-@@ -279,6 +279,26 @@ export function isNetworkErrorAssistantMessage(message: unknown): boolean {
+@@ -280,6 +280,26 @@
  	return TRANSIENT_PROVIDER_ERROR_RE.test(details);
  }
  
@@ -119,10 +132,9 @@ index 5727899..d9d4feb 100644
  	const raw = asRecord(message);
  	return raw?.role === "assistant" && raw.stopReason === "toolUse";
 diff --git a/extensions/goal-runtime.ts b/extensions/goal-runtime.ts
-index 7a59d1a..779f73a 100644
 --- a/extensions/goal-runtime.ts
 +++ b/extensions/goal-runtime.ts
-@@ -38,6 +38,7 @@ export class GoalRuntime {
+@@ -38,6 +38,7 @@
  	private networkErrorRetryGoalId: string | null = null;
  	private networkErrorRetryAttempt = 0;
  	private networkErrorRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -130,7 +142,7 @@ index 7a59d1a..779f73a 100644
  
  	// ── turn-stop guard ──────────────────────────────────────────────────
  	private turnSeq = 0;
-@@ -134,12 +135,45 @@ export class GoalRuntime {
+@@ -134,12 +135,45 @@
  		return plan;
  	}
  
@@ -177,10 +189,9 @@ index 7a59d1a..779f73a 100644
  
  	/**
 diff --git a/extensions/goal-state.ts b/extensions/goal-state.ts
-index 76f0692..ac61a69 100644
 --- a/extensions/goal-state.ts
 +++ b/extensions/goal-state.ts
-@@ -36,6 +36,7 @@ import { GoalAccounting } from "./goal-accounting.ts";
+@@ -38,6 +38,7 @@
  import { newGoalScheduler } from "./goal-scheduler-state.ts";
  import { GoalScheduler } from "./goal-scheduler.ts";
  import { GoalRuntime } from "./goal-runtime.ts";
@@ -188,35 +199,33 @@ index 76f0692..ac61a69 100644
  import { GoalAuditMessages } from "./goal-session-safety.ts";
  import {
  	focusedGoalFromPool,
-@@ -48,6 +49,8 @@ import { GOAL_WIDGET_KEY, GoalWidgetComponent, liveDisplayGoal, makeGoalWidgetFa
+@@ -49,6 +50,8 @@
+ import { GOAL_WIDGET_KEY, GoalWidgetComponent, liveDisplayGoal, makeGoalWidgetFactory, type AuditorWidgetProgress } from "./widgets/goal-widget.ts";
  import type { AuditVerdict } from "./widgets/auditor-dashboard-model.ts";
  import { runGoalCompletionAuditor } from "./goal-auditor.ts";
- 
-+const QUOTA_RETRY_STATUS_KEY = "goal-quota-retry";
 +
++const QUOTA_RETRY_STATUS_KEY = "goal-quota-retry";
  
  
- /**
-@@ -571,6 +574,7 @@ export function createGoalCore(
- 		lastUiCtx = null;
- 		if (ctx.hasUI) {
- 			ctx.ui.setStatus("goal", undefined);
-+			ctx.ui.setStatus(QUOTA_RETRY_STATUS_KEY, undefined);
- 			ctx.ui.setWidget(GOAL_WIDGET_KEY, undefined);
- 		}
- 		widgetRegistered = false;
-@@ -652,6 +656,8 @@ export function createGoalCore(
+ 
+@@ -594,6 +597,7 @@
+   goalWidgetComponentRef.current = null;
+   if (ctx.hasUI) {
+    ctx.ui.setStatus("goal", undefined);
++   ctx.ui.setStatus(QUOTA_RETRY_STATUS_KEY, undefined);
+    ctx.ui.setWidget(GOAL_WIDGET_KEY, undefined);
+   }
+  }
+@@ -673,6 +677,8 @@
  	}
  
  	function renderUI(ctx: ExtensionContext): void {
 +		const quotaRetryAt = runtime.getQuotaRetryAt();
 +		ctx.ui.setStatus(QUOTA_RETRY_STATUS_KEY, quotaRetryAt === null ? undefined : `goal: usage limit, retry ${formatQuotaRetryTime(quotaRetryAt)}`);
+ 		if (!interruption.isHeld()) ctx.ui.setStatus("goal-interrupt", undefined);
  		const goalCwd = ctx.cwd;
  		const storage = goalStorageContext(ctx);
- 		const totalOpen = otherOpenGoalCount(goalsById, null);
 diff --git a/extensions/quota-retry.ts b/extensions/quota-retry.ts
-new file mode 100644
-index 0000000..5013aeb
 --- /dev/null
 +++ b/extensions/quota-retry.ts
 @@ -0,0 +1,81 @@
@@ -302,8 +311,6 @@ index 0000000..5013aeb
 +	return new Date(at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 +}
 diff --git a/tests/goal-quota-retry.test.ts b/tests/goal-quota-retry.test.ts
-new file mode 100644
-index 0000000..7e48413
 --- /dev/null
 +++ b/tests/goal-quota-retry.test.ts
 @@ -0,0 +1,305 @@

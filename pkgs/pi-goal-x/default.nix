@@ -2,13 +2,13 @@
 
 stdenvNoCC.mkDerivation {
   pname = "pi-goal-x";
-  version = "0.32.3";
+  version = "0.34.1";
 
   src = fetchFromGitHub {
     owner = "tmonk";
     repo = "pi-goal-x";
-    rev = "64c5ace87f3400c0b55ef87f2d2912167f53dbaa";
-    hash = "sha256-d0IRFiK5JH/VDimVEdJFE/+5i4lDlPLXITvcbCpixt0=";
+    rev = "27d9facf49e66ee677770a74e26198a8bdcada8a";
+    hash = "sha256-W/SY4jqZqy5CWSM7QRkqNne1YKFotJupT/x2roR3+U4=";
   };
 
   # Wait for the soonest magpie quota reset after a provider usage limit.
