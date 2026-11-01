@@ -215,10 +215,6 @@ in
       source = "${piVim}/lib/node_modules/pi-vim";
       force = true;
     };
-    home.file.".pi/agent/extensions/e2e-feature-model.ts" = {
-      source = ./pi-coding-agent-extensions/e2e-feature-model.ts;
-      force = true;
-    };
     home.file.".pi/agent/skills/e2e-feature/SKILL.md" = {
       source = ./pi-coding-agent-skills/e2e-feature/SKILL.md;
       force = true;
