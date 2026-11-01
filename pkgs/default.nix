@@ -21,6 +21,7 @@ with pkgs; {
   webos-dev-manager = (callPackage ./webos-dev-manager { });
   xurl = (callPackage ./xurl { });
   strata = callPackage ./strata { };
+  paseo-session-recovery = callPackage ./paseo/session-recovery.nix { };
   pi-ask-user = callPackage ./pi-ask-user { };
   pi-footer = callPackage ./pi-footer { };
   pi-ast-grep = callPackage ./pi-ast-grep { };

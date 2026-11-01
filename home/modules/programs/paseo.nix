@@ -28,6 +28,14 @@ let
     ${waitForDaemon}
     exec ${lib.getExe cfg.desktop.package} "$@"
   '';
+  pluginDirectory = "paseo/plugins";
+  pluginEntries = builtins.toJSON (
+    lib.mapAttrs (name: _: {
+      source = "directory";
+      path = "${config.xdg.dataHome}/${pluginDirectory}/${name}";
+      enabled = true;
+    }) cfg.plugins
+  );
   skillNames = [
     "paseo"
     "paseo-advisor"
@@ -95,6 +103,14 @@ in
       };
     };
 
+    plugins = lib.mkOption {
+      type = lib.types.attrsOf lib.types.package;
+      default = {
+        session-recovery = pkgs.paseo-session-recovery;
+      };
+      description = "Directory plugins to install and enable, keyed by plugin id.";
+    };
+
     desktop = {
       enable = lib.mkEnableOption "the Paseo desktop app, which manages its own daemon";
       package = lib.mkPackageOption pkgs "paseo-desktop" { };
@@ -108,6 +124,28 @@ in
           ++ lib.optional cfg.desktop.enable cfg.desktop.package
           ++ lib.optional (cfg.desktop.enable && cfg.daemon.enable) (lib.hiPrio desktopLauncher);
       }
+      (lib.mkIf (cfg.plugins != { }) {
+        xdg.dataFile = lib.mapAttrs' (
+          name: plugin: lib.nameValuePair "${pluginDirectory}/${name}" { source = plugin; }
+        ) cfg.plugins;
+
+        # The daemon rewrites config.json at runtime, so merge plugin entries instead of owning the file.
+        home.activation.paseoPlugins = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          config=${lib.escapeShellArg "${config.home.homeDirectory}/.paseo/config.json"}
+          run ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$config")"
+          if [ -f "$config" ]; then
+            document="$(${pkgs.coreutils}/bin/cat "$config")"
+          else
+            document='{"version":1}'
+          fi
+          updated="$(printf '%s' "$document" | ${pkgs.jq}/bin/jq --argjson plugins ${lib.escapeShellArg pluginEntries} '
+            .pluginsEnabled = true | .plugins = ((.plugins // {}) + $plugins)')"
+          temporary="$(${pkgs.coreutils}/bin/mktemp "$config.XXXXXX")"
+          printf '%s\n' "$updated" > "$temporary"
+          run ${pkgs.coreutils}/bin/chmod 600 "$temporary"
+          run ${pkgs.coreutils}/bin/mv "$temporary" "$config"
+        '';
+      })
       (lib.mkIf (cfg.desktop.enable && cfg.daemon.enable) {
         # Keep desktop preferences writable while giving systemd sole daemon ownership.
         home.activation.paseoDaemonOwnership = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -146,6 +184,8 @@ in
           Unit = {
             Description = "Paseo coding agent daemon";
             After = [ "network.target" ];
+            # Keep active connections alive; apply daemon updates on a deliberate restart.
+            X-SwitchMethod = "keep-old";
           };
           Service = {
             Type = "exec";
