@@ -33,6 +33,28 @@
     (retroarch.withCores (libretro: [ libretro.mgba ]))
   ];
 
+  programs.lrc-catalog-merge = {
+    enable = true;
+    settings =
+      let
+        backups = "/nas/storage/software/backups";
+      in
+      {
+        sources = [
+          "${backups}/Lightroom"
+          "${backups}/Lightroom-asako"
+        ];
+        outputs = [
+          {
+            path = "${backups}/Lightroom";
+            # Local to Asako's PC; meaningless in this catalog.
+            exclude_folders = [ "C:/Users/sinkerine/Pictures/camera/" ];
+          }
+          { path = "${backups}/Lightroom-asako"; }
+        ];
+      };
+  };
+
   my.programs.hyprland = {
     extraSessionVariables = {
       LIBVA_DRIVER_NAME = "nvidia";

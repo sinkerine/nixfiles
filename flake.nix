@@ -72,6 +72,10 @@
       url = "github:xifan2333/fcitx5-vinput";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    lrc-catalog-merge = {
+      url = "github:sinkerine/lrc-catalog-merge";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # Do not add inputs.nixpkgs.follows — proxmox-nixos pins nixpkgs-stable intentionally.
     proxmox-nixos.url = "github:SaumonNet/proxmox-nixos";
     proxmox-nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
@@ -101,6 +105,7 @@
       cua,
       paseo,
       fcitx5-vinput,
+      lrc-catalog-merge,
       proxmox-nixos,
       microvm,
       ...
@@ -201,6 +206,7 @@
                   nur.modules.homeManager.default
                   nixvim.homeModules.nixvim
                   sops-nix.homeManagerModules.sops
+                  lrc-catalog-merge.homeManagerModules.default
                 ];
               }
             ];

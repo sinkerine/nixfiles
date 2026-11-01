@@ -712,6 +712,26 @@
         "type": "github"
       }
     },
+    "lrc-catalog-merge": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1793567193,
+        "narHash": "sha256-FNOHHuz5S9yynCWwC9Eh0xN5u/+DCo7Kd8Cm5fUXAB4=",
+        "owner": "sinkerine",
+        "repo": "lrc-catalog-merge",
+        "rev": "255053fa46451f70d5b1b11a0b469e1acc738b25",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sinkerine",
+        "repo": "lrc-catalog-merge",
+        "type": "github"
+      }
+    },
     "microvm": {
       "inputs": {
         "nixpkgs": [
@@ -1082,6 +1102,7 @@
         "hyprland": "hyprland",
         "kmonad": "kmonad",
         "llm-agents": "llm-agents",
+        "lrc-catalog-merge": "lrc-catalog-merge",
         "microvm": "microvm",
         "nixgl": "nixgl",
         "nixos-hardware": "nixos-hardware",
