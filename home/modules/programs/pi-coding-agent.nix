@@ -18,15 +18,7 @@ let
   piAstGrep = pkgs.pi-ast-grep;
   piCollapseTools = pkgs.pi-collapse-tools;
   piSubagents = pkgs.pi-subagents;
-  piVim = pkgs.pi-vim;
   piGoalX = pkgs.pi-goal-x;
-  # This dependency-free extension defaults to summary mode.
-  piThinkingSteps = pkgs.fetchFromGitHub {
-    owner = "crustyhacker";
-    repo = "pi-thinking-steps";
-    rev = "2209e03ad13e1eda2c66f5fd7a13932b584c4764"; # v1.0.17
-    hash = "sha256-0M9qtHl5QqKMQYM5lfzma1aWW1gwMkB81AdihOk9xLY=";
-  };
   piWebAccess = pkgs.pi-web-access;
   piWebAccessConfig = builtins.toJSON {
     provider = "openai";
@@ -53,7 +45,7 @@ let
     name = "pi-astra";
     runtimeInputs = [ piCodingAgent ];
     text = ''
-      exec pi --provider magpie --model gpt-6-astra "$@"
+      exec pi --provider magpie --model group/astra "$@"
     '';
   };
   piSolFast = pkgs.writeShellApplication {
@@ -68,6 +60,13 @@ let
     runtimeInputs = [ piCodingAgent ];
     text = ''
       exec pi --provider magpie --model group/luna-fast "$@"
+    '';
+  };
+  piOpus = pkgs.writeShellApplication {
+    name = "pi-opus";
+    runtimeInputs = [ piCodingAgent ];
+    text = ''
+      exec pi --provider magpie --model group/opus "$@"
     '';
   };
   # pi-subagents' claude-code adapter owns its argv, so the reviewer's model
@@ -125,11 +124,11 @@ in
               thinking = "medium";
             };
             reviewer = {
-              model = "gpt-6.1-sol";
+              model = "group/astra";
               thinking = "high";
             };
             oracle = {
-              model = "gpt-6-astra";
+              model = "group/astra";
               thinking = "high";
             };
             "evidence-auditor" = {
@@ -149,7 +148,6 @@ in
           "${piCollapseTools}/lib/node_modules/pi-collapse-tools"
           "${piGoalX}/lib/node_modules/pi-goal-x"
           "${piSubagents}/lib/node_modules/pi-subagents"
-          "${piThinkingSteps}"
           "${piWebAccess}/lib/node_modules/pi-web-access"
         ];
       };
@@ -184,11 +182,19 @@ in
             maxTokens = 128000;
           }
           {
-            id = "gpt-6-astra";
+            id = "group/astra";
             name = "GPT-6 Astra";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1050000;
+            maxTokens = 128000;
+          }
+          {
+            id = "group/opus";
+            name = "Opus";
+            reasoning = true;
+            input = [ "text" "image" ];
+            contextWindow = 1000000;
             maxTokens = 128000;
           }
           {
@@ -211,10 +217,6 @@ in
 
     home.sessionVariables.PI_CODING_AGENT_PACKAGE_ROOT = "${piCodingAgent}/lib/node_modules/pi-monorepo";
 
-    home.file.".pi/agent/extensions/pi-vim" = {
-      source = "${piVim}/lib/node_modules/pi-vim";
-      force = true;
-    };
     home.file.".pi/agent/skills/e2e-feature/SKILL.md" = {
       source = ./pi-coding-agent-skills/e2e-feature/SKILL.md;
       force = true;
@@ -242,6 +244,7 @@ in
       piSol
       piAstra
       piSolFast
+      piOpus
       piLunaFast
     ] ++ optional config.my.programs.claude-code.enable claudeReviewer;
   };
