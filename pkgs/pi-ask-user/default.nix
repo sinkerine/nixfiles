@@ -2,13 +2,13 @@
 
 stdenvNoCC.mkDerivation {
   pname = "pi-ask-user";
-  version = "0.16.0-unstable-20261004";
+  version = "0.17.1-unstable-20261030";
 
   src = fetchFromGitHub {
     owner = "edlsh";
     repo = "pi-ask-user";
-    rev = "e8b59a5114bb1cf4fca239b75976483703c9783f";
-    hash = "sha256-pZbjq4U0I+t0M2ToRQJLD1KP309DwIH+BzBjGnD52rU=";
+    rev = "df1df70acf1f7521d24f9518a702064930340df2";
+    hash = "sha256-iAnr33DpE0mTjPlzxDZM2zzi6ncbrCHt0O3ahtlkW5o=";
   };
 
   dontConfigure = true;
@@ -16,7 +16,7 @@ stdenvNoCC.mkDerivation {
 
   installPhase = ''
     mkdir -p $out/lib/node_modules/pi-ask-user
-    cp -r -- index.ts single-select-layout.ts skills package.json README.md LICENSE $out/lib/node_modules/pi-ask-user/
+    cp -r -- *.ts skills package.json README.md LICENSE $out/lib/node_modules/pi-ask-user/
   '';
 
   meta = {
