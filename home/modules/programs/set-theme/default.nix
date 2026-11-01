@@ -44,8 +44,9 @@ in {
     })
     (mkIf config.my.programs.nvim.enable {
       my.programs.set-theme.reloadScript = ''
-        for addr in $XDG_RUNTIME_DIR/nvim.*; do
-          ${pkgs.neovim}/bin/nvim --server $addr --remote-send ':set background=${state.theme} | :colorscheme ${config.my.programs.nvim.colorscheme}<CR>'
+        for addr in "$XDG_RUNTIME_DIR"/nvim.*; do
+          [ -S "$addr" ] || continue
+          ${pkgs.neovim}/bin/nvim --server "$addr" --remote-send ':set background=${state.theme} | :colorscheme ${config.my.programs.nvim.colorscheme}<CR>'
         done
       '';
     })
