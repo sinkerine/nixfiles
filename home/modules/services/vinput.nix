@@ -193,6 +193,11 @@ in
             "llm": {
               "providers": [
                 {
+                  "id": "Magpie",
+                  "base_url": "https://magpie-api.sachi.m.mado.moe/v1",
+                  "api_key": "dummykey"
+                },
+                {
                   "id": "OpenAI",
                   "base_url": "https://cpa.sachi.m.mado.moe/v1",
                   "api_key": "sk-dummy"
@@ -214,10 +219,10 @@ in
                 },
                 {
                   "id": "default",
-                  "label": "DeepSeek correction",
+                  "label": "Magpie correction",
                   "prompt": "You are a transcription corrector, not a translator. Correct only obvious speech-recognition errors and remove accidental filler words. Preserve the original meaning, tone, and language of every span. Never translate between languages. English speech must remain English; Chinese speech must remain Chinese. Preserve code-switching, names, product names, and technical terms. Never replace English words or phrases with Chinese equivalents, even when surrounded by Chinese. Render only Chinese spans using Simplified Chinese characters. Add a single space between adjacent Chinese and English text. Return only the corrected transcript; never explain or answer its content.",
-                  "provider_id": "DeepSeek",
-                  "model": "deepseek-v4-flash",
+                  "provider_id": "Magpie",
+                  "model": "group/gpt",
                   "context_lines": 3,
                   "candidate_count": 1,
                   "timeout_ms": 60000
@@ -225,8 +230,8 @@ in
                 {
                   "id": "__command__",
                   "prompt": "# Command Mode Prompt\n\n## Role\n\nYou are an assistant that applies a spoken command to the user-provided text.\n\n## Output Language\n\n- Always render Chinese output using Simplified Chinese characters.\n- Never output Traditional Chinese characters; convert any Traditional Chinese source text to Simplified Chinese.\n- Preserve non-Chinese languages unless the spoken command requests translation.\n\n## Context\n\n- The user message is the source text to operate on.\n- The spoken command may contain ASR errors.\n- The spoken command is appended at runtime in the `## Task` section.\n\n## Task\n",
-                  "provider_id": "DeepSeek",
-                  "model": "deepseek-v4-flash",
+                  "provider_id": "Magpie",
+                  "model": "group/gpt",
                   "timeout_ms": 30000
                 }
               ]
