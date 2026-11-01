@@ -90,7 +90,7 @@ in
         show_actions = true;
         # Noctalia 5.1 replaced the legacy `filters` array with named filter
         # tables. Keep a catch-all so external notifications stay visible for
-        # 15 seconds, including Orca's desktop notifications.
+        # 15 seconds, including desktop notifications.
         filter_order = [ "reloaded-script" "default" ];
         filter.reloaded-script = {
           enabled = true;

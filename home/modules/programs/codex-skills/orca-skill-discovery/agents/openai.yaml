@@ -1,4 +1,0 @@
-interface:
-  display_name: "Orca Skill Discovery"
-  short_description: "Load current Orca CLI skill guides"
-  default_prompt: "Use $orca-skill-discovery to load the current Orca skill guide before using Orca commands."

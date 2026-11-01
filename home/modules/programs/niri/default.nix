@@ -43,14 +43,6 @@ let
     ${pkgs.systemd}/bin/systemd-run --user --collect --on-active=3s --no-block ${pkgs.runtimeShell} -c ${escapeShellArg "${noctalia} msg screenshot-region"}
   '';
   playerCommand = action: [ "playerctl" "-p" cfg.musicPlayer action ];
-  focusOrLaunchOrca = pkgs.writeShellScript "focus-or-launch-orca" ''
-    set -eu
-    window_id="$(${pkgs.jq}/bin/jq -r '.[] | select((."app-id" // "") == "orca" or (."app-id" // "") == "orca-ide") | .id' < <(${pkgs.niri}/bin/niri msg --json windows) | head -n 1)"
-    if [ -n "$window_id" ]; then
-      exec ${pkgs.niri}/bin/niri msg action focus-window --id "$window_id"
-    fi
-    exec ${pkgs.orca-ide}/bin/orca-ide open
-  '';
   nameDynamicWorkspace = pkgs.writeShellScript "niri-name-dynamic-workspace" ''
     set -eu
     niri=${lib.getExe pkgs.niri}
@@ -124,7 +116,7 @@ in
           }
           {
             window-rule._children = [
-              { match._props = { app-id = "^orca(-ide)?$"; }; }
+              { match._props = { app-id = "(?i)^paseo$"; }; }
               { draw-border-with-background = false; }
               { opacity = 0.9; }
             ];
@@ -136,7 +128,6 @@ in
           "Mod+D" = { spawn = [ noctalia "msg" "panel-toggle" "launcher" ]; };
           "Mod+C" = { spawn = [ noctalia "msg" "panel-toggle" "clipboard" ]; };
           "Super+Alt+L" = { spawn = [ noctalia "msg" "session" "lock" ]; };
-          "Mod+W" = { spawn = [ (toString focusOrLaunchOrca) ]; };
           "Mod+S" = { toggle-overview = {}; };
           "Mod+X" = { toggle-column-tabbed-display = {}; };
           "Mod+R" = { switch-preset-column-width = {}; };

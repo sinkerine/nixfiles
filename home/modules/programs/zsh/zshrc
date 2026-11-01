@@ -104,7 +104,7 @@ _fzf_compgen_dir() {
 }
 
 # fzf z cd. Ctrl-J is a line feed, so binding it breaks terminals that send
-# Ctrl-J for Enter (for example, when resuming a Codex session from Orca).
+# Ctrl-J for Enter.
 bindkey -s '^[j' '__zoxide_zi^m'
 
 # fzf dirs under current dir

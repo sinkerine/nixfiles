@@ -21,6 +21,5 @@
     ./cliphist.nix
     ./gpg.nix
     ./hyprlock.nix
-    ./orca.nix
   ];
 }

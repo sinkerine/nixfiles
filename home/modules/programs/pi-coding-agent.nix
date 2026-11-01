@@ -3,13 +3,7 @@
 with lib;
 let
   cfg = config.my.programs.pi-coding-agent;
-  # Orca's orchestration discovery stub is longer than Pi's default limit.
   piCodingAgent = pkgs.pi-coding-agent.overrideAttrs (old: {
-    postInstall = (old.postInstall or "") + ''
-      cd $out/lib/node_modules/pi-monorepo
-      sed -i 's/MAX_DESCRIPTION_LENGTH = 1024/MAX_DESCRIPTION_LENGTH = 2048/g; s/MAX_DESCRIPTION_LENGTH=1024/MAX_DESCRIPTION_LENGTH=2048/g; s/MAX_DESCRIPTION_LENGTH2=1024/MAX_DESCRIPTION_LENGTH2=2048/g' \
-        dist/core/skills.js dist/bundle/chunks/chunk-*.js
-    '';
     postWrapper = (old.postWrapper or "") + ''
       export PI_CODING_AGENT_PACKAGE_ROOT="${placeholder "out"}/lib/node_modules/pi-monorepo"
     '';

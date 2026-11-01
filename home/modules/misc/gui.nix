@@ -192,8 +192,8 @@ in
           enable = true;
           nix-direnv.enable = true;
           config.whitelist.prefix = [
+            "${config.home.homeDirectory}/dev/"
             "${config.home.homeDirectory}/tech/repo/"
-            "${config.home.homeDirectory}/orca/"
           ];
         };
         my.services.syncthing.enable = true;

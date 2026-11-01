@@ -19,7 +19,6 @@ with pkgs; {
   lsp-ai = (callPackage ./lsp-ai { });
   tmux-fzf = (callPackage ./tmux-fzf { });
   webos-dev-manager = (callPackage ./webos-dev-manager { });
-  orca-ide = callPackage ./orca-ide.nix { };
   xurl = (callPackage ./xurl { });
   strata = callPackage ./strata { };
   pi-ask-user = callPackage ./pi-ask-user { };
