@@ -17,6 +17,7 @@ let
     case "$mode" in
       dark|light)
         ${lib.getExe pkgs.dconf} write /org/gnome/desktop/interface/color-scheme "'prefer-$mode'"
+        NOCTALIA_THEME_MODE="$mode" ${config.home.homeDirectory}/local/bin/reload-theme.sh
         ;;
       *)
         echo "Unexpected Noctalia theme mode: $mode" >&2

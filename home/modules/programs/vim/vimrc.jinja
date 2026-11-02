@@ -148,13 +148,25 @@ set foldcolumn=1
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Colorsheme
 
-{%if theme == "light"%}
-set background=light
-colorscheme solarized
-{%else%}
-set background=dark
-colorscheme Tomorrow-Night
-{%endif%}
+function! SyncNoctaliaTheme()
+  let mode_file = expand('$XDG_STATE_HOME/theme-mode')
+  if empty($XDG_STATE_HOME)
+    let mode_file = expand('~/.local/state/theme-mode')
+  endif
+  let mode = filereadable(mode_file) ? get(readfile(mode_file), 0, 'dark') : 'dark'
+  if &background !=# mode || !exists('g:colors_name')
+    let &background = mode
+    execute 'colorscheme ' . (mode ==# 'light' ? 'solarized' : 'Tomorrow-Night')
+  endif
+endfunction
+call SyncNoctaliaTheme()
+augroup noctalia_theme
+  autocmd!
+  autocmd FocusGained,CursorHold * call SyncNoctaliaTheme()
+augroup END
+if exists('*timer_start')
+  call timer_start(2000, {-> SyncNoctaliaTheme()}, {'repeat': -1})
+endif
 
 " Enable syntax highlighting
 syntax enable 

@@ -1,3 +1,1 @@
-sed -i "s/\(theme.*\)\"[^\"]*\"/\1\"$1\"/" {{statePath}}
-switch-nix-home.sh
-$HOME/local/bin/reload-theme.sh
+exec noctalia msg theme-mode-set "$1"

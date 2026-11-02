@@ -1,10 +1,9 @@
-{ config, pkgs, lib, mylib, state, ... }:
+{ config, pkgs, lib, mylib, ... }:
 
 with lib;
 let
   cfg = config.my.programs.emacs;
   inherit (mylib) templateFile writeShellScriptFile;
-  templateData = { inherit (state) theme; };
 in {
   options.my.programs.emacs = {
     enable = mkEnableOption "emacs";
@@ -41,7 +40,7 @@ in {
       home.file."local/bin/exec-editor.sh".source =
         writeShellScriptFile "exec-editor.sh" ./exec-editor.sh;
       xdg.configFile."emacs-scripts/load-theme.el".source =
-        templateFile "emacs-scripts-load-theme.el" templateData
+        templateFile "emacs-scripts-load-theme.el" { }
         ./scripts/load-theme.el.jinja;
 
       home.activation.gitCloneDoomemacs =

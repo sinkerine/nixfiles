@@ -1,13 +1,9 @@
-{ config, lib, pkgs, state, mylib, ... }:
+{ config, lib, pkgs, mylib, ... }:
 
 with lib;
 let
   cfg = config.my.programs.powerline;
-  inherit (state) theme;
   inherit (mylib) templateFile;
-  templateData = {
-    colorScheme = (if theme == "light" then "solarized-light" else "nord");
-  };
 in {
   options.my.programs.powerline = {
     enable = mkEnableOption "Powerline";
@@ -18,9 +14,11 @@ in {
   };
   config = mkIf cfg.enable {
     home.packages = [ cfg.package ];
+    my.programs.set-theme.files."powerline/config.json" = genAttrs [ "dark" "light" ] (mode:
+      templateFile "powerline-config-${mode}" {
+        colorScheme = if mode == "light" then "solarized-light" else "nord";
+      } ./config.json.jinja);
     xdg.configFile = {
-      "powerline/config.json".source =
-        templateFile "powerline-config" templateData ./config.json.jinja;
       "powerline/color.json".source = ./colors.json;
       "powerline/colorschemes".source = ./colorschemes;
       "powerline/themes".source = ./themes;

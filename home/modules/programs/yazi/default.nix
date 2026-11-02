@@ -2,7 +2,6 @@
   config,
   lib,
   pkgs,
-  state,
   mylib,
   ...
 }:
@@ -37,10 +36,10 @@ in
       inherit (cfg) package;
       shellWrapperName = "yy";
     };
-    xdg.configFile."yazi/theme.toml".source =
+    my.programs.set-theme.files."yazi/theme.toml" = genAttrs [ "dark" "light" ] (mode:
       let
         templateData =
-          if state.theme == "light" then
+          if mode == "light" then
             {
               theme = ./themes/catppuccin-latte.toml.jinja;
               syntectTheme = ./themes/catppuccin-latte.tmTheme;
@@ -51,7 +50,7 @@ in
               syntectTheme = ./themes/catppuccin-mocha.tmTheme;
             };
       in
-      templateFile "yazi-theme.toml" templateData templateData.theme;
+      templateFile "yazi-theme-${mode}.toml" templateData templateData.theme);
 
     xdg.configFile."yazi/keymap.toml".source = ./keymap.toml;
     xdg.configFile."yazi/init.lua".source = ./init.lua;

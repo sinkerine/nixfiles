@@ -1,9 +1,10 @@
-(mapcar #'disable-theme custom-enabled-themes)
-{%if theme == "light"%}
-(load-theme 'solarized-light t)
-(setq frame-background-mode 'light)
-{%else%}
-(load-theme 'sanityinc-tomorrow-night t)
-(setq frame-background-mode 'dark)
-{%endif%}
-(mapc 'frame-set-background-mode (frame-list))
+(let* ((state-home (or (getenv "XDG_STATE_HOME") (expand-file-name "~/.local/state")))
+       (mode-file (expand-file-name "theme-mode" state-home))
+       (light (and (file-readable-p mode-file)
+                   (string= (string-trim (with-temp-buffer
+                                          (insert-file-contents mode-file)
+                                          (buffer-string))) "light"))))
+  (mapcar #'disable-theme custom-enabled-themes)
+  (load-theme (if light 'solarized-light 'sanityinc-tomorrow-night) t)
+  (setq frame-background-mode (if light 'light 'dark))
+  (mapc 'frame-set-background-mode (frame-list)))

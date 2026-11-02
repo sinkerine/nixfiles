@@ -2,7 +2,6 @@
   nixvimLib,
   config,
   lib,
-  state,
   pkgs,
   mylib,
   ...
@@ -28,7 +27,7 @@ in
   };
   config = mkIf cfg.enable (mkMerge [
     {
-      my.programs.nvim.colorscheme = (if state.theme == "light" then "solarized" else "kanagawa");
+      my.programs.nvim.colorscheme = "kanagawa";
       programs.nixvim = {
         enable = true;
         nixpkgs.pkgs = pkgs;
@@ -36,7 +35,6 @@ in
           number = true; # Show line numbers
           relativenumber = true; # Show relative line numbers
           shiftwidth = 2; # Tab width should be 2
-          background = state.theme;
           hlsearch = true;
           ignorecase = true;
           smartcase = true;
@@ -394,6 +392,21 @@ in
         '';
         extraConfigLua = ''
           require("telescope").load_extension("projects")
+          local theme_file = vim.fn.stdpath("state"):gsub("/nvim$", "") .. "/theme-mode"
+          local function sync_noctalia_theme()
+            local file = io.open(theme_file, "r")
+            local mode = file and file:read("*l") or "dark"
+            if file then file:close() end
+            if mode ~= "light" and mode ~= "dark" then return end
+            if vim.g.noctalia_theme_mode == mode then return end
+            vim.g.noctalia_theme_mode = mode
+            vim.o.background = mode
+            vim.cmd.colorscheme(mode == "light" and "solarized" or "${cfg.colorscheme}")
+          end
+          sync_noctalia_theme()
+          local timer = vim.uv.new_timer()
+          timer:start(2000, 2000, vim.schedule_wrap(sync_noctalia_theme))
+          vim.api.nvim_create_autocmd("VimLeavePre", { callback = function() timer:close() end })
         '';
         dependencies = {
           git.enable = true;

@@ -1,4 +1,4 @@
-{ config, pkgs, lib, state, nixinfo, hostname, ... }:
+{ config, pkgs, lib, nixinfo, hostname, ... }:
 
 with lib;
 {
@@ -37,12 +37,12 @@ with lib;
 
   programs.bottom = {
     enable = true;
-    settings = {
-      flags = {
-        color = (if state.theme == "light" then "gruvbox-light" else "gruvbox");
-      };
-    };
+
   };
+  my.programs.set-theme.files."bottom/bottom.toml" = genAttrs [ "dark" "light" ] (mode:
+    (pkgs.formats.toml { }).generate "bottom-${mode}.toml" {
+      flags.color = if mode == "light" then "gruvbox-light" else "gruvbox";
+    });
   programs.zoxide = { enable = true; };
   programs.tealdeer = {
     enable = true;

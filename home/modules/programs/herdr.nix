@@ -1,9 +1,8 @@
-{ config, lib, pkgs, state, ... }:
+{ config, lib, pkgs, ... }:
 
 with lib;
 let
   cfg = config.my.programs.herdr;
-  inherit (state) theme;
 in {
   options.my.programs.herdr = {
     enable = mkEnableOption "Herdr terminal multiplexer";
@@ -24,7 +23,8 @@ in {
       hks = "herdr session stop";
     };
 
-    xdg.configFile."herdr/config.toml".text = ''
+    my.programs.set-theme.files."herdr/config.toml" = genAttrs [ "dark" "light" ] (theme:
+      pkgs.writeText "herdr-${theme}.toml" ''
       # Managed by Home Manager.
       onboarding = false
 
@@ -81,6 +81,6 @@ in {
       help = "prefix+?"
       settings = "prefix+s"
       reload_config = "prefix+shift+r"
-    '';
+    '');
   };
 }

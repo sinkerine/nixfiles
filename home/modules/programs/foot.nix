@@ -1,9 +1,8 @@
-{ config, lib, pkgs, state, ... }:
+{ config, lib, pkgs, ... }:
 
 with lib;
 let
   cfg = config.my.programs.foot;
-  inherit (state) theme;
 in {
   options.my.programs.foot = {
     enable = mkEnableOption "Foot terminal";
@@ -14,6 +13,8 @@ in {
     };
   };
   config = mkIf cfg.enable {
+    my.programs.set-theme.files."foot/theme.ini" = lib.genAttrs [ "dark" "light" ] (mode:
+      pkgs.writeText "foot-theme-${mode}.ini" "[main]\ninitial-color-theme=${mode}\n");
     programs.foot = {
       enable = true;
       settings = {
@@ -22,7 +23,7 @@ in {
           shell = "${pkgs.tmux}/bin/tmux new-session -A -s main";
           font = "Sarasa Mono SC Nerd Font:size=${toString cfg.fontSize}";
           dpi-aware = "yes";
-          initial-color-theme = theme;
+          include = "${config.xdg.configHome}/foot/theme.ini";
         };
         mouse = { hide-when-typing = "yes"; };
         colors-dark = {

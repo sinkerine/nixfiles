@@ -113,12 +113,6 @@
     let
       supportedSystems = [ "x86_64-linux" ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
-      state = import (
-        if builtins.pathExists ./home/state/default.nix then
-          ./home/state
-        else
-          ./home/state/default.example.nix
-      );
     in
     rec {
       overlays = import ./overlays {
@@ -211,7 +205,6 @@
               }
             ];
             extraSpecialArgs = (v.extraSpecialArgs or { }) // rec {
-              inherit state;
               nixvimLib = nixvim.lib.nixvim;
               microvmNixosModule = microvm.nixosModules.microvm;
               nixinfo = {

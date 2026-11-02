@@ -1,12 +1,12 @@
-{ config, mylib, hostname, state, pkgs, lib, ... }:
+{ config, mylib, hostname, pkgs, lib, ... }:
 
 with lib;
 let
   cfg = config.my.xsession.i3;
   inherit (mylib) templateFile templateShellScriptFile writeShellScriptFile;
-  templateData = rec {
+  templateData = theme: {
     inherit hostname;
-    inherit (state) theme;
+    inherit theme;
     inherit (cfg) musicPlayer;
     colorScheme = (if theme == "light" then "solarized-light" else "nord-dark");
     monitors = cfg.monitors;
@@ -32,10 +32,7 @@ in {
     xsession.windowManager.i3 = {
       enable = true;
       config = null;
-      extraConfig = pipe ./config.jinja [
-        (templateFile "i3-config" templateData)
-        builtins.readFile
-      ];
+
     };
 
     # i3 Scripts
@@ -44,8 +41,12 @@ in {
 
     # Other i3 related packages.
     home.packages = [ pkgs.i3status-rust pkgs.i3-quickterm ];
-    xdg.configFile."i3status-rust/config.toml".source =
-      templateFile "i3status-rust" templateData ./status.toml.jinja;
+    my.programs.set-theme.files = {
+      "i3/config" = genAttrs [ "dark" "light" ] (mode:
+        templateFile "i3-config-${mode}" (templateData mode) ./config.jinja);
+      "i3status-rust/config.toml" = genAttrs [ "dark" "light" ] (mode:
+        templateFile "i3status-rust-${mode}" (templateData mode) ./status.toml.jinja);
+    };
     xdg.configFile."i3/i3-quickterm.json".source = ./i3-quickterm.json;
   };
 }

@@ -1,4 +1,4 @@
-{ config, lib, mylib, state, pkgs, ... }:
+{ config, lib, mylib, pkgs, ... }:
 
 with lib;
 let cfg = config.my.programs.jetbrains;

@@ -1,36 +1,9 @@
-{ config, lib, pkgs, state, ... }:
+{ config, lib, pkgs, ... }:
 
 with lib;
 let
   cfg = config.my.programs.alacritty;
-  inherit (state) theme;
-in {
-  options.my.programs.alacritty = { enable = mkEnableOption "Alacritty"; };
-  config = mkIf cfg.enable {
-    programs.alacritty = {
-      enable = true;
-      settings = {
-        terminal.shell = {
-          program = "${pkgs.herdr}/bin/herdr";
-          args = [ ];
-        };
-        font = {
-          normal = {
-            family = "Sarasa Mono SC Nerd Font";
-            style = "Medium";
-          };
-          bold = {
-            family = "Sarasa Mono SC Nerd Font";
-            style = "Bold";
-          };
-          italic = {
-            family = "Sarasa Mono SC Nerd Font";
-            style = "Italic";
-          };
-          # Point size of the font
-          size = 13;
-        };
-        colors = (if theme == "light" then { # Soloriazed light
+  colors = theme: (if theme == "light" then { # Soloriazed light
           primary = {
             background = "0xfdf6e3";
             foreground = "0x586e75";
@@ -91,6 +64,35 @@ in {
             white = "0x282a2e";
           };
         });
+in {
+  options.my.programs.alacritty = { enable = mkEnableOption "Alacritty"; };
+  config = mkIf cfg.enable {
+    my.programs.set-theme.files."alacritty/theme.toml" = genAttrs [ "dark" "light" ] (mode:
+      (pkgs.formats.toml { }).generate "alacritty-theme-${mode}.toml" { colors = colors mode; });
+    programs.alacritty = {
+      enable = true;
+      settings = {
+        terminal.shell = {
+          program = "${pkgs.herdr}/bin/herdr";
+          args = [ ];
+        };
+        font = {
+          normal = {
+            family = "Sarasa Mono SC Nerd Font";
+            style = "Medium";
+          };
+          bold = {
+            family = "Sarasa Mono SC Nerd Font";
+            style = "Bold";
+          };
+          italic = {
+            family = "Sarasa Mono SC Nerd Font";
+            style = "Italic";
+          };
+          # Point size of the font
+          size = 13;
+        };
+        general.import = [ "${config.xdg.configHome}/alacritty/theme.toml" ];
         bell = {
           animation = "EaseOutExpo";
           duration = 0;
