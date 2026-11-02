@@ -72,8 +72,8 @@ in
   config = mkIf cfg.hkRelay {
     assertions = [
       {
-        assertion = pkgs.sing-box.version == "1.14.1";
-        message = "HK relay requires sing-box 1.14.1";
+        assertion = pkgs.sing-box.version == "1.14.4";
+        message = "HK relay requires sing-box 1.14.4";
       }
     ];
 

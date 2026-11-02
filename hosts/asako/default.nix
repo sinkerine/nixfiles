@@ -22,7 +22,7 @@ let
 in
 {
   system.stateVersion = "22.05";
-  # TUN routing starts off; choose `asako-proxy off|amane|sachi|hk`.
+  # TUN routing starts off; choose `asako-proxy off|amane|sachi|michiru`.
   my.asakoProxy.defaultEnabled = false;
   my.services.regionalProxy.cnClient = true;
   imports = [
@@ -47,7 +47,7 @@ in
         case "''${1:-}" in
           amane|on) /run/wrappers/bin/sudo systemctl restart asako-proxy-enable.service ;;
           sachi) /run/wrappers/bin/sudo systemctl restart asako-proxy-sachi.service ;;
-          hk) /run/wrappers/bin/sudo systemctl restart asako-proxy-hk.service ;;
+          michiru) /run/wrappers/bin/sudo systemctl restart asako-proxy-michiru.service ;;
           off) /run/wrappers/bin/sudo systemctl restart asako-proxy-disable.service ;;
           status)
             /run/wrappers/bin/sudo systemctl status --no-pager sing-box-tun.service || true
@@ -58,7 +58,7 @@ in
               echo "Boot choice: ${if config.my.asakoProxy.defaultEnabled then "amane" else "off"} (default)"
             fi
             ;;
-          *) echo "Usage: asako-proxy off|amane|sachi|hk|status" >&2; exit 2 ;;
+          *) echo "Usage: asako-proxy off|amane|sachi|michiru|status" >&2; exit 2 ;;
         esac
       '';
     })

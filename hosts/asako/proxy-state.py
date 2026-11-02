@@ -167,7 +167,7 @@ def tailnet_return_rule(enabled):
 
 def guard_if_hk_selected():
     selected = STATE_FILE.read_text(encoding="ascii").strip() if STATE_FILE.exists() else ""
-    if selected == "hk":
+    if selected in {"hk", "michiru"}:
         guard_tailnet(True)
 
 
@@ -186,14 +186,17 @@ def select(choice):
         guard_tailnet(False)
         return
 
-    if choice not in {"amane", "sachi", "hk"}:
+    # Accept the former persisted name when upgrading an existing machine.
+    if choice == "hk":
+        choice = "michiru"
+    if choice not in {"amane", "sachi", "michiru"}:
         raise ValueError(f"invalid Asako proxy choice: {choice!r}")
 
-    if choice == "hk":
+    if choice == "michiru":
         # Install the blackhole first. If rule-set startup fails before sing-box
         # creates its TUN, no native Tailscale route can bypass the guard.
         guard_tailnet(True)
-        save("hk")
+        save("michiru")
         systemctl("stop", "sing-box-tun.service")
         # Remove stale table state before bringing the interface back.
         hk_route(False)
@@ -243,13 +246,13 @@ def main(args):
     if args == ["guard"]:
         guard_if_hk_selected()
         return
-    if len(args) == 1 and args[0] in {"off", "amane", "sachi", "hk", "on", "enable", "disable"}:
+    if len(args) == 1 and args[0] in {"off", "amane", "sachi", "michiru", "on", "enable", "disable"}:
         select({"on": "amane", "enable": "amane", "disable": "off"}.get(args[0], args[0]))
-    elif len(args) == 2 and args[0] == "restore" and args[1] in {"amane", "sachi", "hk", "off", "on"}:
+    elif len(args) == 2 and args[0] == "restore" and args[1] in {"amane", "sachi", "michiru", "off", "on"}:
         choice = STATE_FILE.read_text(encoding="ascii").strip() if STATE_FILE.exists() else args[1]
         select("amane" if choice == "on" else choice)
     else:
-        raise SystemExit("usage: proxy-state.py off|amane|sachi|hk|restore amane|sachi|hk|off")
+        raise SystemExit("usage: proxy-state.py off|amane|sachi|michiru|restore amane|sachi|michiru|off")
 
 
 if __name__ == "__main__":

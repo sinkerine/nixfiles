@@ -3,10 +3,7 @@
 with pkgs; {
   notify-lib = callPackage ./notify-lib { };
   ergodox-layout = callPackage ./ergodox-layout { };
-  ccstatusline = callPackage ./ccstatusline { };
-  claude-statusbar = callPackage ./claude-statusbar { };
   clipper = callPackage ./clipper { };
-  claude-notify = callPackage ./claude-notify { };
   codex-trusted = callPackage ./codex-trusted { };
   codex-notify = callPackage ./codex-notify { };
   codex-auth = callPackage ./codex-auth { };

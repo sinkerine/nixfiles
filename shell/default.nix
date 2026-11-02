@@ -17,7 +17,6 @@ pkgs.mkShell {
     gawk
     coreutils
     libnotify
-    claude-notify
     codex-notify
   ] ++ extraPkgs;
 }

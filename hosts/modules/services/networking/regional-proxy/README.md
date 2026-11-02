@@ -44,7 +44,7 @@ The RouterOS path shares HK routing across the main LAN without requiring sing-b
 
 ### Stack and endpoints
 
-Use sing-box 1.14.1 for REALITY ingress, client TUNs, and authenticated SOCKS; no separate HK Xray process is required. Headscale/Tailscale provides private peer connectivity, while a separate plain WireGuard tunnel serves RouterOS. NixOS/systemd manages services and persistent host routing/firewall rules; RouterOS scripts manage the LAN policy. SOPS stores credentials encrypted in Git and sops-nix decrypts them only at runtime.
+Use sing-box 1.14.4 for REALITY ingress, client TUNs, and authenticated SOCKS; no separate HK Xray process is required. Headscale/Tailscale provides private peer connectivity, while a separate plain WireGuard tunnel serves RouterOS. NixOS/systemd manages services and persistent host routing/firewall rules; RouterOS scripts manage the LAN policy. SOPS stores credentials encrypted in Git and sops-nix decrypts them only at runtime.
 
 | Endpoint | Purpose when enabled |
 | --- | --- |
@@ -74,7 +74,7 @@ Use China domain and IP rules for CN local-direct traffic. For US residential ro
 
 ## Implementation task boundaries
 
-The concrete stack uses sing-box 1.14.1, VLESS REALITY, Tailscale, authenticated SOCKS, coturn, systemd, and NixOS firewall and `ip rule` configuration. Keep each work item within these non-overlapping boundaries:
+The concrete stack uses sing-box 1.14.4, VLESS REALITY, Tailscale, authenticated SOCKS, coturn, systemd, and NixOS firewall and `ip rule` configuration. Keep each work item within these non-overlapping boundaries:
 
 | Task | File boundary or output |
 | --- | --- |
@@ -197,7 +197,7 @@ Commands below are operator steps for a provisioned setup, not evidence of compl
 ```sh
 # Asako: select a path or stop the TUN
 asako-proxy status
-asako-proxy hk
+asako-proxy michiru
 asako-proxy off
 # Existing direct profiles
 asako-proxy amane

@@ -29,9 +29,13 @@ with lib;
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
+      # Rule-set downloads can fail while networking is reconfigured during a
+      # switch. Keep retrying after connectivity returns instead of giving up.
+      startLimitIntervalSec = 0;
       serviceConfig = {
         ExecStart = "${pkgs.sing-box}/bin/sing-box run -c ${config.sops.templates."sing-box-proxy.json".path}";
         Restart = "on-failure";
+        RestartSec = "5s";
         User = "root";
         CapabilityBoundingSet = "CAP_NET_ADMIN CAP_NET_BIND_SERVICE";
         AmbientCapabilities = "CAP_NET_ADMIN CAP_NET_BIND_SERVICE";
@@ -72,6 +76,7 @@ with lib;
       environment = stateEnvironment;
       serviceConfig = {
         Type = "oneshot";
+        RemainAfterExit = true;
         ExecStart = "${pkgs.python3}/bin/python ${./proxy-state.py} guard";
       };
     };
@@ -99,12 +104,12 @@ with lib;
         ExecStart = "${pkgs.python3}/bin/python ${./proxy-state.py} sachi";
       };
     };
-    systemd.services.asako-proxy-hk = {
-      description = "Route Asako traffic through the Hong Kong TUN";
+    systemd.services.asako-proxy-michiru = {
+      description = "Route Asako traffic through Michiru's Hong Kong TUN";
       environment = stateEnvironment;
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${pkgs.python3}/bin/python ${./proxy-state.py} hk";
+        ExecStart = "${pkgs.python3}/bin/python ${./proxy-state.py} michiru";
       };
     };
   };

@@ -213,11 +213,14 @@ class ProxyStateTests(unittest.TestCase):
             def run(*args):
                 subprocess.run(["python3", str(state_path), *args], env=env, check=True)
 
-            run("hk")
-            self.assertEqual((state_dir / "state").read_text().strip(), "hk")
+            run("michiru")
+            self.assertEqual((state_dir / "state").read_text().strip(), "michiru")
             self.assertEqual(calls.read_text().splitlines(), ["stop sing-box-tun.service", "start sing-box-hk-tun.service"])
             calls.unlink()
+            # Existing installations saved the previous name; restore migrates it.
+            (state_dir / "state").write_text("hk\n", encoding="ascii")
             run("restore", "off")
+            self.assertEqual((state_dir / "state").read_text().strip(), "michiru")
             self.assertEqual(calls.read_text().splitlines(), ["stop sing-box-tun.service", "start sing-box-hk-tun.service"])
 
             calls.unlink()
@@ -241,9 +244,9 @@ class ProxyStateTests(unittest.TestCase):
             fake_ip.chmod(0o755)
             env = dict(os.environ, ASAKO_PROXY_STATE_DIR=str(root / "state"), ASAKO_SYSTEMCTL=str(fake_systemctl),
                        ASAKO_IP=str(fake_ip), CALL_LOG=str(calls), IP_LOG=str(ip_calls))
-            subprocess.run(["python3", str(state_path), "hk"], env=env, check=True)
+            subprocess.run(["python3", str(state_path), "michiru"], env=env, check=True)
             self.assertEqual(calls.read_text().splitlines(), ["stop sing-box-tun.service", "start sing-box-hk-tun.service"])
-            self.assertEqual((root / "state" / "state").read_text().strip(), "hk")
+            self.assertEqual((root / "state" / "state").read_text().strip(), "michiru")
             routes = ip_calls.read_text()
             self.assertIn("route replace blackhole 100.64.0.0/10 table 110", routes)
             self.assertIn("rule add priority 1001 iif lo to 100.64.0.0/10 lookup 110", routes)
