@@ -9,6 +9,21 @@
 let
   noctalia = lib.getExe config.programs.noctalia.package;
   niriActiveWorkspacePlugin = ./niri-active-workspace;
+  syncSystemAppearance = pkgs.writeShellScript "sync-noctalia-system-appearance" ''
+    set -eu
+
+    # The change hook supplies the resolved app mode; query it on startup.
+    mode="''${NOCTALIA_THEME_MODE:-$(${noctalia} msg theme-mode-get)}"
+    case "$mode" in
+      dark|light)
+        ${lib.getExe pkgs.dconf} write /org/gnome/desktop/interface/color-scheme "'prefer-$mode'"
+        ;;
+      *)
+        echo "Unexpected Noctalia theme mode: $mode" >&2
+        exit 1
+        ;;
+    esac
+  '';
   setNoctaliaWallpapers = pkgs.writeShellScript "set-noctalia-wallpapers" ''
     set -eu
 
@@ -183,7 +198,13 @@ in
           show_value = true;
         };
       };
-      hooks.started = [ "${setNoctaliaWallpapers}" ];
+      hooks = {
+        started = [
+          "${setNoctaliaWallpapers}"
+          "${syncSystemAppearance}"
+        ];
+        theme_mode_changed = [ "${syncSystemAppearance}" ];
+      };
     };
   };
 
