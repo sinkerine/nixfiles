@@ -10,22 +10,26 @@ Use this workflow only when the user explicitly invokes `/skill:e2e-feature <req
 
 You are the orchestrator, running on whatever model this session already uses; do not switch it. You coordinate four phases (design, implement, review, e2e test) and do not write feature code yourself, except for trivial integration fixes that you record as rulings.
 
+This skill uses the Pi goal extension to execute the full approved plan. Invoking this skill explicitly authorizes creating a regular goal once the user approves the design. Design approval also approves that goal; do not run a second goal drafting or confirmation round. Keep the design handoff before goal creation so automatic goal continuation does not bypass the design approval gate.
+
 Stop and ask the user, with `ask_user`, only for: a destructive or irreversible operation, a security-sensitive action, a side effect outside the worktree, a request so ambiguous that every path forward is a guess, or a gate this skill names. Decide everything else yourself, record it as `Ruling: <decision> — <why> — <cost if wrong>`, and keep going.
 
 ## Preflight
 
 1. Pick a short, lowercase feature slug `<feature>`.
-2. Confirm you are running in a Paseo worktree workspace and record its details, as described in Feature worktree. Stop there if you are not.
-3. Read the project-level `AGENTS.md` in `<worktree>` and classify its e2e status:
+2. Confirm the current directory belongs to a Git repository and inspect the current Paseo workspace and Git worktree metadata.
+3. If the current workspace is already a Paseo-owned Git worktree, use it and record its details as described in Feature worktree.
+4. Otherwise, automatically create a new Paseo worktree workspace for the current project before doing feature work. Use the project's current branch as the base unless the user specified another base, and a feature branch named `feat/<feature>`. Discover the project ID from the current workspace or Paseo project registry; create the workspace with `paseo workspace create --isolation worktree --mode branch-off --new-branch feat/<feature> --base <base> --project <project-id> --title "<feature>" --json`. If the installed CLI uses different flags, inspect `paseo workspace create --help` and use the equivalent supported options. Verify the returned workspace ID, worktree path, owning project, base ref, branch, and `paseo/worktree.json`. Since the current agent cannot change its working directory, launch a fresh orchestrator agent in that workspace with the original user request and `/skill:e2e-feature` invocation, then end this turn. The new agent resumes at preflight using the created workspace; do not create a second worktree. If the CLI cannot create or associate the worktree, preserve the exact error and report the blocker; do not fall back to editing the current checkout or ask the user to create it manually.
+5. Read the project-level `AGENTS.md` in `<worktree>` and classify its e2e status:
    - **instructions**: it explains how to run an end-to-end test of a feature in a sandbox, such as a VM, a container, a disposable environment, or a local stack;
    - **not needed**: it explicitly says e2e testing is not needed for this repository;
    - **missing**: neither of the above, including when there is no `AGENTS.md`.
    When the status is missing, tell the user now, together with the design handoff below, so they can fix it while the design is underway. The gate is enforced in the e2e phase.
-4. Create the workflow mission described in Workflow layout and record its id.
+6. Create the workflow mission described in Workflow layout and record its id.
 
 ## Feature worktree
 
-The user creates the isolated worktree in Paseo before invoking this skill: **New workspace → Isolation: New worktree**, or the project's **New worktree** button in the sidebar. Paseo places it under `~/.paseo/worktrees/<project hash>/<slug>` and records its base. You never create worktrees yourself; all feature work, including the plan, implementation, commits, verification, and e2e runs, happens in that worktree.
+Use an existing Paseo-owned Git worktree when the skill is invoked from one. When invoked from a local workspace or the main checkout, create a new Paseo-owned Git worktree automatically during preflight as specified above. Paseo places it under `~/.paseo/worktrees/<project hash>/<slug>` and records its base. All feature work, including the plan, implementation, commits, verification, and E2E runs, happens in that isolated worktree.
 
 Verify and record it during preflight:
 
@@ -35,8 +39,6 @@ Verify and record it during preflight:
 - `<repo root>` is the main checkout: the first `worktree` entry of `git worktree list --porcelain`.
 - The base commit is `git merge-base HEAD <base>`.
 - `<branch>` is the current branch. Paseo may rename a placeholder branch after the first agent prompt, so read it again with `git branch --show-current` whenever you need it, not only once.
-
-If your working directory is not a Paseo-owned worktree, for example the main checkout or a local workspace, stop before doing anything else. Ask the user, with `ask_user`, to create a worktree workspace in Paseo and invoke the skill again from an agent in it.
 
 Never edit `<repo root>`. Set `cwd: "<worktree>"` on every `subagent` launch. Paths in this skill such as `docs/features/<feature>-plan.md` and `AGENTS.md` are relative to `<worktree>`.
 
@@ -138,7 +140,15 @@ When the plan arrives:
 
 1. Read `<worktree>/docs/features/<feature>-plan.md`. If it is missing, ask the design tab to write it with `paseo send <design agent id> --no-wait --prompt "..."` and end your turn.
 2. Check that every section is present, every task has a unit test command, the dependency graph has no cycles, and task boundaries follow the cohesion rule in Workflow layout. Send gaps or unnecessary task splits back to the design tab the same way, or ask the user if a gap needs their decision.
-3. When the plan is complete, commit it on `<branch>`, archive the design tab with `paseo archive <design agent id>`, and proceed straight into implementation without waiting for further confirmation.
+3. When the plan is complete, commit it on `<branch>`, archive the design tab with `paseo archive <design agent id>`, create the execution goal as described below, and proceed straight into implementation without waiting for further confirmation.
+
+## Execution goal
+
+Before launching implementation, call `create_goal` with `mode: "regular"`. The `objective` must contain the user's request and the entire approved `docs/features/<feature>-plan.md` verbatim, including its acceptance criteria, design, every task and dependency, verification commands, and E2E journey. A file path, short summary, or just the next task is not sufficient. Include this skill's remaining execution requirements as well: implementation waves, review and repair limits, commits, full verification, E2E evidence, delivery, the final default-branch merge question, and cleanup rules. Preserve the order and all user-approved constraints. Do not set a token budget unless the user supplied one.
+
+Create and focus this goal directly through the extension's `create_goal` tool; do not invoke the guided `/goal` drafting flow or ask the user to confirm the already-approved objective again. Record the returned goal id alongside the workflow mission id. The goal covers the entire workflow, rather than one goal per worker or task. Leave unrelated open goals unchanged. If the extension or tool is unavailable, report the blocker instead of silently running without a goal.
+
+Use the extension's task and progress tools as available to track the approved tasks, accepted reviews, commits, and verification evidence. After interruption or compaction, use `get_goal` and read the approved plan to resume the same goal without creating a duplicate. Do not claim the goal is complete while required work or checks remain outstanding. Goal continuation must respect every human-input gate in this skill, including the final merge decision: wait for the user's answer and never treat goal approval as merge approval. A choice to keep the branch or open a PR can finish delivery without a merge; apply the corresponding cleanup rules.
 
 ## Implement
 
@@ -179,15 +189,16 @@ Re-read the project-level `AGENTS.md` in `<worktree>`, because the user may have
 
 Inspect the final diff with `git diff <base commit>...HEAD` and confirm `git status` is clean. Report the changed files and behavior, the commits on `<branch>`, each task with its review rounds, verification and e2e evidence, rulings made, deferred Minor findings, and unresolved risks. Never claim completion while required checks remain unverified.
 
-Then ask the user with `ask_user` whether to merge `<branch>` into `<base>` now, keep the branch for later, or open a PR instead. Merge, push, or open a PR only on their answer, or when repository policy in `AGENTS.md` says what to do. The user can also do the merge from the workspace's Git actions in Paseo; the steps below do the same thing.
-## Merge into the base branch
+As the final delivery step, if this session runs in a Git worktree, identify the repository's default branch `<default branch>` from the remote's HEAD or repository metadata; do not assume `<base>` is the default branch. If the default branch cannot be determined, ask the user to identify it. Then use `ask_user` to ask whether to merge the completed commits from `<branch>` into `<default branch>` now, keep the branch for later, or open a PR instead. Include the target branch, commits, and verification results so the decision is reviewable. Wait for an explicit answer before merging; do not infer merge approval from plan approval or repository policy. Push or open a PR only when the user's answer authorizes it.
 
-Follow Paseo's own merge-from-base and merge-to-base behavior:
+## Merge into the default branch
 
-1. **Update from base.** With a clean tree, run `git merge <base>` on `<branch>`; Paseo merges base in rather than rebasing. When the base tracks a remote, run `git fetch` first and merge the remote-tracking ref. Resolve conflicts in `<worktree>`: trivial ones yourself, substantive ones through a `worker`, and ask the user when a conflict changes behavior. If the merge brought in changes, rerun the plan's Test and verification checks and the e2e journey.
-2. **Find the target checkout.** Find the worktree that has `<base>` checked out with `git worktree list --porcelain`; usually that is `<repo root>`. Merge only if `git -C <target> status --porcelain` is empty. Otherwise ask the user; never stash, reset, or discard work in their checkout. If `<base>` is not checked out anywhere, merge in `<worktree>` itself: check out `<base>`, merge, then check out `<branch>` again, as Paseo does.
-3. **Merge to base.** Run `git -C <target> merge <branch>`; this is Paseo's default merge strategy. Squash only when `AGENTS.md` or the user asks for it: `git -C <target> merge --squash <branch>`, then `git -C <target> commit -m "Squash merge <branch> into <base>"`. If the merge conflicts, run `git -C <target> merge --abort` and go back to step 1.
-4. **Confirm.** `git -C <target> log --oneline -n 20 <base>` shows the feature commits or the squash commit. Push only when the user asked for it.
+After the user approves merging, use `<default branch>` as the target in every step below (even when the worktree's recorded `<base>` differs):
+
+1. **Update from the default branch.** With a clean tree, run `git merge <default branch>` on `<branch>`. When the default branch tracks a remote, run `git fetch` first and merge the remote-tracking ref. Resolve conflicts in `<worktree>`: trivial ones yourself, substantive ones through a `worker`, and ask the user when a conflict changes behavior. If the merge brought in changes, rerun the plan's Test and verification checks and the e2e journey.
+2. **Find the target checkout.** Find the worktree that has `<default branch>` checked out with `git worktree list --porcelain`; usually that is `<repo root>`. Merge only if `git -C <target> status --porcelain` is empty. Otherwise ask the user; never stash, reset, or discard work in their checkout. If `<default branch>` is not checked out anywhere, merge in `<worktree>` itself: check out `<default branch>`, merge, then check out `<branch>` again, as Paseo does.
+3. **Merge to the default branch.** Run `git -C <target> merge <branch>`. Squash only when `AGENTS.md` or the user asks for it: `git -C <target> merge --squash <branch>`, then `git -C <target> commit -m "Squash merge <branch> into <default branch>"`. If the merge conflicts, run `git -C <target> merge --abort` and go back to step 1.
+4. **Confirm.** `git -C <target> log --oneline -n 20 <default branch>` shows the feature commits or the squash commit. Push only when the user asked for it.
 ## Clean up the worktree
 
 In Paseo, cleanup means archiving the workspace. Archiving runs the teardown commands from the project's `paseo.json`, force-removes the Paseo-owned worktree with `git worktree remove --force`, prunes it, and archives every agent and terminal in the workspace. It keeps the branch.

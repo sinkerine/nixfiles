@@ -11,8 +11,12 @@ stdenvNoCC.mkDerivation {
     hash = "sha256-W/SY4jqZqy5CWSM7QRkqNne1YKFotJupT/x2roR3+U4=";
   };
 
-  # Wait for the soonest magpie quota reset after a provider usage limit.
-  patches = [ ./quota-retry.patch ];
+  patches = [
+    # Wait for the soonest magpie quota reset after a provider usage limit.
+    ./quota-retry.patch
+    # Keep agents pursuing the goal; pausing remains a user control.
+    ./autonomous-progress.patch
+  ];
 
   dontConfigure = true;
   dontBuild = true;

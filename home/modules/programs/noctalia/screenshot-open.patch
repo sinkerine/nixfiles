@@ -1,0 +1,59 @@
+diff --git a/src/capture/screenshot_service.cpp b/src/capture/screenshot_service.cpp
+--- a/src/capture/screenshot_service.cpp
++++ b/src/capture/screenshot_service.cpp
+@@ -2258,7 +2258,16 @@
+ }
+
+ void ScreenshotService::notifySaved(const std::filesystem::path& path) {
+-  m_notifications.addInternal("Noctalia", "Screenshot saved", path.string());
++  m_notifications.addOrReplace(
++      NotificationRequest{
++          .appName = "Noctalia",
++          .summary = "Screenshot saved",
++          .body = path.string(),
++          .origin = NotificationOrigin::Internal,
++          .actions = {"default", "Open image"},
++          .category = "x-noctalia.screenshot",
++      }
++  );
+ }
+
+ void ScreenshotService::notifyError(const std::string& message) {
+diff --git a/src/notification/notification_manager.cpp b/src/notification/notification_manager.cpp
+--- a/src/notification/notification_manager.cpp
++++ b/src/notification/notification_manager.cpp
+@@ -2,6 +2,7 @@
+
+ #include "core/deferred_call.h"
+ #include "core/log.h"
++#include "net/url_open.h"
+ #include "notification/notification_filter.h"
+ #include "notification/notification_history_store.h"
+ #include "pipewire/sound_player.h"
+@@ -9,6 +10,7 @@
+ #include "util/string_utils.h"
+
+ #include <algorithm>
++#include <gio/gio.h>
+ #include <filesystem>
+ #include <ranges>
+ #include <string_view>
+@@ -562,7 +564,17 @@
+
+   // Internal notifications have no D-Bus owner, so their actions are dispatched in-process instead.
+   if (notification->origin == NotificationOrigin::Internal) {
+-    if (m_internalActionCallback) {
++    if (notification->category == "x-noctalia.screenshot" && actionKey == "default") {
++      // Convert the saved filename to a URI so spaces and URI metacharacters are escaped.
++      gchar* uri = g_filename_to_uri(notification->body.c_str(), nullptr, nullptr);
++      if (uri == nullptr) {
++        return false;
++      }
++      // Uses GIO's default application for the file type and forwards the activation token.
++      const bool opened = net::openInBrowser(uri, activationToken);
++      g_free(uri);
++      if (!opened) return false;
++    } else if (m_internalActionCallback) {
+       m_internalActionCallback(id, actionKey, activationToken, notification->sender);
+     }
+   } else if (m_actionInvokeCallback) {

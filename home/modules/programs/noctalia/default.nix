@@ -79,6 +79,9 @@ in
 
   programs.noctalia = {
     enable = true;
+    package = pkgs.noctalia.overrideAttrs (old: {
+      patches = (old.patches or [ ]) ++ [ ./screenshot-open.patch ];
+    });
     systemd.enable = true;
     settings = {
       plugins.enabled = [ "salemsayed/niri-active-workspace" ];
@@ -137,8 +140,8 @@ in
       };
       location = {
         custom_schedule = true;
-        sunrise = "06:00";
-        sunset = "20:00";
+        sunrise = "07:00";
+        sunset = "17:00";
       };
       bar.main = {
         position = "top";

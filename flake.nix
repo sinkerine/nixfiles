@@ -202,6 +202,12 @@
                   sops-nix.homeManagerModules.sops
                   lrc-catalog-merge.homeManagerModules.default
                 ];
+                # Python's wrapper hook expects each argument as a separate list item.
+                programs.lrc-catalog-merge.package =
+                  lrc-catalog-merge.packages.${v.pkgs.stdenv.hostPlatform.system}.default.overrideAttrs
+                    (old: {
+                      makeWrapperArgs = nixpkgs.lib.concatMap (nixpkgs.lib.splitString " ") old.makeWrapperArgs;
+                    });
               }
             ];
             extraSpecialArgs = (v.extraSpecialArgs or { }) // rec {
