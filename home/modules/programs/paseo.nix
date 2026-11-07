@@ -180,10 +180,13 @@ in
         };
       })
       (lib.mkIf cfg.daemon.enable {
+        services.ssh-agent.enable = true;
+
         systemd.user.services.paseo = {
           Unit = {
             Description = "Paseo coding agent daemon";
-            After = [ "network.target" ];
+            After = [ "network.target" "ssh-agent.service" ];
+            Wants = [ "ssh-agent.service" ];
             # Keep active connections alive; apply daemon updates on a deliberate restart.
             X-SwitchMethod = "keep-old";
           };
@@ -198,6 +201,7 @@ in
               "PASEO_LISTEN=${cfg.daemon.listen}"
               "PASEO_HOSTNAMES=${lib.concatStringsSep "," cfg.daemon.hostnames}"
               "PATH=${config.home.profileDirectory}/bin:/run/wrappers/bin:/run/current-system/sw/bin"
+              "SSH_AUTH_SOCK=%t/ssh-agent"
             ];
             Restart = "on-failure";
             RestartSec = 5;
