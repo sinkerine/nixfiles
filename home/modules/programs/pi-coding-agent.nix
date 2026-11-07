@@ -62,6 +62,13 @@ let
       exec pi --provider magpie --model group/luna-fast "$@"
     '';
   };
+  piArgon = pkgs.writeShellApplication {
+    name = "pi-argon";
+    runtimeInputs = [ piCodingAgent ];
+    text = ''
+      exec pi --provider magpie --model group/argon "$@"
+    '';
+  };
   piOpus = pkgs.writeShellApplication {
     name = "pi-opus";
     runtimeInputs = [ piCodingAgent ];
@@ -190,6 +197,14 @@ in
             maxTokens = 128000;
           }
           {
+            id = "group/argon";
+            name = "Gemini 4 Argon";
+            reasoning = true;
+            input = [ "text" "image" ];
+            contextWindow = 1048576;
+            maxTokens = 65536;
+          }
+          {
             id = "group/opus";
             name = "Opus";
             reasoning = true;
@@ -243,6 +258,7 @@ in
       piLuna
       piSol
       piAstra
+      piArgon
       piSolFast
       piOpus
       piLunaFast

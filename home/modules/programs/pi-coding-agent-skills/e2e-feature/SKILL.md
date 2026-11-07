@@ -14,13 +14,19 @@ This skill uses the Pi goal extension to execute the full approved plan. Invokin
 
 Stop and ask the user, with `ask_user`, only for: a destructive or irreversible operation, a security-sensitive action, a side effect outside the worktree other than the default-branch merge authorized below, a request so ambiguous that every path forward is a guess, or a gate this skill names. Decide everything else yourself, record it as `Ruling: <decision> — <why> — <cost if wrong>`, and keep going.
 
+## E2E requirement scope
+
+The agent must run end-to-end sandbox tests **only when a feature is first added**, subject to the repository's explicit “not needed” exemption below. Complete any necessary repairs and reruns during that initial feature workflow. Future pushes or deployments of the existing feature do not need to rerun those end-to-end sandbox tests. **Existing unit tests must still be run**, including for future pushes and deployments; skipping sandbox E2E tests does not waive unit testing.
+
+Do not add E2E requirements for push or deploy to `AGENTS.md` (or `agent.md`). Any testing instructions requested or added by this workflow must state that the agent runs sandbox E2E tests when a feature is first added, future pushes and deployments do not require those sandbox tests, and existing unit tests must still be run.
+
 ## Preflight
 
 1. Pick a short, lowercase feature slug `<feature>`.
 2. Confirm the current directory belongs to a Git repository and inspect the current Paseo workspace and Git worktree metadata.
 3. If the current workspace is already a Paseo-owned Git worktree, use it and record its details as described in Feature worktree.
 4. Otherwise, automatically create a new Paseo worktree workspace for the current project before doing feature work. Use the project's current branch as the base unless the user specified another base, and a feature branch named `feat/<feature>`. Discover the project ID from the current workspace or Paseo project registry; create the workspace with `paseo workspace create --isolation worktree --mode branch-off --new-branch feat/<feature> --base <base> --project <project-id> --title "<feature>" --json`. If the installed CLI uses different flags, inspect `paseo workspace create --help` and use the equivalent supported options. Verify the returned workspace ID, worktree path, owning project, base ref, branch, and `paseo/worktree.json`. Since the current agent cannot change its working directory, launch a fresh orchestrator agent in that workspace with the original user request and `/skill:e2e-feature` invocation, then end this turn. The new agent resumes at preflight using the created workspace; do not create a second worktree. If the CLI cannot create or associate the worktree, preserve the exact error and report the blocker; do not fall back to editing the current checkout or ask the user to create it manually.
-5. Read the project-level `AGENTS.md` in `<worktree>` and classify its e2e status:
+5. For a request that adds a new feature, read the project-level `AGENTS.md` in `<worktree>` and classify its e2e status. For requests that do not add a new feature, skip this classification and the E2E phase; do not request or add E2E instructions:
    - **instructions**: it explains how to run an end-to-end test of a feature in a sandbox, such as a VM, a container, a disposable environment, or a local stack;
    - **not needed**: it explicitly says e2e testing is not needed for this repository;
    - **missing**: neither of the above, including when there is no `AGENTS.md`.
@@ -240,9 +246,11 @@ After all tasks are accepted, run the plan's full Test and verification checks y
 
 ## E2E test
 
+The agent runs this phase **only when the feature is first added**, including repairs and reruns needed to finish that initial feature workflow. Skip it for future pushes, deployments, and other requests that do not add new features; do not require fresh sandbox E2E evidence or changes to `AGENTS.md` for those operations. Existing unit tests must still be run.
+
 Re-read the project-level `AGENTS.md` in `<worktree>`, because the user may have changed it since preflight.
 
-- **missing**: ask the user with `ask_user` to either add instructions to `AGENTS.md` on how to test a feature end to end in a sandbox, or add a note to `AGENTS.md` that e2e testing is not needed for this repository. Wait for their answer, then re-read the file. Do not deliver while the status is still missing.
+- **missing**: ask the user with `ask_user` to either add instructions to `AGENTS.md` on how to test newly added features end to end in a sandbox, explicitly stating that the agent runs these sandbox tests only when a feature is first added, future pushes and deployments do not require rerunning them, and existing unit tests must still be run, or add a note to `AGENTS.md` that e2e testing is not needed for this repository. Wait for their answer, then re-read the file. Do not deliver while the status is still missing.
 - **not needed**: skip this phase and record that in the report.
 - **instructions**: hand the journey to a fresh `worker` on `magpie/gpt-6.1-sol` at thinking `medium`, launched as `runs.run("e2e-journey-r1", { label: "E2E · journey r1", phase: "e2e", agent: "worker", model: "magpie/gpt-6.1-sol:medium", task })`, so the sandbox's commands and logs stay out of your context. Its brief, `<run dir>/e2e-brief.md`, holds the `AGENTS.md` e2e instructions, the plan's E2E journey, `<worktree>`, and `<branch>`. Require the worker to:
   - run everything from `<worktree>`, so the sandbox runs the feature branch;
@@ -266,7 +274,7 @@ As the final delivery step, once all required work and checks are complete, auto
 
 Unless the user explicitly asked not to merge, proceed automatically after all required work and checks are complete. Use `<default branch>` as the target in every step below (even when the worktree's recorded `<base>` differs):
 
-1. **Update from the default branch.** With a clean tree, run `git merge <default branch>` on `<branch>`. When the default branch tracks a remote, run `git fetch` first and merge the remote-tracking ref. Resolve conflicts in `<worktree>`: trivial ones yourself, substantive ones through a `worker`, and ask the user when a conflict changes behavior. If the merge brought in changes, rerun the plan's Test and verification checks and the e2e journey.
+1. **Update from the default branch.** With a clean tree, run `git merge <default branch>` on `<branch>`. When the default branch tracks a remote, run `git fetch` first and merge the remote-tracking ref. Resolve conflicts in `<worktree>`: trivial ones yourself, substantive ones through a `worker`, and ask the user when a conflict changes behavior. If the merge brought in changes, rerun the plan's Test and verification checks. Rerun the e2e journey only when this run adds a new feature and the E2E phase is required; merging, pushing, or deploying alone does not introduce an E2E requirement.
 2. **Find the target checkout.** Find the worktree that has `<default branch>` checked out with `git worktree list --porcelain`; usually that is `<repo root>`. Merge only if `git -C <target> status --porcelain` is empty. Otherwise ask the user; never stash, reset, or discard work in their checkout. If `<default branch>` is not checked out anywhere, merge in `<worktree>` itself: check out `<default branch>`, merge, then check out `<branch>` again, as Paseo does.
 3. **Merge to the default branch.** Run `git -C <target> merge <branch>`. Squash only when `AGENTS.md` or the user asks for it: `git -C <target> merge --squash <branch>`, then `git -C <target> commit -m "Squash merge <branch> into <default branch>"`. If the merge conflicts, run `git -C <target> merge --abort` and go back to step 1.
 4. **Confirm.** `git -C <target> log --oneline -n 20 <default branch>` shows the feature commits or the squash commit. Push only when the user asked for it.
