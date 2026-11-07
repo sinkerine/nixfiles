@@ -15,6 +15,8 @@
   # exports $XDG_RUNTIME_DIR/ssh-agent while preserving forwarded SSH agents.
   services.ssh-agent.enable = true;
   systemd.user.services.ssh-agent.Service.Restart = "on-failure";
+  # Services do not source the shell initialization that exports this socket.
+  systemd.user.sessionVariables.SSH_AUTH_SOCK = "$XDG_RUNTIME_DIR/ssh-agent";
 
   programs.git = {
     enable = true;
