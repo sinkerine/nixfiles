@@ -10,6 +10,12 @@ This is the reviewed maintenance set for the `fork-maintenance` skill. It was co
 
 Paseo is consumed by the `/nixfiles` flake input `paseo`, then installed as the daemon and desktop app by standalone Home Manager. Update the fork first, then the input, activate Home Manager, and verify both running revisions. A NixOS switch alone does not install the updated user packages. Android builds of Paseo are outside the default scope; offer them only when requested.
 
+| Project | Fork → upstream | Fork default / upstream branch | Local checkout | Paseo project ID |
+| --- | --- | --- | --- | --- |
+| pi-goal-x | [sinkerine/pi-goal-x](https://github.com/sinkerine/pi-goal-x) → [tmonk/pi-goal-x](https://github.com/tmonk/pi-goal-x) | `main` / `main` | `/home/sinkerine/dev/pi-goal-x` | not registered |
+
+pi-goal-x is the Pi goal extension. `main` carries three local commits over upstream: the magpie quota-reset wait (paired with `PI_GOAL_QUOTA_URL` in `home/modules/programs/pi-coding-agent.nix`), the rejection of agent-initiated pauses, and the checkpoint hold while pi-subagents runs are active. `pkgs/pi-goal-x/default.nix` pins a fork commit with `fetchFromGitHub`; after pushing the fork, update `rev` and `hash` there, then activate Home Manager. Tests run with `node scripts/run-unit-tests.mjs` once `node_modules/@earendil-works/{pi-coding-agent,pi-ai,pi-tui}` and `node_modules/typebox` link to the installed `pi-coding-agent` package. Upstream's `recovery repair: confirmed repair backs up, removes stale locks…` test already failed at upstream `b0fc15e` on kazuki.
+
 ## Services in sachi Docker
 
 | Project | Fork → upstream | Fork default / upstream branch | Local checkout | Paseo project ID |

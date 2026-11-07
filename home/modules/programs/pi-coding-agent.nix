@@ -246,6 +246,8 @@ in
       piSolFast
       piOpus
       piLunaFast
+      # Moves running e2e-feature runs between hosts; the e2e-feature skill registers runs with it.
+      pkgs.e2e-dispatch
     ] ++ optional config.my.programs.claude-code.enable claudeReviewer;
   };
 }
