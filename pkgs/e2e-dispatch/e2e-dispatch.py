@@ -29,6 +29,7 @@ import argparse
 import base64
 import datetime
 import glob
+import re
 import json
 import os
 import shlex
@@ -48,7 +49,7 @@ HOME = os.environ.get("E2E_DISPATCH_HOME", "kazuki")
 AWAY = os.environ.get("E2E_DISPATCH_AWAY", "sachi")
 REF_NS = "refs/e2e-dispatch"
 # Pi's goal files and subagent state are per host and per session; they never move.
-SNAPSHOT_EXCLUDES = [":(exclude).pi"]
+PI_STATE_DIR = ".pi"
 REWRITE_SUFFIXES = (".md", ".json", ".sh", ".txt", ".js")
 SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15"]
 IN_PROGRESS_MARKERS = ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD", "rebase-merge", "rebase-apply")
@@ -63,7 +64,20 @@ def now_iso():
 
 
 def log(message):
-    print(f"[e2e-dispatch] {message}", file=sys.stderr, flush=True)
+    # The caller may be the very orchestrator this move kills (for example over SSH), so a
+    # vanished stderr must not stop the move.
+    try:
+        print(f"[e2e-dispatch] {message}", file=sys.stderr, flush=True)
+    except (BrokenPipeError, OSError):
+        pass
+
+
+def say(message):
+    """print() that survives a caller that has gone away."""
+    try:
+        print(message, flush=True)
+    except (BrokenPipeError, OSError):
+        pass
 
 
 def run(args, cwd=None, input=None, env=None, check=True):
@@ -101,11 +115,16 @@ def git_dir(worktree):
 
 
 def tree_of(worktree):
-    """Tree id of the worktree as it is on disk, untracked files included, without touching the index."""
+    """Tree id of the worktree as it is on disk, untracked files included, without touching the index.
+
+    Pi's state directory keeps its committed content, if any: anything untracked or edited there
+    stays on this host. (An exclude pathspec would fail outright where `.pi` is gitignored.)
+    """
     with tempfile.TemporaryDirectory() as scratch:
         env = {**os.environ, "GIT_INDEX_FILE": os.path.join(scratch, "index")}
         git(worktree, "read-tree", "HEAD", env=env)
-        git(worktree, "add", "-A", "--", ".", *SNAPSHOT_EXCLUDES, env=env)
+        git(worktree, "add", "-A", "--", ".", env=env)
+        git(worktree, "reset", "-q", "HEAD", "--", PI_STATE_DIR, env=env)
         return git(worktree, "write-tree", env=env).strip()
 
 
@@ -196,7 +215,8 @@ def verify_tree(worktree, expected):
 
 def apply_range(worktree, start, end):
     pipe(["git", "-C", worktree, "diff", "--binary", "--full-index", start, end],
-         ["git", "-C", worktree, "apply", "--whitespace=nowarn", "-"])
+         # A run parked with everything committed has an empty snapshot diff.
+         ["git", "-C", worktree, "apply", "--allow-empty", "--whitespace=nowarn", "-"])
 
 
 def h_apply_snapshot(worktree, snapshot_ref, expected_tree):
@@ -213,9 +233,9 @@ def h_adopt_incoming(worktree, head_ref, snapshot_ref, expected_tree, departure_
     if current != departure_tree:
         raise Failure(f"{worktree} changed since the run left it (tree {current[:12]}, expected {departure_tree[:12]}); "
                       "inspect it before bringing the run back")
-    # Everything removed here is preserved in the departure snapshot ref.
+    # Everything removed here is preserved in the departure snapshot ref; pi's state stays.
     git(worktree, "reset", "--hard", "-q", head_ref)
-    git(worktree, "clean", "-fdq")
+    git(worktree, "clean", "-fdq", "-e", f"/{PI_STATE_DIR}")
     apply_range(worktree, "HEAD", snapshot_ref)
     return verify_tree(worktree, expected_tree)
 
@@ -393,6 +413,20 @@ def h_branch_worktrees(repo, branch):
     return paths
 
 
+def h_goal_states(worktree):
+    """Status of each active pi goal in the worktree, as pi-goal-x saved it."""
+    states = []
+    for path in sorted(glob.glob(os.path.join(worktree, PI_STATE_DIR, "goals", "active_goal_*.md"))):
+        try:
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read()
+        except OSError:
+            continue
+        found = {key: re.search(rf'"{key}"\s*:\s*"([^"]*)"', text) for key in ("status", "stopReason")}
+        states.append({"file": os.path.basename(path), **{key: (match.group(1) if match else None) for key, match in found.items()}})
+    return states
+
+
 def h_session_guess(worktree):
     encoded = "--" + os.path.realpath(worktree).lstrip("/").replace("/", "-") + "--"
     candidates = glob.glob(os.path.join(os.path.expanduser("~/.pi/agent/sessions"), encoded, "*.jsonl"))
@@ -531,9 +565,13 @@ def select(runs, features):
     return chosen
 
 
-def out_blockers(home, entry):
+def out_blockers(home, entry, include_paused=False):
     """Reasons a home run cannot move out now, empty when it can."""
     reasons = []
+    if not include_paused:
+        for goal in home.call("goal_states", worktree=entry["worktree"]):
+            if goal.get("status") == "paused":
+                reasons.append(f"goal paused by {goal.get('stopReason') or 'someone'}; `/goal-resume` it first or pass --include-paused")
     agent_id = entry.get("orchestratorAgentId")
     if entry.get("host", home.name) != home.name:
         return [f"already on {entry.get('host')}"]
@@ -578,6 +616,7 @@ def move(entry, source, destination, args):
     previous = source.paseo("inspect", previous_agent_id, "--json") if previous_agent_id else {}
     provider, thinking = agent_launch_args(previous, args)
     session_file = entry.get("sessionFile") or source.call("session_guess", worktree=source_worktree)
+    previous_goals = source.call("goal_states", worktree=source_worktree)
     log(f"{feature}: {source.name} -> {destination.name} (move {seq})")
 
     # Checks and preparation that leave the source untouched.
@@ -671,6 +710,7 @@ def move(entry, source, destination, args):
             "worktree": destination_worktree, "gitDir": destination_git_dir, "runDir": destination_run_dir,
             "sourceWorktree": source_worktree, "transcript": transcript, "warnings": warnings,
             "previousOrchestrator": {"host": source.name, "agentId": previous_agent_id, "provider": provider, "thinking": thinking},
+            "previousGoals": previous_goals,
         })
         prompt = (args.resume_prompt or "/skill:e2e-feature resume {packet}").format(packet=packet_path)
         launched = destination.paseo("run", "--no-wait", "--json", "--provider", provider, "--thinking", thinking,
@@ -748,9 +788,32 @@ def move(entry, source, destination, args):
 def require_home():
     if socket.gethostname() != HOME:
         raise Failure(f"run this on {HOME}, the home host")
+    # A move kills the source orchestrator, which may be the process that started this command
+    # (for example over SSH). Losing that session must not interrupt the move halfway.
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
 
 def cmd_status(args):
+    here = socket.gethostname()
+    if here != HOME:
+        # The away host cannot reach the home host, so it reports only its own runs.
+        runs = HELPERS["list_runs"]()
+        if not runs:
+            print(f"No e2e-feature runs on {here}.")
+            return
+        print(f"{'FEATURE':24} {'ORCHESTRATOR':22} WORKTREE ON {here.upper()}")
+        for entry in runs:
+            agent = entry.get("orchestratorAgentId")
+            status = "-"
+            if agent:
+                try:
+                    info = json.loads(run(["paseo", "inspect", agent, "--json"]))
+                    status = "archived" if info.get("Archived") else str(info.get("Status"))
+                except (Failure, ValueError):
+                    status = "unknown"
+            print(f"{entry.get('feature', '?'):24} {(agent or '-')[:8] + ' ' + status:22} {entry.get('worktree', '')}")
+        print(f"Run `e2e-dispatch back` on {HOME} to bring runs home.")
+        return
     home = Host(HOME)
     rows = []
     for entry in home_runs(home):
@@ -779,22 +842,22 @@ def cmd_out(args):
     away.call("ping")
     candidates = select([entry for entry in home_runs(home) if entry.get("host", home.name) == home.name], args.features)
     if not candidates:
-        print("Nothing to move: no active runs on", home.name)
+        say(f"Nothing to move: no active runs on {home.name}")
         return
     failures = 0
     for entry in candidates:
-        reasons = out_blockers(home, entry)
+        reasons = out_blockers(home, entry, args.include_paused)
         if reasons:
-            print(f"skip {entry['feature']}: {'; '.join(reasons)}")
+            say(f"skip {entry['feature']}: {'; '.join(reasons)}")
             continue
         try:
             args.home_entry = entry
             agent = move(entry, home, away, args)
             if agent:
-                print(f"moved {entry['feature']} to {away.name}: agent {agent}")
+                say(f"moved {entry['feature']} to {away.name}: agent {agent}")
         except Failure as error:
             failures += 1
-            print(f"FAILED {entry['feature']}: {error}")
+            say(f"FAILED {entry['feature']}: {error}")
     sys.exit(1 if failures else 0)
 
 
@@ -803,7 +866,7 @@ def cmd_back(args):
     home = Host(HOME)
     candidates = select([entry for entry in home_runs(home) if entry.get("host", home.name) != home.name], args.features)
     if not candidates:
-        print("Nothing to bring back: every run is on", home.name)
+        say(f"Nothing to bring back: every run is on {home.name}")
         return
     failures = 0
     for home_entry in candidates:
@@ -817,10 +880,10 @@ def cmd_back(args):
             args.home_entry = home_entry
             agent = move(entry, source, home, args)
             if agent:
-                print(f"brought {home_entry['feature']} back to {home.name}: agent {agent}")
+                say(f"brought {home_entry['feature']} back to {home.name}: agent {agent}")
         except Failure as error:
             failures += 1
-            print(f"FAILED {home_entry['feature']}: {error}")
+            say(f"FAILED {home_entry['feature']}: {error}")
     sys.exit(1 if failures else 0)
 
 
@@ -890,6 +953,7 @@ def main():
         command.add_argument("--thinking", help="thinking level for the new orchestrator (default: the previous one's)")
         if name == "out":
             command.add_argument("--to", default=AWAY, help=f"destination host (default: {AWAY})")
+            command.add_argument("--include-paused", action="store_true", help="also move runs whose goal is paused")
     register = commands.add_parser("register", help="record the calling orchestrator's run (used by the e2e-feature skill)")
     register.add_argument("--feature")
     register.add_argument("--home", help="host that delivers the run (default: this host)")

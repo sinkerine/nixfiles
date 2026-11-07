@@ -62,8 +62,8 @@ let
       exec pi --provider magpie --model group/luna-fast "$@"
     '';
   };
-  piArgon = pkgs.writeShellApplication {
-    name = "pi-argon";
+  piGemini = pkgs.writeShellApplication {
+    name = "pi-gemini";
     runtimeInputs = [ piCodingAgent ];
     text = ''
       exec pi --provider magpie --model group/argon "$@"
@@ -258,7 +258,7 @@ in
       piLuna
       piSol
       piAstra
-      piArgon
+      piGemini
       piSolFast
       piOpus
       piLunaFast
