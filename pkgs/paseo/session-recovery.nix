@@ -2,16 +2,16 @@
 
 buildNpmPackage {
   pname = "paseo-session-recovery";
-  version = "0.6.13";
+  version = "0.6.15-unstable-2026-11-08";
 
   src = fetchFromGitHub {
-    owner = "sm1ee";
+    owner = "sinkerine";
     repo = "paseo-session-recovery";
-    rev = "50f83cd1045b41c516d7fb18f7517a277181be01";
-    hash = "sha256-AI658eLECZUf7SxR0hxel78qSGQJzEeqVKVZjNKppx8=";
+    rev = "06987c00b4a6d30477acefbbcaef3763a57cb6cd";
+    hash = "sha256-vtHMWWp+zSWEpT2TC18QzI8C6D5+kkoVNcx1LWb0IQM=";
   };
 
-  npmDepsHash = "sha256-lePI7JNyO+MXHfGuSS7p5+//m9MZGEDUge1cf9D9ZGo=";
+  npmDepsHash = "sha256-4AojbgieetypBOf3RfwBbiOOOz7sPnrUkR71iP+oB/U=";
   npmFlags = [ "--ignore-scripts" ];
   dontNpmBuild = true;
   nativeBuildInputs = [ jq ];
@@ -27,7 +27,7 @@ buildNpmPackage {
 
   meta = {
     description = "Recover interrupted Paseo sessions after daemon restarts";
-    homepage = "https://github.com/sm1ee/paseo-session-recovery";
+    homepage = "https://github.com/sinkerine/paseo-session-recovery";
     license = lib.licenses.mit;
     platforms = lib.platforms.unix;
   };
