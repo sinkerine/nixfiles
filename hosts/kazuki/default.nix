@@ -84,6 +84,7 @@ in
     easyrsa
     herdr
     i2c-tools
+    nvidia-container-toolkit
     sing-box
   ];
 
@@ -278,6 +279,7 @@ in
     powerManagement.enable = true;
     open = true;
   };
+  hardware.nvidia-container-toolkit.enable = true;
 
   boot.kernelParams = [
     "acpi_enforce_resources=lax"
