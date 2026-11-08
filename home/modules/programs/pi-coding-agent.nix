@@ -236,6 +236,10 @@ in
       source = ./pi-coding-agent-skills/e2e-feature/SKILL.md;
       force = true;
     };
+    home.file.".pi/agent/skills/e2e-dispatch/SKILL.md" = {
+      source = ./pi-coding-agent-skills/e2e-dispatch/SKILL.md;
+      force = true;
+    };
     # Runs through pi-subagents' claude-code adapter, which needs the claude CLI.
     home.file.".pi/agent/agents/claude-reviewer.md" = mkIf config.my.programs.claude-code.enable {
       source = ./pi-coding-agent-agents/claude-reviewer.md;

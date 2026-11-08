@@ -2,7 +2,8 @@
 """Move a running /skill:e2e-feature run between hosts.
 
 `e2e-dispatch out` runs on the home host (kazuki) before it suspends and moves each active
-run to the away host (sachi); `e2e-dispatch back` brings them home. A move:
+run to the away host (sachi); `e2e-dispatch back` brings them home from either host.
+When invoked on sachi, `back` forwards to kazuki over SSH. A move:
 
 1. freezes the run's processes (its pi orchestrator, pi-subagents runners, and their
    descendants) with SIGSTOP;
@@ -793,10 +794,40 @@ def require_home():
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
 
+def forward_back():
+    """Run the same dispatcher on home, which drives the existing return protocol."""
+    here = socket.gethostname()
+    if here not in HOSTS:
+        raise Failure(f"run this on {HOME} or a known away host ({', '.join(HOSTS)})")
+    home = Host(HOME)
+    # Keep a real source file for Host.call(), which streams __file__ to helpers.
+    # Check the remote hostname before running to prevent forwarding loops.
+    bootstrap = "\n".join([
+        "import os, runpy, signal, socket, sys, tempfile",
+        f"expected = {HOME!r}",
+        "if socket.gethostname() != expected:",
+        "    sys.exit(f'e2e-dispatch: expected {expected}, reached {socket.gethostname()}')",
+        "signal.signal(signal.SIGHUP, signal.SIG_IGN)",
+        f"os.environ.update(E2E_DISPATCH_HOME={HOME!r}, E2E_DISPATCH_AWAY={AWAY!r})",
+        "with tempfile.TemporaryDirectory(prefix='e2e-dispatch-') as directory:",
+        "    path = os.path.join(directory, 'e2e-dispatch.py')",
+        "    with open(path, 'wb') as handle:",
+        "        handle.write(sys.stdin.buffer.read())",
+        "    sys.argv[0] = path",
+        "    runpy.run_path(path, run_name='__main__')",
+    ])
+    command = shlex.join(["python3", "-c", bootstrap, *sys.argv[1:]])
+    log(f"forwarding back from {here} to {home.name}; {home.name} must be awake and reachable over SSH")
+    with open(os.path.realpath(__file__), "rb") as handle:
+        source = handle.read()
+    result = subprocess.run(["ssh", *SSH_OPTS, home.ssh, command], input=source)
+    sys.exit(result.returncode)
+
+
 def cmd_status(args):
     here = socket.gethostname()
     if here != HOME:
-        # The away host cannot reach the home host, so it reports only its own runs.
+        # Keep status local on the away host, even when home is asleep.
         runs = HELPERS["list_runs"]()
         if not runs:
             print(f"No e2e-feature runs on {here}.")
@@ -812,7 +843,7 @@ def cmd_status(args):
                 except (Failure, ValueError):
                     status = "unknown"
             print(f"{entry.get('feature', '?'):24} {(agent or '-')[:8] + ' ' + status:22} {entry.get('worktree', '')}")
-        print(f"Run `e2e-dispatch back` on {HOME} to bring runs home.")
+        print(f"Run `e2e-dispatch back` here or on {HOME} to bring runs home ({HOME} must be awake).")
         return
     home = Host(HOME)
     rows = []
@@ -862,6 +893,9 @@ def cmd_out(args):
 
 
 def cmd_back(args):
+    if socket.gethostname() != HOME:
+        forward_back()
+        return
     require_home()
     home = Host(HOME)
     candidates = select([entry for entry in home_runs(home) if entry.get("host", home.name) != home.name], args.features)
