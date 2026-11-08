@@ -1,4 +1,0 @@
-interface:
-  display_name: "Nix deploy-rs"
-  short_description: "Deploy NixOS and Home Manager profiles safely"
-  default_prompt: "Use $nix-deploy-rs to deploy this Nix flake to a remote machine."

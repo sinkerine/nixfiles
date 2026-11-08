@@ -1,0 +1,7 @@
+{
+  "paypal": { "domain": "www.paypal.com", "listen_port": 10092 },
+  "alaskaair": { "domain": "alaskaair.com", "listen_port": 10090 },
+  "aa": { "domain": "www.aa.com", "listen_port": 10091 },
+  "delta": { "domain": "www.delta.com", "listen_port": 10093 },
+  "cathay": { "domain": "www.cathaypacific.com", "listen_port": 10094 }
+}

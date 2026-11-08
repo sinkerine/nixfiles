@@ -96,6 +96,7 @@ in
           echo "NAS inbox is unavailable: $out" >&2
           exit 1
         fi
+        export REALITY_SNI_TARGETS_FILE=${../common/reality-sni-targets.json}
         python3 ${../makina/android-profiles.py} "$uuid_file" "$out" "$auth_keys_file"
       '';
     })

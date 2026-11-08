@@ -26,6 +26,7 @@ in
     ./book-example.nix
     ../modules/services/gateway/paseo.nix
     ../common/baseline.nix
+    ../common/reality-sni.nix
     ../common/boot-loader.nix
     ../common/users.nix
     ../common/trusted.nix
@@ -106,7 +107,8 @@ in
                 short_id = "27323628";
               }; };
             }
-          ] ++ optional config.my.services.regionalProxy.usExit {
+          ] ++ import ../common/reality-sni-inbounds.nix { inherit config lib; }
+          ++ optional config.my.services.regionalProxy.usExit {
             type = "socks";
             tag = "regional-us-exit-socks";
             listen = "100.64.0.1";

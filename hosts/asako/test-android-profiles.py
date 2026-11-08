@@ -41,7 +41,7 @@ class AndroidProfileTests(unittest.TestCase):
                     os.environ.pop("MICHIRU_PROFILE_CONFIG_FILE", None)
                 else:
                     os.environ["MICHIRU_PROFILE_CONFIG_FILE"] = old
-            self.assertEqual(len(paths), 5)
+            self.assertEqual(len(paths), 1 + len(android_profiles.SERVERS) * (1 + len(android_profiles.SNI_TARGETS)))
             config = json.loads((output / "michiru-cn-direct-tailscale.json").read_text())
             self.assertEqual(config["dns"]["strategy"], "ipv4_only")
             self.assertEqual(config["dns"]["final"], "managed-dns")
@@ -98,14 +98,15 @@ class AndroidProfileTests(unittest.TestCase):
             expected = {
                 f"{server}{suffix}-tailscale.json"
                 for server in android_profiles.SERVERS
-                for suffix in ("", "-paypal")
+                for suffix in ("", *(f"-{mode}" for mode in android_profiles.SNI_TARGETS))
             } | {"michiru-cn-direct-tailscale.json"}
             self.assertEqual({path.name for path in paths}, expected)
             for path in paths:
                 self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
             for server_name in android_profiles.SERVERS:
-                for mode, suffix in (("normal", ""), ("paypal", "-paypal")):
+                for mode in ("normal", *android_profiles.SNI_TARGETS):
+                        suffix = "" if mode == "normal" else f"-{mode}"
                         name = f"{server_name}{suffix}-tailscale"
                         config = json.loads((output_dir / f"{name}.json").read_text())
                         self.assertEqual(config["route"]["final"], "proxy")
@@ -148,9 +149,13 @@ class AndroidProfileTests(unittest.TestCase):
                             outbound = next(item for item in config["outbounds"] if item["tag"] == "proxy")
                         self.assertEqual(outbound["server"], server["host"])
                         self.assertEqual(outbound["uuid"], uuid)
-                        if mode == "paypal":
-                            self.assertEqual(outbound["server_port"], server["paypal_port"])
-                            self.assertEqual(outbound["tls"]["server_name"], "www.paypal.com")
+                        if mode != "normal":
+                            self.assertEqual(outbound["server_port"], 443)
+                            self.assertEqual(outbound["tls"]["server_name"], android_profiles.SNI_TARGETS[mode]["domain"])
+                            self.assertEqual(outbound["tls"]["reality"]["short_id"], server["sni_short_id"])
+                            if server_name == "sachi":
+                                self.assertEqual(local_outbound["server_port"], 443)
+                                self.assertEqual(local_outbound["tls"], outbound["tls"])
                             self.assertFalse(config["route"]["rule_set"])
                             self.assertFalse(any("cn" in json.dumps(rule).lower() for rule in config["route"]["rules"]))
                         else:
@@ -164,7 +169,22 @@ class AndroidProfileTests(unittest.TestCase):
                 "amane-tailscale": "amane-test-key",
                 "michiru-cn-direct-tailscale": "sachi-test-key",
             }
-            android_profiles.generate(secret_path, output_dir, keys)
+            # A registry entry alone must produce a usable profile for every
+            # server, including enrollment through the shared server identity.
+            with patch.dict(android_profiles.SNI_TARGETS, {
+                "new-airline": {"domain": "airline.example", "listen_port": 10123},
+            }):
+                android_profiles.generate(secret_path, output_dir, keys)
+            for server_name in android_profiles.SERVERS:
+                custom = json.loads((output_dir / f"{server_name}-new-airline-tailscale.json").read_text())
+                outbound = next(item for item in custom["outbounds"] if item["type"] == "vless")
+                self.assertEqual(outbound["server_port"], 443)
+                self.assertEqual(outbound["tls"]["server_name"], "airline.example")
+                self.assertEqual(custom["route"]["final"], "proxy")
+                self.assertFalse(custom["route"]["rule_set"])
+                self.assertEqual(custom["endpoints"][0]["state_directory"], f"tailscale-{server_name}")
+                if server_name == "amane":
+                    self.assertEqual(custom["endpoints"][0]["auth_key"], "amane-test-key")
             authorized = json.loads((output_dir / "amane-tailscale.json").read_text())
             self.assertEqual(authorized["endpoints"][0]["auth_key"], "amane-test-key")
             other = json.loads((output_dir / "sachi-tailscale.json").read_text())

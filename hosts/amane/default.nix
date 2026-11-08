@@ -14,6 +14,7 @@ with lib;
   imports = [
     ./hardware-configuration.nix
     ../common/baseline.nix
+    ../common/reality-sni.nix
     ../common/users.nix
     ../common/grub-legacy.nix
   ];
@@ -88,7 +89,7 @@ with lib;
                 };
               };
             }
-          ];
+          ] ++ import ../common/reality-sni-inbounds.nix { inherit config lib; };
           outbounds = [
             {
               type = "direct";

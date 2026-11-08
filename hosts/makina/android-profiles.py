@@ -5,6 +5,17 @@ import json
 import os
 import sys
 import tempfile
+from pathlib import Path
+
+
+# Nix embeds this same registry in the installed export command. Source-tree
+# invocation resolves it relative to this script.
+SNI_TARGETS_FILE = Path(os.environ.get(
+    "REALITY_SNI_TARGETS_FILE",
+    Path(__file__).resolve().parents[1] / "common" / "reality-sni-targets.json",
+))
+with SNI_TARGETS_FILE.open(encoding="utf-8") as source:
+    SNI_TARGETS = json.load(source)
 
 
 SERVERS = {
@@ -13,9 +24,8 @@ SERVERS = {
         "normal_port": 10087,
         "normal_key": "IM4pgDQbcql0ZIrzUWeU0HKE8GWbqsAV1t3c-PC20ks",
         "normal_short_id": "a1b2c3d4",
-        "paypal_port": 10088,
-        "paypal_key": "IM4pgDQbcql0ZIrzUWeU0HKE8GWbqsAV1t3c-PC20ks",
-        "paypal_short_id": "8c614ced",
+        "sni_key": "IM4pgDQbcql0ZIrzUWeU0HKE8GWbqsAV1t3c-PC20ks",
+        "sni_short_id": "8c614ced",
     },
     "sachi": {
         "host": "mado.moe",
@@ -23,9 +33,8 @@ SERVERS = {
         "normal_port": 10087,
         "normal_key": "-6pvY7DzL_M7q-7fNeZZrnxosjIFyNPltVCo4rFu1yo",
         "normal_short_id": "e5f60718",
-        "paypal_port": 10089,
-        "paypal_key": "-6pvY7DzL_M7q-7fNeZZrnxosjIFyNPltVCo4rFu1yo",
-        "paypal_short_id": "27323628",
+        "sni_key": "-6pvY7DzL_M7q-7fNeZZrnxosjIFyNPltVCo4rFu1yo",
+        "sni_short_id": "27323628",
     },
 }
 MICHIRU_PROXY_HOST = "103.117.101.12"
@@ -38,7 +47,8 @@ LAN_DIRECT_CIDRS = [
 
 def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
     server = SERVERS[server_name]
-    paypal = mode == "paypal"
+    spoofed = mode != "normal"
+    sni = SNI_TARGETS[mode]["domain"] if spoofed else "www.cloudflare.com"
     rules = [{"protocol": "dns", "action": "hijack-dns"}]
     if tailnet:
         rules.extend([
@@ -52,7 +62,7 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
         {"ip_is_private": True, "action": "route", "outbound": "direct"},
     ])
     rule_sets = []
-    if not paypal:
+    if not spoofed:
         rules.extend([
             {"rule_set": ["geosite-cn"], "action": "route", "outbound": "direct"},
             {"rule_set": ["geoip-cn"], "action": "route", "outbound": "direct"},
@@ -66,17 +76,17 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
         "type": "vless",
         "tag": tag,
         "server": server["host"],
-        "server_port": server["paypal_port"] if paypal else server["normal_port"],
+        "server_port": 443 if spoofed else server["normal_port"],
         "uuid": uuid,
         "flow": "xtls-rprx-vision",
         "tls": {
             "enabled": True,
-            "server_name": "www.paypal.com" if paypal else "www.cloudflare.com",
+            "server_name": sni,
             "utls": {"enabled": True, "fingerprint": "chrome"},
             "reality": {
                 "enabled": True,
-                "public_key": server["paypal_key"] if paypal else server["normal_key"],
-                "short_id": server["paypal_short_id"] if paypal else server["normal_short_id"],
+                "public_key": server["sni_key"] if spoofed else server["normal_key"],
+                "short_id": server["sni_short_id"] if spoofed else server["normal_short_id"],
             },
         },
     }
@@ -253,13 +263,15 @@ def generate(secret_path, output_dir, tailnet_auth_keys=None):
     paths = []
     keys = tailnet_auth_keys or {}
     for server_name in SERVERS:
-        for mode, suffix in (("normal", ""), ("paypal", "-paypal")):
+        for mode in ("normal", *SNI_TARGETS):
+            suffix = "" if mode == "normal" else f"-{mode}"
             name = f"{server_name}{suffix}-tailscale"
             path = os.path.join(output_dir, f"{name}.json")
             fd, temporary = tempfile.mkstemp(dir=output_dir, prefix=f".{name}.", suffix=".tmp")
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as output:
-                    json.dump(profile(uuid, server_name, mode, True, keys.get(name)), output, indent=2)
+                    json.dump(profile(uuid, server_name, mode, True,
+                                      keys.get(name) or keys.get(f"{server_name}-tailscale")), output, indent=2)
                     output.write("\n")
                 os.replace(temporary, path)
             finally:
