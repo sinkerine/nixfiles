@@ -7,8 +7,8 @@ stdenvNoCC.mkDerivation {
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "pi-hindsight";
-    rev = "1162ba148506a7ebb6161b94d9edcc7ef9726ee8";
-    hash = "sha256-UmMkd3Qwhhk9ONyclLlrTJG3+SQS5tVneBbGHURqYsg=";
+    rev = "2389de76faf26c6441cfd4d7569c54b7aa2d0c5d";
+    hash = "sha256-UE6mVqXrEzLppr2P8DPjCJoGxE/PGBsIkKQF6XdxNMs=";
   };
 
   dontConfigure = true;
