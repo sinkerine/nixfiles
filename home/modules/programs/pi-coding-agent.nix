@@ -19,6 +19,7 @@ let
   piCollapseTools = pkgs.pi-collapse-tools;
   piSubagents = pkgs.pi-subagents;
   piGoalX = pkgs.pi-goal-x;
+  piHindsight = pkgs.pi-hindsight;
   piWebAccess = pkgs.pi-web-access;
   piWebAccessConfig = builtins.toJSON {
     provider = "openai";
@@ -154,6 +155,7 @@ in
           "${piAstGrep}/lib/node_modules/pi-ast-grep"
           "${piCollapseTools}/lib/node_modules/pi-collapse-tools"
           "${piGoalX}/lib/node_modules/pi-goal-x"
+          "${piHindsight}/lib/node_modules/pi-hindsight-memory"
           "${piSubagents}/lib/node_modules/pi-subagents"
           "${piWebAccess}/lib/node_modules/pi-web-access"
         ];
@@ -251,6 +253,12 @@ in
         preset = "ascii";
         separator = "ascii";
       };
+    };
+    home.file.".pi/agent/hindsight-memory.json".text = builtins.toJSON {
+      apiUrl = "https://hindsight-engineer-api.sachi.m.mado.moe";
+      bankId = "pi";
+      recall.policy = "smart";
+      retain.auto = true;
     };
     home.file.".pi/agent/keybindings.json".text = builtins.toJSON {
       "app.interrupt" = "ctrl+g";
