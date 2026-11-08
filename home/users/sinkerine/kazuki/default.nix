@@ -18,6 +18,10 @@
     daemon.enable = true;
     daemon.hostnames = [ "paeso.kazuki.m.mado.moe" ];
     integrations.enable = true;
+    plugins = {
+      better-paseo = pkgs.better-paseo;
+      session-recovery = pkgs.paseo-session-recovery;
+    };
   };
 
   programs.noctalia.settings.lockscreen.enabled = lib.mkForce false;

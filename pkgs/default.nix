@@ -20,6 +20,7 @@ with pkgs; {
   strata = callPackage ./strata { };
   pi-coding-agent = callPackage ./pi-coding-agent { };
   paseo-session-recovery = callPackage ./paseo/session-recovery.nix { };
+  better-paseo = callPackage ./paseo/better-paseo.nix { };
   pi-ask-user = callPackage ./pi-ask-user { };
   pi-footer = callPackage ./pi-footer { };
   pi-ast-grep = callPackage ./pi-ast-grep { };
