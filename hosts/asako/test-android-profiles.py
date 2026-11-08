@@ -115,19 +115,31 @@ class AndroidProfileTests(unittest.TestCase):
                             {"ip_cidr": android_profiles.LAN_DIRECT_CIDRS, "action": "route", "outbound": "direct"},
                             config["route"]["rules"],
                         )
+                        spoofed = mode != "normal"
+                        tailnet_detour = "proxy" if spoofed or server_name != "sachi" else "direct"
+                        control_resolver = "control-dns" if server_name == "sachi" else "remote-dns"
                         self.assertEqual(config["endpoints"], [{
                                 "type": "tailscale", "tag": "tailscale", "state_directory": f"tailscale-{server_name}",
                                 "hostname": f"makina-{server_name}",
-                                "control_url": "https://headscale.mado.moe", "detour": "direct" if server_name == "sachi" else "proxy", "accept_routes": True,
+                                "control_url": "https://headscale.mado.moe", "detour": tailnet_detour, "accept_routes": True,
                                 "exit_node": "sachi", "exit_node_allow_lan_access": True,
-                                **({"domain_resolver": "lan-dns"} if server_name == "sachi" else {}),
+                                **({"domain_resolver": {"server": control_resolver, "strategy": "ipv4_only"}} if spoofed else
+                                   {"domain_resolver": "lan-dns"} if server_name == "sachi" else {}),
                             }])
                         self.assertEqual(config["route"]["rules"][1:4], [
                                 {"action": "sniff"},
-                                {"domain": ["headscale.mado.moe"], "action": "route", "outbound": "direct" if server_name == "sachi" else "proxy"},
+                                {"domain": ["headscale.mado.moe"], "action": "route", "outbound": tailnet_detour},
                                 {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48", "172.16.0.0/16"], "action": "route", "outbound": "tailscale"},
                         ])
-                        if server_name == "sachi":
+                        if spoofed:
+                            self.assertEqual(config["dns"]["strategy"], "ipv4_only")
+                            self.assertEqual(config["dns"]["rules"], [{"domain": ["headscale.mado.moe"], "server": control_resolver}])
+                            if server_name == "sachi":
+                                self.assertIn({"type": "hosts", "tag": "control-dns", "predefined": {
+                                    "headscale.mado.moe": [android_profiles.SERVERS["sachi"]["lan_host"]],
+                                }}, config["dns"]["servers"])
+                            self.assertFalse(any(item["tag"] == "lan-dns" for item in config["dns"]["servers"]))
+                        elif server_name == "sachi":
                             self.assertIn({"type": "local", "tag": "lan-dns"}, config["dns"]["servers"])
                             self.assertEqual(config["dns"]["rules"], [{"domain": ["headscale.mado.moe"], "server": "lan-dns"}])
                         self.assertTrue(config["dns"]["reverse_mapping"])

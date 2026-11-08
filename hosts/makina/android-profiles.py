@@ -49,11 +49,14 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
     server = SERVERS[server_name]
     spoofed = mode != "normal"
     sni = SNI_TARGETS[mode]["domain"] if spoofed else "www.cloudflare.com"
+    # SNI profiles must carry control-plane and peer traffic through the same
+    # allowed TLS connection, including when Sachi is the proxy server.
+    tailnet_detour = "proxy" if spoofed or server_name != "sachi" else "direct"
     rules = [{"protocol": "dns", "action": "hijack-dns"}]
     if tailnet:
         rules.extend([
             {"action": "sniff"},
-            {"domain": ["headscale.mado.moe"], "action": "route", "outbound": "direct" if server_name == "sachi" else "proxy"},
+            {"domain": ["headscale.mado.moe"], "action": "route", "outbound": tailnet_detour},
             # Sachi's Docker subnet is reachable through its advertised exit route.
             {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48", "172.16.0.0/16"], "action": "route", "outbound": "tailscale"},
         ])
@@ -113,7 +116,9 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
                 {"type": "https", "tag": "remote-dns", "server": "1.1.1.1", "path": "/dns-query", "detour": "proxy"},
             ],
             "final": "remote-dns",
-            "strategy": "prefer_ipv4",
+            # Amane has no upstream IPv6 route. Keep physical SNI transport
+            # IPv4-only; tailnet IPv6 still runs inside the Tailscale endpoint.
+            "strategy": "ipv4_only" if spoofed else "prefer_ipv4",
         },
         # Keep TUN addresses inside the VPN route. SFA protects outbound sockets;
         # the LAN CIDR rule above sends local destinations through direct.
@@ -139,7 +144,19 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
     }
     if tailnet:
         result["dns"]["reverse_mapping"] = True
-        if server_name == "sachi":
+        control_resolver = "remote-dns"
+        if spoofed:
+            if server_name == "sachi":
+                # From Sachi, its public address reaches the router's TLS
+                # service. Dial Headscale's LAN address through the SNI proxy
+                # while retaining headscale.mado.moe for TLS verification.
+                control_resolver = "control-dns"
+                result["dns"]["servers"].insert(0, {
+                    "type": "hosts", "tag": control_resolver,
+                    "predefined": {"headscale.mado.moe": [server["lan_host"]]},
+                })
+            result["dns"]["rules"] = [{"domain": ["headscale.mado.moe"], "server": control_resolver}]
+        elif server_name == "sachi":
             # Sachi's LAN DNS returns its private address. Resolving through
             # the proxy returns the public address and reaches the router's
             # TLS service instead of Headscale on this LAN.
@@ -153,12 +170,14 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
             "state_directory": f"tailscale-{server_name}",
             "hostname": f"makina-{server_name}",
             "control_url": "https://headscale.mado.moe",
-            "detour": "direct" if server_name == "sachi" else "proxy",
+            "detour": tailnet_detour,
             "accept_routes": True,
             "exit_node": "sachi",
             "exit_node_allow_lan_access": True,
         }
-        if server_name == "sachi":
+        if spoofed:
+            endpoint["domain_resolver"] = {"server": control_resolver, "strategy": "ipv4_only"}
+        elif server_name == "sachi":
             endpoint["domain_resolver"] = "lan-dns"
         if tailnet_auth_key:
             endpoint["auth_key"] = tailnet_auth_key

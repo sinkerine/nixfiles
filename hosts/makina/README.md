@@ -51,9 +51,16 @@ upstream router. Backend listener ports bind only to loopback and need no public
 firewall openings.
 
 The spoofed profiles proxy public Internet traffic without the China-direct
-rules; private network and tailnet routes remain enabled. All variants for a
-server reuse its Tailscale identity and can use the normal profile's enrollment
-key. The exporter removes only its exact legacy Amane, Sachi, and `michiru-cn`
+rules; private network and tailnet routes remain enabled. Their Tailscale
+endpoints use the selected SNI proxy as the detour, including on Sachi. Headscale
+DNS resolution uses the proxy's DNS on Amane; Sachi uses a static Headscale LAN
+address reached through the SNI proxy, avoiding its router's public-address TLS
+service. Upstream DNS is IPv4-only because Amane has no upstream IPv6 route;
+private tailnet IPv6 addresses remain routed through Tailscale. Normal Sachi
+profiles retain their direct connection and LAN DNS behavior.
+
+All variants for a server reuse its Tailscale identity and can use the normal
+profile's enrollment key. The exporter removes only its exact legacy Amane, Sachi, and `michiru-cn`
 output filenames when regenerating; it does not delete profiles for removed
 registry entries, so remove those files manually when retiring a target.
 
