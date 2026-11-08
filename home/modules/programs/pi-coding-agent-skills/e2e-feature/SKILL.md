@@ -16,9 +16,11 @@ Stop and ask the user, with `ask_user`, only for: a destructive or irreversible 
 
 ## E2E requirement scope
 
-The agent must run end-to-end sandbox tests **only when a feature is first added**, subject to the repository's explicit “not needed” exemption below. Complete any necessary repairs and reruns during that initial feature workflow. Future pushes or deployments of the existing feature do not need to rerun those end-to-end sandbox tests. **Existing unit tests must still be run**, including for future pushes and deployments; skipping sandbox E2E tests does not waive unit testing.
+Any isolated environment that can exercise the feature’s user journey end to end is acceptable. Isolation can come from a VM, a container, a disposable environment, or a local stack with separate test state; no particular isolation technology or terminology is required.
 
-Do not add E2E requirements for push or deploy to `AGENTS.md` (or `agent.md`). Any testing instructions requested or added by this workflow must state that the agent runs sandbox E2E tests when a feature is first added, future pushes and deployments do not require those sandbox tests, and existing unit tests must still be run.
+The agent must run end-to-end tests **only when a feature is first added**, subject to the repository's explicit “not needed” exemption below. Complete any necessary repairs and reruns during that initial feature workflow. Future pushes or deployments of the existing feature do not need to rerun those end-to-end tests. **Existing unit tests must still be run**, including for future pushes and deployments; skipping E2E tests does not waive unit testing.
+
+Do not add E2E requirements for push or deploy to `AGENTS.md` (or `agent.md`). Any testing instructions requested or added by this workflow must state that the agent runs E2E tests when a feature is first added, future pushes and deployments do not require those E2E tests, and existing unit tests must still be run.
 
 ## Preflight
 
@@ -27,7 +29,7 @@ Do not add E2E requirements for push or deploy to `AGENTS.md` (or `agent.md`). A
 3. If the current workspace is already a Paseo-owned Git worktree, use it and record its details as described in Feature worktree.
 4. Otherwise, automatically create a new Paseo worktree workspace for the current project before doing feature work. Use the project's current branch as the base unless the user specified another base, and a feature branch named `feat/<feature>`. Discover the project ID from the current workspace or Paseo project registry; create the workspace with `paseo workspace create --isolation worktree --mode branch-off --new-branch feat/<feature> --base <base> --project <project-id> --title "<feature>" --json`. If the installed CLI uses different flags, inspect `paseo workspace create --help` and use the equivalent supported options. Verify the returned workspace ID, worktree path, owning project, base ref, branch, and `paseo/worktree.json`. Since the current agent cannot change its working directory, launch a fresh orchestrator agent in that workspace with the original user request and `/skill:e2e-feature` invocation, then end this turn. The new agent resumes at preflight using the created workspace; do not create a second worktree. If the CLI cannot create or associate the worktree, preserve the exact error and report the blocker; do not fall back to editing the current checkout or ask the user to create it manually.
 5. For a request that adds a new feature, read the project-level `AGENTS.md` in `<worktree>` and classify its e2e status. For requests that do not add a new feature, skip this classification and the E2E phase; do not request or add E2E instructions:
-   - **instructions**: it explains how to run an end-to-end test of a feature in a sandbox, such as a VM, a container, a disposable environment, or a local stack;
+   - **instructions**: it explains how to run an end-to-end test of a feature by walking through the user journey in an isolated environment, such as a VM, a container, a disposable environment, or a local stack with isolated state;
    - **not needed**: it explicitly says e2e testing is not needed for this repository;
    - **missing**: neither of the above, including when there is no `AGENTS.md`.
    When the status is missing, tell the user now, together with the design handoff below, so they can fix it while the design is underway. The gate is enforced in the e2e phase.
@@ -246,21 +248,21 @@ After all tasks are accepted, run the plan's full Test and verification checks y
 
 ## E2E test
 
-The agent runs this phase **only when the feature is first added**, including repairs and reruns needed to finish that initial feature workflow. Skip it for future pushes, deployments, and other requests that do not add new features; do not require fresh sandbox E2E evidence or changes to `AGENTS.md` for those operations. Existing unit tests must still be run.
+The agent runs this phase **only when the feature is first added**, including repairs and reruns needed to finish that initial feature workflow. Skip it for future pushes, deployments, and other requests that do not add new features; do not require fresh E2E evidence or changes to `AGENTS.md` for those operations. Existing unit tests must still be run.
 
 Re-read the project-level `AGENTS.md` in `<worktree>`, because the user may have changed it since preflight.
 
-- **missing**: ask the user with `ask_user` to either add instructions to `AGENTS.md` on how to test newly added features end to end in a sandbox, explicitly stating that the agent runs these sandbox tests only when a feature is first added, future pushes and deployments do not require rerunning them, and existing unit tests must still be run, or add a note to `AGENTS.md` that e2e testing is not needed for this repository. Wait for their answer, then re-read the file. Do not deliver while the status is still missing.
+- **missing**: ask the user with `ask_user` to either add instructions to `AGENTS.md` on how to test newly added features end to end by walking through the user journey in an isolated environment, explicitly stating that the agent runs these E2E tests only when a feature is first added, future pushes and deployments do not require rerunning them, and existing unit tests must still be run, or add a note to `AGENTS.md` that e2e testing is not needed for this repository. Wait for their answer, then re-read the file. Do not deliver while the status is still missing.
 - **not needed**: skip this phase and record that in the report.
-- **instructions**: hand the journey to a fresh `worker` on `magpie/gpt-6.1-sol` at thinking `medium`, launched as `runs.run("e2e-journey-r1", { label: "E2E · journey r1", phase: "e2e", agent: "worker", model: "magpie/gpt-6.1-sol:medium", task })`, so the sandbox's commands and logs stay out of your context. Its brief, `<run dir>/e2e-brief.md`, holds the `AGENTS.md` e2e instructions, the plan's E2E journey, `<worktree>`, and `<branch>`. Require the worker to:
-  - run everything from `<worktree>`, so the sandbox runs the feature branch;
-  - bring up the sandbox and walk through the journey step by step, keeping the evidence (commands, output, screenshots, or logs) under `<run dir>/e2e/`;
+- **instructions**: hand the journey to a fresh `worker` on `magpie/gpt-6.1-sol` at thinking `medium`, launched as `runs.run("e2e-journey-r1", { label: "E2E · journey r1", phase: "e2e", agent: "worker", model: "magpie/gpt-6.1-sol:medium", task })`, so the test environment's commands and logs stay out of your context. Its brief, `<run dir>/e2e-brief.md`, holds the `AGENTS.md` e2e instructions, the plan's E2E journey, `<worktree>`, and `<branch>`. Require the worker to:
+  - run everything from `<worktree>`, so the test environment runs the feature branch;
+  - bring up the test environment and walk through the journey step by step, keeping the evidence (commands, output, screenshots, or logs) under `<run dir>/e2e/`;
   - report each step's expected result, actual result, and evidence paths;
   - not edit product code;
   - on a failed step, reproduce it once and state its root-cause hypothesis;
-  - leave the sandbox up when a step failed, so the rerun can reuse it.
+  - leave the test environment up when a step failed, so the rerun can reuse it.
 
-  Check the reported results against the expected ones yourself, spot-checking key evidence by path rather than reading all of it. Confirm the root cause of each failure and send the fix to a `worker` on `magpie/gpt-6.1-sol`, under the same rules as task workers. Then rerun the affected unit tests yourself and resume the journey worker for the rerun: `resume: "<its latest runId>"`, key `e2e-journey-rN`. Allow at most three repair attempts, then ask the user. When the journey passes, have the journey worker tear the sandbox down if the instructions say to.
+  Check the reported results against the expected ones yourself, spot-checking key evidence by path rather than reading all of it. Confirm the root cause of each failure and send the fix to a `worker` on `magpie/gpt-6.1-sol`, under the same rules as task workers. Then rerun the affected unit tests yourself and resume the journey worker for the rerun: `resume: "<its latest runId>"`, key `e2e-journey-rN`. Allow at most three repair attempts, then ask the user. When the journey passes, have the journey worker tear the test environment down if the instructions say to.
 
 ## Deliver
 
@@ -284,7 +286,7 @@ In Paseo, cleanup means archiving the workspace. Archiving runs the teardown com
 
 Because the removal is forced, archive only after the branch is merged, or after the user explicitly says to discard it, and only once `git status` is clean, so nothing uncommitted is lost. If the user chose to keep the branch, leave the workspace in place and say so.
 
-1. Confirm every worker and the design tab are archived, and tear down any sandbox the e2e instructions started.
+1. Confirm every worker and the design tab are archived, and tear down any test environment the e2e instructions started.
 2. You run inside this workspace, so archiving it stops you too. Deliver your final report first. Then tell the user to archive the workspace from Paseo, from the workspace's Archive action in the sidebar. If they ask you to do it, run `paseo workspace archive <workspace id>` as your very last command.
 3. Paseo leaves `<branch>` in place. Delete it only when the user asks: `git -C <repo root> branch -d <branch>`, which refuses unmerged work.
 
