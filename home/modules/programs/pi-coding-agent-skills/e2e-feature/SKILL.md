@@ -1,6 +1,6 @@
 ---
 name: e2e-feature
-description: "Opt-in end-to-end feature workflow: a high-reasoning Claude design tab in Paseo (Pi GPT Astra on Claude quota exhaustion) that hands the plan back, Pi-sol implementation subagents, Pi Gemini review loops with medium reasoning, and an AGENTS.md-driven e2e check."
+description: "Opt-in end-to-end feature workflow: a high-reasoning Pi Opus design tab in Paseo (Pi Gemini on Pi Opus quota exhaustion) that hands the plan back, Pi-sol implementation subagents, Pi Gemini review loops with medium reasoning, and an AGENTS.md-driven e2e check."
 disable-model-invocation: true
 ---
 
@@ -78,7 +78,7 @@ Whenever you report progress to the user, use this layout. List accepted tasks o
 
 ```
 Workflow: e2e-feature: <feature>
-├─ Design (Claude / Pi GPT Astra tab)      ✓ plan approved
+├─ Design (Pi Opus / Pi Gemini tab)      ✓ plan approved
 ├─ T1 · wave 1                             ✓ accepted (2 rounds)
 ├─ T2 · wave 1                             ✓ accepted (1 round)
 ├─ T3 · wave 2 · after T1, T2              ⟳ review r2
@@ -112,13 +112,13 @@ Keep the run's state in files as you go, not only in this session, so a new orch
 
 Read `$PASEO_AGENT_ID`; it is your own Paseo agent id, and the design tab uses it to hand the plan back to you. If it is empty, you are not running inside Paseo: drop the handoff paragraph from the brief and wait for the user to tell you the plan is ready instead.
 
-Create a new, independent, user-facing Paseo agent for design, using the Paseo `Claude` agent profile's settings but overriding thinking to `high`. Both Claude and the Pi GPT Astra fallback must use high reasoning. Do not use a Pi subagent, agent-scoped MCP creation, or a create-then-detach sequence for this phase. A plain agent-originated `paseo run` inherits parentage through `PASEO_AGENT_ID`; `--workspace` controls placement but does not remove parentage.
+Create a new, independent, user-facing Paseo agent for design, using Pi Opus (`pi/magpie/group/opus`) with thinking set to `high`. Both Pi Opus and the Pi Gemini fallback must use high reasoning. Do not use a Pi subagent, agent-scoped MCP creation, or a create-then-detach sequence for this phase. A plain agent-originated `paseo run` inherits parentage through `PASEO_AGENT_ID`; `--workspace` controls placement but does not remove parentage.
 
 First capture the orchestrator's agent ID for the brief's explicit `PLAN_READY` handoff. The design agent goes in the same worktree workspace as you, `<workspace id>`. Then unset `PASEO_AGENT_ID` only for the design launch command with `env -u`, and pass the existing workspace explicitly. Keep the orchestrator's own environment and the daemon connection settings unchanged. This workflow explicitly authorizes creating the design session as a top-level agent:
 
 ```bash
 env -u PASEO_AGENT_ID paseo run --no-wait --json \
-  --provider claude/claude-opus-5-5 --thinking high --mode bypassPermissions \
+  --provider pi/magpie/group/opus --thinking high \
   --workspace <workspace id> \
   --cwd <worktree> --title "Design: <feature>" \
   "$(cat <brief file>)"
@@ -126,23 +126,23 @@ env -u PASEO_AGENT_ID paseo run --no-wait --json \
 
 Capture the returned agent ID and run `paseo inspect <design agent id> --json`. Require `ParentAgentId` to be `null`, and verify through Paseo's agent/workspace metadata that the agent belongs to the intended workspace. If either check fails, preserve the launch output and exact state and report the infrastructure blocker; do not silently proceed with a subagent or create duplicate design sessions.
 
-### Claude quota fallback
+### Pi Opus quota fallback
 
-If Claude is already known to be out of quota, launch Pi GPT Astra directly instead. If the Claude design launch or a later design turn reports quota exhaustion or a usage limit that blocks design, replace that design tab with Pi GPT Astra automatically; do not wait for a quota reset or ask the user to approve the substitution. This exception applies only to Claude quota exhaustion, not unrelated launch or infrastructure failures.
+If Pi Opus is already known to be out of quota, launch Pi Gemini directly instead. If the Pi Opus design launch or a later design turn reports quota exhaustion or a usage limit that blocks design, replace that design tab with Pi Gemini automatically; do not wait for a quota reset or ask the user to approve the substitution. This exception applies only to Pi Opus quota exhaustion, not unrelated launch or infrastructure failures.
 
-Before replacing an existing Claude tab, preserve its agent ID, exact quota error, and any available design context. Prepare a replacement brief containing the original brief, the current plan file if present, and the design decisions, unresolved questions, and approval status available from the Claude session. Archive the blocked Claude agent with `paseo archive <old design agent id>` before launching the replacement, so only one design tab remains active. If Claude never created an agent, skip the archive step.
+Before replacing an existing Pi Opus tab, preserve its agent ID, exact quota error, and any available design context. Prepare a replacement brief containing the original brief, the current plan file if present, and the design decisions, unresolved questions, and approval status available from the Pi Opus session. Archive the blocked Pi Opus agent with `paseo archive <old design agent id>` before launching the replacement, so only one design tab remains active. If Pi Opus never created an agent, skip the archive step.
 
 Launch the replacement as an independent agent in the same workspace and worktree, keeping the original title and orchestrator's `PLAN_READY` handoff:
 
 ```bash
 env -u PASEO_AGENT_ID paseo run --no-wait --json \
-  --provider pi/magpie/group/astra --thinking high \
+  --provider pi/magpie/group/argon --thinking high \
   --workspace <workspace id> \
   --cwd <worktree> --title "Design: <feature>" \
   "$(cat <replacement brief file>)"
 ```
 
-Apply the same independence and workspace checks to the replacement, then record its ID as the current design agent ID for all later messages and cleanup. Tell the user Claude exhausted its quota and the design tab now uses Pi GPT Astra with high reasoning. Continue the existing design and approval process from the preserved context; replacing the tab does not approve the plan. If the fallback fails, preserve the exact error and report the blocker rather than repeatedly creating agents.
+Apply the same independence and workspace checks to the replacement, then record its ID as the current design agent ID for all later messages and cleanup. Tell the user Pi Opus exhausted its quota and the design tab now uses Pi Gemini with high reasoning. Continue the existing design and approval process from the preserved context; replacing the tab does not approve the plan. If the fallback fails, preserve the exact error and report the blocker rather than repeatedly creating agents.
 
 ### Design brief and handoff
 
@@ -163,7 +163,7 @@ Write the brief to a temporary file first. It contains the user's request, what 
 >
 > Then tell the user the plan has been handed off. If the orchestrator later sends you questions about the plan, update the file and send `PLAN_READY` again.
 
-Record the design agent's ID and workspace ID after verifying independence and placement. Tell the user the independent `Design: <feature>` agent is available in that workspace's agent list, to open it and work out the plan there, and that it will hand the plan back to you when they approve it. Then end your turn. Do not poll the tab. On a notification or user report that Claude is blocked by quota exhaustion, apply the Claude quota fallback above and hand the replacement tab back to the user. Otherwise ignore turn-finished notifications from the design tab; continue into implementation only on a `PLAN_READY` message or when the user tells you the plan is ready.
+Record the design agent's ID and workspace ID after verifying independence and placement. Tell the user the independent `Design: <feature>` agent is available in that workspace's agent list, to open it and work out the plan there, and that it will hand the plan back to you when they approve it. Then end your turn. Do not poll the tab. On a notification or user report that Pi Opus is blocked by quota exhaustion, apply the Pi Opus quota fallback above and hand the replacement tab back to the user. Otherwise ignore turn-finished notifications from the design tab; continue into implementation only on a `PLAN_READY` message or when the user tells you the plan is ready.
 
 When the plan arrives:
 
