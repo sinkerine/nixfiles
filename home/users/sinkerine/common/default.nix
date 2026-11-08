@@ -20,7 +20,10 @@
 
   programs.git = {
     enable = true;
-    ignores = [ ".pi/" ];
+    ignores = [
+      ".pi/"
+      "/.agents/skills/"
+    ];
     settings = {
       user.name = "sinkerine";
       user.email = "git@15cm.net";

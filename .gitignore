@@ -7,7 +7,6 @@ __pycache__/
 *.py[cod]
 
 .mcp.json
-/.agents/skills/
 .pi/
 .bg-shell/
 .claude/settings.local.json
