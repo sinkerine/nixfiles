@@ -28,9 +28,9 @@ For source snapshots, `<run dir>/snap.sh <paths>` captures tracked and non-ignor
 
 A passing receipt can satisfy task acceptance or final verification after a read-only review when all relevant inputs, environment, command, and discovered scope still match. A commit without changed content need not invalidate it, but hooks, generators, dependency changes, repairs, merges, host moves, and environment changes require checking identities again. Reuse only the checks whose full identity is still proven; uncertainty means rerun. Keep final full-feature requirements and a full inventory of evidence. Worker prose never substitutes for independent execution.
 
-## Overlap without a wave barrier
+## Implementation dependencies and consolidated review
 
-Within one launch, use plain functions returning promise chains. Nested `async` functions are rejected by the installed Node/Bun-portable workflow sandbox. This schematic example runs each task's review immediately after its own gate; it never waits for a sibling implementation first. Fill `items` with the compatible ready task ids and exact commands from the approved plan, and let the helper claim each task's complete assigned resource set; do not wrap it in another flock.
+Within one launch, use plain functions returning promise chains. Nested `async` functions are rejected by the installed Node/Bun-portable workflow sandbox. Launch compatible ready implementations together; each completes its independent host gate and notifies the parent without launching a reviewer. Fill `items` with the task ids and exact commands from the approved plan. The helper claims each task's complete resource set; do not wrap it in another flock.
 
 ```js workflow
 const items = [
@@ -42,31 +42,23 @@ function runTask(item) {
     label: item.id + " · implement", phase: item.id,
     agent: "worker", model: "magpie/gpt-6.1-sol:medium",
     task: "Implement " + item.id + ". Read <run dir>/" + item.key + "-brief.md.",
-    gate: item.gate,
+    gate: item.gate, notifyOnComplete: true,
     output: "<run dir>/" + item.key + "-implement-result.md", outputMode: "file-only",
   }).then(function (impl) {
-    if (!impl.ok) return { task: item.id, ok: false, stage: "implement", writerRunId: impl.runId, report: impl.outputReference };
-    return runs.run(item.key + "-review-r1", {
-      label: item.id + " · review r1", phase: item.id,
-      agent: "reviewer", model: "magpie/group/argon:high",
-      task: "Review " + item.id + ". Read <run dir>/" + item.key + "-review-r1.md.",
-      notifyOnComplete: true,
-      output: "<run dir>/" + item.key + "-review-r1-result.md", outputMode: "file-only",
-    }).then(function (review) {
-      return { task: item.id, ok: review.ok, stage: "review r1", writerRunId: impl.runId, reviewRunId: review.runId, report: review.outputReference };
-    });
+    return { task: item.id, ok: impl.ok, stage: "implement", writerRunId: impl.runId, report: impl.outputReference, artifacts: impl.artifactPaths };
   }).catch(function (error) {
-    // The native failed-child notification carries the run and evidence references.
-    // Preserve sibling execution while the parent handles this failed task.
+    // Preserve siblings while the parent handles the native failed-child notification.
     return { task: item.id, ok: false, stage: "failed", error: String(error) };
   });
 }
 return Promise.all(items.map(runTask));
 ```
 
-`notifyOnComplete` is provided by this repository's pi-subagents patch. Apply the matching Nix package before using this skill revision. Successful intermediate children stay quiet; each final review wakes the parent while siblings continue. `emit()` alone is persisted progress, not a wake. The wake makes a report available for judgment; it is not task acceptance. The parent reads the report and validates the independent gate before releasing dependencies. Do not relaunch the running script or use a duplicate workflow key to refresh a result.
+`notifyOnComplete` is provided by this repository's pi-subagents patch. Apply the matching Nix package before using this skill revision. Each gated implementation wakes the parent while siblings continue. `emit()` alone persists progress without a wake. The parent reads the worker report, validates the independent gate and produced interface, and marks the task implemented before releasing compatible dependencies. Do not relaunch the running script or duplicate a workflow key to refresh a result.
 
-Release newly ready tasks only when ownership and source/build-input conflict checks allow them. Do not mutate files still read by another task or its test. Accepted tasks can remain uncommitted while dependents work; update `tasks.md` and commit task-owned files at the next safe idle point. Preserve explicit user-approved barriers.
+Release newly ready tasks only when ownership and source/build-input conflicts allow them. Do not mutate files still read by another task or its test. Implemented tasks may remain uncommitted until consolidated review acceptance; update `tasks.md` with interfaces and receipts so dependents can consume them. A later relevant edit invalidates earlier evidence. Preserve explicitly approved early review gates and barriers.
+
+After all implementation and gates finish, use the skill's consolidated Review phase against stable feature inputs. Delaying the same per-task reviewer fanout saves little context and loses overlap; consolidate shared context and review integration explicitly. Default to one reviewer, splitting only large features into a few nonoverlapping scopes with assigned integration coverage. Group confirmed fixes by ownership, resume the original workers, and review affected deltas after repairs settle. Do not rerun a full review for each repair. Acceptance still requires no confirmed Critical/Important findings and matching independent gates; commit only at a safe idle point and recheck any hook changes.
 
 ## Final verification and E2E
 
@@ -84,4 +76,4 @@ Continue approved local tasks that do not need that dependency. Do not use timed
 
 Use existing trace/receipt timestamps for task ready, launch, model/command start, lock acquisition, finish, and acceptance. A normal command duration includes lock wait unless acquisition is logged separately; never label it pure test execution. Mark missing timestamps unknown. Track human approval and external dependencies separately from active execution.
 
-Compare task-ready-to-launch, gate-to-review, and review-to-dependent-launch delays, time spent alone in review, lock wait, environment repairs, and repeated checks with unchanged identities. For overlapping intervals, compute their union rather than summing durations. Final verification plus E2E has serial cost `V + E` and a theoretical overlap cost `max(V, E)` only when resources and inputs are independent; contention can erase the benefit. Do not report aggregate model minutes or no-child time as end-to-end latency savings.
+Compare task-ready-to-launch and gate-to-dependent-launch delays, all-implementation-finished-to-review-start delay, consolidated review/repair duration, lock wait, environment repairs, and repeated checks with unchanged identities. Track reviewer launches, repeated context, and input/output/cache token usage alongside total elapsed time; delayed discovery can add downstream rework. Distinguish explicitly planned early reviews from consolidated scopes. For overlapping intervals, compute their union rather than summing durations. Final verification plus E2E has serial cost `V + E` and a theoretical overlap cost `max(V, E)` only when resources and inputs are independent; contention can erase the benefit. Do not report aggregate model minutes or no-child time as end-to-end latency savings.
