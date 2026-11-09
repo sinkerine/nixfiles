@@ -34,7 +34,7 @@ Reviewer responses have median duration 10.7s, p90 48.3s and p95 65.6s. Twelve i
 
 Across reviewers, the provider reports 487,293 reasoning tokens and 682,481 output tokens. Those fields indicate that much of the time is hidden reasoning, not filesystem latency or visible report prose. Shorter visible output alone cannot be assumed to remove that time. The 294 recorded model minutes are only a timing field reported by the provider; they do not separately identify queueing, time to first token, reasoning speed or generation speed.
 
-The skill keeps Gemini medium reasoning and the existing review-round limits. It supplies a narrower, evidence-rich brief, asks for all concrete current findings and a short verdict, allows reading callers/dependencies to substantiate defects, and avoids repeated deterministic artifact audits. Switching reviewer models or reducing reasoning needs a controlled comparison of latency and finding quality on the same task packets; this investigation does not claim such a comparison has happened.
+The skill now uses user-selected Gemini high reasoning and the existing review-round limits. The retrospective timings below were collected before that setting changed. It supplies a narrower, evidence-rich brief, asks for all concrete current findings and a short verdict, allows reading callers/dependencies to substantiate defects, and avoids repeated deterministic artifact audits. Switching reviewer models or reducing reasoning needs a controlled comparison of latency and finding quality on the same task packets; this investigation does not claim such a comparison has happened.
 
 ## Interval analysis
 
@@ -82,7 +82,7 @@ The execution layer now supports prerequisite check graphs (`needs`), bounded `m
 
 The runner also provides copied build snapshots with source/environment and artifact validation before/after E2E. Concrete Element Web recipes prepare and pin the build before parallel verification readers, preserve full configured unit/browser/Storybook discovery, retain legacy Jest when present, and use a separate journey browser before allowing browser-test overlap. Android recipes validate existing and new SDK APIs plus AAR ABI/bindings before builds, then preserve the repository's required Gradle-before-emulator ordering.
 
-A six-request, two-snapshot [reviewer pilot](e2e-review-benchmark.md) has also been completed and adjudicated. Faster settings distinguished the known bug from its fixed control, but that sample is insufficient to change the default Gemini medium reviewer. The benchmark is opt-in and never an extra stage of ordinary feature work.
+A six-request, two-snapshot [reviewer pilot](e2e-review-benchmark.md) has also been completed and adjudicated. Faster settings distinguished the known bug from its fixed control, but that sample is insufficient to establish equivalent review quality. The user subsequently selected Gemini high as the reviewer default; high reasoning was not measured in that pilot. The benchmark is opt-in and never an extra stage of ordinary feature work.
 
 The changes live in:
 

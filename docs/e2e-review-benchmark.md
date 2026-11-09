@@ -1,6 +1,6 @@
 # Reviewer latency pilot — November 9, 2026
 
-A bounded replay of two archived Element Web snapshots compared the current Gemini medium reviewer, Gemini low and Sol medium. Every model received byte-identical contract/code evidence within each case, with tools, MCP, extensions, skills, context discovery and persistent sessions disabled. Model order rotated between cases. One request per model/case was run; there were no timeouts or failed requests.
+A bounded replay of two archived Element Web snapshots compared the then-default Gemini medium reviewer, Gemini low and Sol medium. Every model received byte-identical contract/code evidence within each case, with tools, MCP, extensions, skills, context discovery and persistent sessions disabled. Model order rotated between cases. One request per model/case was run; there were no timeouts or failed requests.
 
 | Variant | Known-defect snapshot | Fixed control | Median request wall time | Confirmed defect found | Findings on fixed control |
 | --- | ---: | ---: | ---: | --- | ---: |
@@ -28,7 +28,7 @@ The runner's provisional keyword matcher did not reliably recognize the issue be
 
 ## Decision
 
-Keep Gemini medium as the default. The faster variants are promising for a broader experiment, but one defect and its repaired control do not establish equivalent finding quality. Add unrelated, adjudicated examples from SDK/API compatibility, Android dependency injection, lifecycle/cancellation and clean changes, with repeated requests, before changing the workflow default.
+The pilot retained Gemini medium at the time. The user subsequently selected Gemini high as the reviewer default, and future benchmark runs include that baseline. High reasoning was not measured in this pilot. The faster variants are promising for a broader experiment, but one defect and its repaired control do not establish equivalent finding quality. Add unrelated, adjudicated examples from SDK/API compatibility, Android dependency injection, lifecycle/cancellation and clean changes, with repeated requests, before changing the workflow default.
 
 The implementation provides the reusable harness, immutable corpus manifest, usage/timing records and explicit adjudication boundary. It does not automatically run this experiment during feature work.
 

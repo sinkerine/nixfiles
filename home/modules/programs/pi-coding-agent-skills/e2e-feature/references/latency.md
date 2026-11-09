@@ -48,7 +48,7 @@ function runTask(item) {
     if (!impl.ok) return { task: item.id, ok: false, stage: "implement", writerRunId: impl.runId, report: impl.outputReference };
     return runs.run(item.key + "-review-r1", {
       label: item.id + " · review r1", phase: item.id,
-      agent: "reviewer", model: "magpie/group/argon:medium",
+      agent: "reviewer", model: "magpie/group/argon:high",
       task: "Review " + item.id + ". Read <run dir>/" + item.key + "-review-r1.md.",
       notifyOnComplete: true,
       output: "<run dir>/" + item.key + "-review-r1-result.md", outputMode: "file-only",

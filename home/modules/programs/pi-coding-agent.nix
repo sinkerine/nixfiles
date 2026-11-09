@@ -154,7 +154,7 @@ in
               thinking = "medium";
             };
             reviewer = {
-              model = "group/astra";
+              model = "group/argon";
               thinking = "high";
             };
             oracle = {
