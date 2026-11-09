@@ -90,6 +90,10 @@ in {
         ${config.my.programs.powerline.package}/bin/powerline-daemon --replace
         if tmux list-sessions >/dev/null 2>&1; then
           ${config.my.programs.powerline.package}/bin/powerline-config tmux setup
+          ${lib.optionalString config.my.programs.tmux.enable ''
+            # Powerline replaces status-right; reinstall Continuum's autosave hook.
+            tmux run-shell ${pkgs.tmuxPlugins.continuum}/share/tmux-plugins/continuum/continuum.tmux
+          ''}
           tmux refresh-client -S
         fi
       '';

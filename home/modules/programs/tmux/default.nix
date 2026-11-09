@@ -42,18 +42,21 @@ in {
         ])
         ++ [
           pkgs.tmux-fzf
-        ]
-        ++ (with pkgs.tmuxPlugins; [
-        # tmux-continuum should be last so its status-right hook keeps autosave working.
-          continuum
-        ]);
+        ];
     };
     # Keep custom settings in Home Manager's generated config so the module's
     # prefix and any extraConfig from other modules (such as Powerline) are
     # preserved.
-    programs.tmux.extraConfig = pipe ./tmux.conf.jinja [
-      (templateFile "tmux.conf" templateData)
-      builtins.readFile
+    programs.tmux.extraConfig = mkMerge [
+      (pipe ./tmux.conf.jinja [
+        (templateFile "tmux.conf" templateData)
+        builtins.readFile
+      ])
+      # Home Manager loads plugins before extraConfig. Continuum must run after
+      # the restore options and Powerline's status-right configuration.
+      (mkAfter ''
+        run-shell ${pkgs.tmuxPlugins.continuum}/share/tmux-plugins/continuum/continuum.tmux
+      '')
     ];
   };
 }
