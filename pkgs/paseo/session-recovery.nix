@@ -2,13 +2,13 @@
 
 buildNpmPackage {
   pname = "paseo-session-recovery";
-  version = "0.6.15-unstable-2026-11-08";
+  version = "0.6.15-unstable-2026-11-09";
 
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "paseo-session-recovery";
-    rev = "06987c00b4a6d30477acefbbcaef3763a57cb6cd";
-    hash = "sha256-vtHMWWp+zSWEpT2TC18QzI8C6D5+kkoVNcx1LWb0IQM=";
+    rev = "8e7a824a9b827c2eb5cea300fb1f6cc98141783b";
+    hash = "sha256-JHaskYTyGUKeaLw7EqEqPsiXRyegktJrnK9hz7nlpfY=";
   };
 
   npmDepsHash = "sha256-4AojbgieetypBOf3RfwBbiOOOz7sPnrUkR71iP+oB/U=";

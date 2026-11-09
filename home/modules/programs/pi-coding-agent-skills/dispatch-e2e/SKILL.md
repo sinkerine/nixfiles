@@ -1,5 +1,5 @@
 ---
-name: e2e-dispatch
+name: dispatch-e2e
 description: Move registered Pi e2e-feature agents and their work from kazuki to sachi before suspend, bring them back to kazuki, or check where they run. Use for requests to move, migrate, dispatch, or return these agents between hosts with the e2e-dispatch script.
 ---
 

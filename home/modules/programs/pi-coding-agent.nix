@@ -19,6 +19,28 @@ let
   piCollapseTools = pkgs.pi-collapse-tools;
   piSubagents = pkgs.pi-subagents;
   piGoalX = pkgs.pi-goal-x;
+  e2eFeatureRun = pkgs.writeShellApplication {
+    name = "e2e-feature-run";
+    runtimeInputs = [ pkgs.python3 pkgs.git pkgs.bash ];
+    text = ''
+      exec python3 ${./pi-coding-agent-skills/e2e-feature/scripts}/verify.py "$@"
+    '';
+  };
+  e2eReviewBenchmark = pkgs.writeShellApplication {
+    name = "e2e-review-benchmark";
+    runtimeInputs = [ pkgs.python3 pkgs.git piCodingAgent ];
+    text = ''
+      exec python3 ${./pi-coding-agent-skills/e2e-feature/scripts}/benchmark.py \
+        --pi ${piCodingAgent}/bin/pi \
+        --manifest ${./pi-coding-agent-skills/e2e-feature/benchmarks/review-cases.json} "$@"
+    '';
+  };
+  e2eVerificationExtension = pkgs.writeText "e2e-verification.ts" (
+    builtins.replaceStrings
+      [ "@SUBAGENTS@" "@E2E_RUNNER@" ]
+      [ "${piSubagents}/lib/node_modules/pi-subagents" "${e2eFeatureRun}" ]
+      (builtins.readFile ./pi-coding-agent-extensions/e2e-verification.ts)
+  );
   piHindsight = pkgs.pi-hindsight;
   piWebAccess = pkgs.pi-web-access;
   piWebAccessConfig = builtins.toJSON {
@@ -239,12 +261,17 @@ in
       force = true;
     };
 
-    home.file.".pi/agent/skills/e2e-feature/SKILL.md" = {
-      source = ./pi-coding-agent-skills/e2e-feature/SKILL.md;
+    home.file.".pi/agent/extensions/e2e-verification.ts" = {
+      source = e2eVerificationExtension;
       force = true;
     };
-    home.file.".pi/agent/skills/e2e-dispatch/SKILL.md" = {
-      source = ./pi-coding-agent-skills/e2e-dispatch/SKILL.md;
+    home.file.".pi/agent/skills/e2e-feature" = {
+      source = ./pi-coding-agent-skills/e2e-feature;
+      recursive = true;
+      force = true;
+    };
+    home.file.".pi/agent/skills/dispatch-e2e/SKILL.md" = {
+      source = ./pi-coding-agent-skills/dispatch-e2e/SKILL.md;
       force = true;
     };
     # Runs through pi-subagents' claude-code adapter, which needs the claude CLI.
@@ -281,6 +308,8 @@ in
       piLunaFast
       # Moves running e2e-feature runs between hosts; the e2e-feature skill registers runs with it.
       pkgs.e2e-dispatch
+      e2eFeatureRun
+      e2eReviewBenchmark
     ] ++ optional config.my.programs.claude-code.enable claudeReviewer;
   };
 }

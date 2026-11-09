@@ -1,0 +1,262 @@
+diff --git a/extensions/goal-core-tools.ts b/extensions/goal-core-tools.ts
+index ff48c3b..95b33f3 100644
+--- a/extensions/goal-core-tools.ts
++++ b/extensions/goal-core-tools.ts
+@@ -180,6 +180,7 @@ pi.registerTool(defineTool({
+ 		objective: Type.String({ description: "Full objective; preserve ordered steps and done criteria." }),
+ 		mode: Type.Optional(StringEnum(["regular", "sisyphus"] as const, { description: "Default regular; sisyphus only if requested." })),
+ 		token_budget: Type.Optional(Type.Integer({ minimum: 1, description: "Whole-token budget, only if supplied by the user." })),
++		verbose: Type.Optional(Type.Boolean({ description: "Echo the full objective and details; default returns a compact receipt." })),
+ 	}, { additionalProperties: false }),
+ 	executionMode: "sequential",
+ 	async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+@@ -226,7 +227,7 @@ pi.registerTool(defineTool({
+ 			? `\n\nThe objective contains ${derived.length} ordered step${derived.length === 1 ? "" : "s"}; propose them as the task tree with set_goal_tasks if the user wants tracked milestones.`
+ 			: "";
+ 		return {
+-			content: [{ type: "text", text: `${buildGoalCreatedReport({ objective: created?.objective ?? objective, detailedSummary: detailedSummary(created), tokenBudget: created?.tokenBudget })}${bootstrapLine}${otherLine}` }],
++			content: [{ type: "text", text: `${params.verbose ? buildGoalCreatedReport({ objective: created?.objective ?? objective, detailedSummary: detailedSummary(created), tokenBudget: created?.tokenBudget }) : `Goal ${created?.id}: created and focused, ${sisyphusFlag ? "sisyphus" : "regular"}.\nPath: ${created?.activePath}\nFull objective and contracts saved; retrieve with get_goal section=objective.${created?.tokenBudget ? `\nBudget: ${created.tokenBudget} tokens` : ""}`}${bootstrapLine}${otherLine}` }],
+ 			details: goalDetails(created),
+ 			terminate: true,
+ 		};
+@@ -519,7 +520,7 @@ pi.registerTool(defineTool({
+ 		status: Type.Optional(StringEnum(["complete", "blocked", "paused"] as const, { description: "Exclusive with continuation." })),
+ 		continuation: Type.Optional(Type.Union([
+ 			Type.Object({ kind: Type.Literal("ready") }, { additionalProperties: false }),
+-			Type.Object({ kind: Type.Literal("wait"), reason: Type.String({ minLength: 1, maxLength: 2000 }), deadline: Type.String(), wait_id: Type.Optional(Type.String()), polling: Type.Optional(Type.Object({ interval_seconds: Type.Integer({ minimum: 1, maximum: 2147483 }), max_checks: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }) }, { additionalProperties: false })) }, { additionalProperties: false }),
++			Type.Object({ kind: Type.Literal("wait"), reason: Type.String({ minLength: 1, maxLength: 2000 }), deadline: Type.String(), wait_id: Type.Optional(Type.String()), message: Type.Optional(Type.Object({ source_agent_id: Type.String({minLength: 1, maxLength: 128}), prefix: Type.String({minLength: 1, maxLength: 80}) }, {additionalProperties: false})), polling: Type.Optional(Type.Object({ interval_seconds: Type.Integer({ minimum: 1, maximum: 2147483 }), max_checks: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }) }, { additionalProperties: false })) }, { additionalProperties: false }),
+ 		])),
+ 		reason: Type.Optional(Type.String({ description: "Required when status is blocked: describe the concrete blocker. Agent-initiated paused requests are rejected." })),
+ 		attempted_actions: Type.Optional(Type.Array(Type.String({ maxLength: 240 }), { maxItems: 8, description: "Actions attempted against the blocker." })),
+diff --git a/extensions/goal-recovery.ts b/extensions/goal-recovery.ts
+index 7ab851c..9b1c688 100644
+--- a/extensions/goal-recovery.ts
++++ b/extensions/goal-recovery.ts
+@@ -215,6 +215,9 @@ export async function runRecoveryRepair(
+ 		try {
+ 			if (fs.existsSync(snapshotPath)) {
+ 				fs.copyFileSync(snapshotPath, path.join(backupDir, "pool-snapshot.json"));
++				// A cold read can still trust the persisted snapshot when the goals
++				// directory mtime is unchanged. Remove the backed-up derived cache.
++				fs.unlinkSync(snapshotPath);
+ 			}
+ 			// Refresh the pool snapshot from a fresh scan (invalidate first so
+ 			// the re-read goes cold and rewrites the snapshot).
+diff --git a/extensions/goal-scheduler-state.ts b/extensions/goal-scheduler-state.ts
+index 3226fb6..f5815b4 100644
+--- a/extensions/goal-scheduler-state.ts
++++ b/extensions/goal-scheduler-state.ts
+@@ -2,6 +2,12 @@ import { commandHint, commandInstructions, type GoalCommands } from "./goal-cont
+ import { randomUUID } from "node:crypto";
+ 
+ export type GoalDispatchKind = "ready" | "check" | "wake" | "repair" | "kickoff" | "recovery";
++export interface GoalMessageWait { source_agent_id: string; prefix: string }
++export function validGoalMessageWait(value: unknown): value is GoalMessageWait {
++	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
++	const m = value as GoalMessageWait;
++	return Object.keys(m).length === 2 && typeof m.source_agent_id === "string" && typeof m.prefix === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(m.source_agent_id) && /^[A-Z][A-Z0-9_:-]{0,79}$/.test(m.prefix);
++}
+ export interface GoalWait {
+ 	id: string;
+ 	token: string;
+@@ -11,6 +17,7 @@ export interface GoalWait {
+ 	remainingChecks?: number;
+ 	nextCheckAt?: number;
+ 	signalled?: boolean;
++	message?: GoalMessageWait;
+ }
+ export interface GoalSchedulerState {
+ 	version: 1;
+@@ -27,7 +34,7 @@ export interface GoalSchedulerState {
+ }
+ export type GoalContinuation =
+ 	| { kind: "ready" }
+-	| { kind: "wait"; reason: string; deadline: string; wait_id?: string; polling?: { interval_seconds: number; max_checks: number } };
++	| { kind: "wait"; reason: string; deadline: string; wait_id?: string; message?: GoalMessageWait; polling?: { interval_seconds: number; max_checks: number } };
+ 
+ export function newGoalScheduler(owner: string): GoalSchedulerState {
+ 	return { version: 1, owner, generation: randomUUID(), used: 0, phase: "idle", repairUsed: false };
+@@ -53,6 +60,7 @@ export function normalizeGoalScheduler(raw: unknown): GoalSchedulerState | undef
+ 		if (w.intervalMs !== undefined && (!integer(w.intervalMs) || w.intervalMs < 1000 || !integer(w.remainingChecks) || !integer(w.nextCheckAt))) return invalid();
+ 		if (w.intervalMs === undefined && (w.remainingChecks !== undefined || w.nextCheckAt !== undefined)) return invalid();
+ 		if (w.signalled !== undefined && typeof w.signalled !== "boolean") return invalid();
++		if (w.message !== undefined && (!validGoalMessageWait(w.message) || w.intervalMs !== undefined)) return invalid();
+ 	}
+ 	if (s.dispatch && (!text(s.dispatch.id) || !integer(s.dispatch.claimedAt) || !["ready", "check", "wake", "repair", "kickoff", "recovery"].includes(s.dispatch.kind))) return invalid();
+ 	if ((s.phase === "claimed" || s.phase === "running") && !s.dispatch) return invalid();
+diff --git a/extensions/goal-scheduler.ts b/extensions/goal-scheduler.ts
+index 896ae34..49d1354 100644
+--- a/extensions/goal-scheduler.ts
++++ b/extensions/goal-scheduler.ts
+@@ -5,7 +5,7 @@ import type { GoalCore } from "./goal-state.ts";
+ import { asRecord, type GoalRecord } from "./goal-record.ts";
+ import { budgetReached } from "./goal-accounting.ts";
+ import { loadGoalSettings, invalidateGoalSettingsCache } from "./goal-settings.ts";
+-import { newGoalScheduler, schedulerSummary, type GoalContinuation, type GoalSchedulerState } from "./goal-scheduler-state.ts";
++import { newGoalScheduler, schedulerSummary, validGoalMessageWait, type GoalContinuation, type GoalSchedulerState } from "./goal-scheduler-state.ts";
+ import { BACKGROUND_HOLD_HEARTBEAT_MS, BackgroundWorkProbe } from "./goal-background-work.ts";
+ 
+ /** Scheduling intent is durable; timers only arrange an opportunity to claim it. */
+@@ -212,10 +212,12 @@ export class GoalScheduler {
+ 					s.phase = "ready"; s.decision = { kind: "ready", purpose: "ready" }; s.wait = undefined;
+ 				} else if (input.kind === "wait") {
+ 					if (!this.strict(ctx, s)) throw new Error(commandInstructions("New waits require strictExecutionContract=true in /goal-settings. This is a user preference; continue pursuing the goal without a wait unless the user opts in.", this.core.loadedCommands));
++					if (input.message !== undefined && (!validGoalMessageWait(input.message) || input.polling !== undefined)) throw new Error("Message waits require a source agent and uppercase prefix, without polling.");
+ 					if (typeof input.reason !== "string" || !input.reason.trim() || input.reason.length > 2000) throw new Error("wait requires a nonempty reason (at most 2000 characters).");
+ 					const deadline = Date.parse(input.deadline);
+ 					if (!/T.*(?:Z|[+-]\d\d:\d\d)$/.test(input.deadline) || !Number.isSafeInteger(deadline) || deadline <= Date.now()) throw new Error("wait requires a future ISO deadline with a timezone.");
+ 					if (s.wait) {
++						if (input.message !== undefined && (input.message.source_agent_id !== s.wait.message?.source_agent_id || input.message.prefix !== s.wait.message?.prefix)) throw new Error("An existing wait cannot change its message condition.");
+ 						if (input.wait_id !== s.wait.id || deadline !== s.wait.deadline) throw new Error("Re-declare the current wait_id with its original deadline; checks cannot be reset.");
+ 						if (input.polling && (input.polling.interval_seconds * 1000 !== s.wait.intervalMs || input.polling.max_checks !== s.wait.remainingChecks)) throw new Error("Existing wait polling cannot be reset; omit polling when re-declaring wait_id.");
+ 						s.wait.token = randomUUID(); s.wait.signalled = false;
+@@ -224,7 +226,7 @@ export class GoalScheduler {
+ 						if (input.wait_id) throw new Error("Unknown wait_id.");
+ 						const polling = input.polling;
+ 						if (polling && (!Number.isSafeInteger(polling.interval_seconds) || polling.interval_seconds < 1 || polling.interval_seconds > 2_147_483 || !Number.isSafeInteger(polling.max_checks) || polling.max_checks < 1)) throw new Error("Polling requires positive whole interval_seconds (at most 2147483) and max_checks.");
+-						s.wait = { id: randomUUID(), token: randomUUID(), reason: input.reason.trim(), deadline,
++						s.wait = { id: randomUUID(), token: randomUUID(), reason: input.reason.trim(), deadline, ...(input.message ? {message: {...input.message}} : {}),
+ 							...(polling ? { intervalMs: polling.interval_seconds * 1000, remainingChecks: polling.max_checks, nextCheckAt: Date.now() + polling.interval_seconds * 1000 } : {}) };
+ 					}
+ 					s.phase = "waiting"; s.decision = { kind: "wait" };
+@@ -293,6 +295,22 @@ export class GoalScheduler {
+ 			}
+ 			return;
+ 		}
++		const goal = this.core.state.goal;
++		const wait = goal?.scheduler?.wait;
++		if (goal?.status === "active" && goal.autoContinue && goal.scheduler?.phase === "waiting" && wait?.message) {
++			// Paseo delivers the producer handoff as a native user turn. Consume it
++			// directly; emitting a scheduler wake too would create a duplicate turn.
++			if (Date.now() >= wait.deadline) { this.safe(ctx, () => this.pause(ctx, "Wait deadline reached.")); return; }
++			if (msg.role === "custom") return;
++			const content = typeof msg.content === "string" ? msg.content : Array.isArray(msg.content) ? msg.content.map((b: {text?: string}) => b.text ?? "").join("\n") : "";
++			const envelope = /^<paseo-system\b([^>]{0,4096})>\s*([\s\S]*)/.exec(content);
++			if (envelope) {
++				const attrs = envelope[1]!;
++				const source = /\bsource-agent-id="([^"]+)"/.exec(attrs)?.[1];
++				if (!/\bkind="agent-message"/.test(attrs) || source !== wait.message.source_agent_id || !envelope[2]!.startsWith(wait.message.prefix) || !/^(?:\s|<\/paseo-system>|$)/.test(envelope[2]!.slice(wait.message.prefix.length))) return;
++			}
++			// A direct human message is deliberate steering and supersedes the wait.
++		}
+ 		// Genuine host work supersedes an old scheduling claim, but never resets used.
+ 		this.takeover(ctx);
+ 	}
+@@ -324,6 +342,9 @@ export class GoalScheduler {
+ 			if (!goal || goal.status !== "active" || !goal.autoContinue || !successful) return;
+ 			const s = this.state(ctx, goal);
+ 			const strict = this.strict(ctx, s);
++			// An unrelated notification may start a native turn while the external
++			// dependency is outstanding. Preserve the saved wait without repair runs.
++			if (s.phase === "waiting" && s.wait?.message && !this.declared) { this.schedule(ctx); return; }
+ 			if (this.declared && s.decision) {
+ 				if (strict || (s.decision.kind === "ready" && s.decision.purpose !== "ready")) { this.schedule(ctx); return; }
+ 			}
+diff --git a/extensions/goal-tool-inputs.ts b/extensions/goal-tool-inputs.ts
+index 61a0270..079c67a 100644
+--- a/extensions/goal-tool-inputs.ts
++++ b/extensions/goal-tool-inputs.ts
+@@ -1,4 +1,4 @@
+-import type {GoalContinuation} from "./goal-scheduler-state.ts";
++import {validGoalMessageWait, type GoalContinuation} from "./goal-scheduler-state.ts";
+ 
+ export interface TaskProgressInput {
+ 	task_id: string;
+@@ -77,15 +77,16 @@ export function planUpdateGoal(input: unknown): {ok: true; plan: GoalUpdatePlan}
+   if (!object(raw)) return fail("continuation must be a ready or wait object.");
+   if (raw.kind === "ready" && Object.keys(raw).length === 1) {
+    if (!status) continuation = {kind: "ready"};
+-  } else if (raw.kind === "wait" && Object.keys(raw).every(key => ["kind", "reason", "deadline", "wait_id", "polling"].includes(key))) {
++  } else if (raw.kind === "wait" && Object.keys(raw).every(key => ["kind", "reason", "deadline", "wait_id", "polling", "message"].includes(key))) {
+    if (typeof raw.reason !== "string" || !raw.reason.trim() || raw.reason.length > 2000 || typeof raw.deadline !== "string" || (raw.wait_id !== undefined && typeof raw.wait_id !== "string")) return fail("continuation.wait requires reason and deadline strings; wait_id must be a string.");
++   if (raw.message !== undefined && (!validGoalMessageWait(raw.message) || raw.polling !== undefined)) return fail("message requires a source_agent_id and uppercase handoff prefix, without polling.");
+    let polling: {interval_seconds: number; max_checks: number} | undefined;
+    if (raw.polling !== undefined) {
+     const p = raw.polling;
+     if (!object(p) || Object.keys(p).some(key => !["interval_seconds", "max_checks"].includes(key)) || typeof p.interval_seconds !== "number" || !Number.isSafeInteger(p.interval_seconds) || p.interval_seconds < 1 || p.interval_seconds > 2147483 || typeof p.max_checks !== "number" || !Number.isSafeInteger(p.max_checks) || p.max_checks < 1) return fail("continuation.polling requires positive whole interval_seconds and max_checks.");
+     polling = {interval_seconds: p.interval_seconds, max_checks: p.max_checks};
+    }
+-   continuation = {kind: "wait", reason: raw.reason, deadline: raw.deadline, ...(raw.wait_id === undefined ? {} : {wait_id: raw.wait_id}), ...(polling ? {polling} : {})};
++   continuation = {kind: "wait", reason: raw.reason, deadline: raw.deadline, ...(raw.wait_id === undefined ? {} : {wait_id: raw.wait_id}), ...(polling ? {polling} : {}), ...(raw.message ? {message: raw.message} : {})};
+   } else return fail("continuation must be payload-free ready or a valid wait; unexpected continuation fields are not filler.");
+  }
+  if (status && continuation) return fail("status conflicts with continuation.wait. Choose one action; a payload-free ready may accompany status as filler.");
+diff --git a/tests/goal-core-tools.test.ts b/tests/goal-core-tools.test.ts
+index 8726a53..70d716e 100644
+--- a/tests/goal-core-tools.test.ts
++++ b/tests/goal-core-tools.test.ts
+@@ -170,7 +170,10 @@ test("create_goal creates, focuses, and reports other open goals", async () => {
+ 			mode: "regular",
+ 		}, undefined, undefined, h.ctx);
+ 		const text = result.content?.[0]?.text ?? "";
+-		assert.ok(text.includes("Second goal from create_goal"), "result should confirm creation");
++		assert.match(text, /created and focused/);
++		assert.ok(text.includes(h.core.state.goal.id), "receipt identifies the created goal");
++		assert.ok(h.core.state.goal.objective.includes("Second goal from create_goal"), "full objective remains stored");
++		assert.ok(!text.includes("Second goal from create_goal"), "receipt does not echo the objective");
+ 		assert.ok(text.includes("1 other open goal"), "result should report other open goals");
+ 		assert.equal(activeGoalFiles(f.cwd).length, before + 1, "a new active goal file must land on disk");
+ 		assert.ok(ledgerEvents(f.cwd).some((e) => e.type === "goal_created"), "goal_created ledger event");
+@@ -213,8 +216,12 @@ test("create_goal accepts long objectives by default (no hard 4000 limit)", asyn
+ 			objective: "x".repeat(5000),
+ 		}, undefined, undefined, h.ctx);
+ 		const text = result.content?.[0]?.text ?? "";
+-		assert.ok(text.includes("x".repeat(40)), "long objective is accepted when no max objective length is configured");
++		assert.equal(h.core.state.goal.objective.length, 5000, "long objective is accepted without echoing it");
+ 		assert.equal(activeGoalFiles(f.cwd).length, 2, "the long-objective goal is created alongside the fixture goal");
++		assert.ok(text.length < 1200, "receipt must not echo the full objective");
++		assert.equal(h.core.state.goal.objective, "x".repeat(5000), "compact receipt preserves the stored objective verbatim");
++		const verbose = await (create.execute as any)("verbose", {objective: "VERBOSE_SENTINEL_".repeat(100), verbose: true}, undefined, undefined, h.ctx);
++		assert.match(verbose.content[0].text, /VERBOSE_SENTINEL_[\s\S]*VERBOSE_SENTINEL_/);
+ 	} finally {
+ 		f.cleanup();
+ 	}
+diff --git a/tests/goal-scheduler.test.ts b/tests/goal-scheduler.test.ts
+index 03578e8..c2ceb92 100644
+--- a/tests/goal-scheduler.test.ts
++++ b/tests/goal-scheduler.test.ts
+@@ -1035,6 +1035,44 @@ test("recovery dispatches are not held by active subagent runs", async t => {
+ 	assert.equal(h.core.state.goal?.scheduler?.dispatch?.kind, "recovery");
+ });
+ 
++test("Paseo handoff wait survives unrelated notifications and consumes one native delivery", async t => {
++ const h = await fixture(t);
++ t.mock.timers.enable({apis: ["setTimeout", "Date"]});
++ h.begin();
++ assert.equal(h.core.scheduler.declare(h.ctx, {kind: "wait", reason: "SDK dependency", deadline: new Date(Date.now()+60_000).toISOString(), message: {source_agent_id: "sdk-agent", prefix: "SDK_READY"}}).terminate, true);
++ h.core.scheduler.settled(h.ctx); t.mock.timers.tick(20_000);
++ assert.equal(h.sent.length, 0);
++ const envelope = (source: string, body: string) => ({role: "user", content: [{type: "text", text: `<paseo-system version="1" kind="agent-message" source-agent-id="${source}">${body}</paseo-system>`}]});
++ for (const message of [{role:"custom",customType:"subagent-notify"}, envelope("other-agent","SDK_READY abc"), envelope("sdk-agent","SDK_READYNESS abc")]) {
++  h.begin(); h.core.scheduler.message(h.ctx,message); h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1);
++  assert.equal(h.core.state.goal?.scheduler?.phase,"waiting");
++  assert.equal(h.sent.length,0,"no checkpoint or contract repair for unrelated messages");
++ }
++ h.begin(); h.core.scheduler.message(h.ctx,envelope("sdk-agent","SDK_READY abc"));
++ assert.equal(h.core.state.goal?.scheduler?.wait,undefined);
++ assert.equal(h.core.state.goal?.status,"active");
++ assert.equal(h.sent.length,0,"native Paseo delivery already starts the turn");
++ h.ready(); h.core.scheduler.settled(h.ctx); t.mock.timers.tick(1);
++ assert.equal(h.sent.length,1,"normal work continues without goal-resume");
++});
++
++test("message wait persists across restart and cannot revive a user pause", async t => {
++ const h = await fixture(t);
++ t.mock.timers.enable({apis:["setTimeout","Date"]});
++ h.begin(); h.core.scheduler.declare(h.ctx,{kind:"wait",reason:"SDK",deadline:new Date(Date.now()+60_000).toISOString(),message:{source_agent_id:"sdk",prefix:"SDK_READY"}});
++ h.core.scheduler.settled(h.ctx); h.core.scheduler.shutdown();
++ const resumed=await fixture(t,undefined,"owner",h.cwd);
++ resumed.core.scheduler.restore(resumed.ctx); t.mock.timers.tick(10_000);
++ assert.equal(resumed.sent.length,0);
++ assert.equal(resumed.core.state.goal?.scheduler?.wait?.message?.prefix,"SDK_READY");
++ resumed.core.pauseActiveGoal(resumed.ctx);
++ resumed.core.scheduler.message(resumed.ctx,{role:"user",content:'<paseo-system kind="agent-message" source-agent-id="sdk">SDK_READY abc</paseo-system>'});
++ t.mock.timers.tick(1);
++ resumed.core.scheduler.settled(resumed.ctx); t.mock.timers.tick(1);
++ assert.equal(resumed.core.state.goal?.status,"paused");
++ assert.equal(resumed.sent.length,0,"producer cannot override user interruption");
++});
++
+ test("an unanswered subagent status probe fails open", async t => {
+ 	const h = await fixture(t, undefined, "owner", undefined, false);
+ 	(h.pi as any).events.emit("subagent:async-started", { id: "fixture-run" });

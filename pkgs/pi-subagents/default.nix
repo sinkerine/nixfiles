@@ -18,6 +18,11 @@ buildNpmPackage {
     hash = "sha256-yJHclk8TqJX0OGDteZYAbcW9qGDY9a8BSVy0kxcRpEU=";
   };
 
+  patches = [
+    ./task-boundary-wake.patch
+    ./host-verification-activity.patch
+  ];
+
   npmDepsHash = "sha256-4iHfVe/7y5xTT3tu8hhbrjOMr8OpkvgpCiDdWqMGVoQ=";
   npmFlags = [ "--omit=dev" ];
   dontNpmBuild = true;
@@ -55,6 +60,12 @@ buildNpmPackage {
     assert.deepEqual(missing, [], 'Background runner must resolve every required host peer');
     for (const target of new Set(Object.values(aliases))) await import(target);
     JS
+    PI_TEST_HOST=${pi-coding-agent}/lib/node_modules/pi-monorepo \
+      PI_TEST_PACKAGE=$out/lib/node_modules/pi-subagents \
+      node ${./task-boundary-wake.test.mjs}
+    PI_TEST_HOST=${pi-coding-agent}/lib/node_modules/pi-monorepo \
+      PI_TEST_PACKAGE=$out/lib/node_modules/pi-subagents \
+      node ${./host-verification-activity.test.mjs}
     runHook postInstallCheck
   '';
 

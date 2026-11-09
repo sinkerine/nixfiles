@@ -1,0 +1,100 @@
+diff --git a/src/runs/background/subagent-runner.ts b/src/runs/background/subagent-runner.ts
+index 5a09924..9c0d0d2 100644
+--- a/src/runs/background/subagent-runner.ts
++++ b/src/runs/background/subagent-runner.ts
+@@ -1467,6 +1467,7 @@ export async function runSingleStepInner(
+ 			artifactsDir: ctx.artifactsDir,
+ 			runId: ctx.id,
+ 			watchdog: finalResult?.watchdog,
++			onVerifyActivity: (command) => ctx.onChildEvent?.({ type: command ? "host_verification_start" : "host_verification_end", toolName: "host_verification", ...(command ? {toolCallId: command.id} : {}) }),
+ 		}))
+ 		: undefined;
+ 	const stoppedAfterAcceptance = finalResult?.stopped === true || ctx.stopSignal?.aborted === true;
+@@ -3068,6 +3069,12 @@ export async function runSubagent(
+ 		const previousActivityState = step.activityState;
+ 		const now = Date.now();
+ 		statusPayload.currentStep = flatIndex;
++		if (event.type === "host_verification_start" || event.type === "host_verification_end") {
++			if (event.type === "host_verification_start") { step.currentTool = "host_verification"; step.currentToolStartedAt = now; }
++			else if (step.currentTool === "host_verification") { delete step.currentTool; delete step.currentToolStartedAt; }
++			step.lastActivityAt = now; statusPayload.lastActivityAt = now;
++			syncTopLevelCurrentTool(); writeStatusPayload(true); return;
++		}
+ 		if (isChildWatchdogStatusEvent(event)) {
+ 			const next = acceptChildWatchdogEvent({
+ 				current: step.watchdog,
+diff --git a/src/runs/shared/acceptance.ts b/src/runs/shared/acceptance.ts
+index 42f07d6..73e8720 100644
+--- a/src/runs/shared/acceptance.ts
++++ b/src/runs/shared/acceptance.ts
+@@ -1495,6 +1495,8 @@ export async function evaluateAcceptance(input: {
+ 	artifactsDir?: string;
+ 	runId?: string;
+ 	watchdog?: ChildWatchdogProgress;
++	/** Host checks remain live work after the model child has finished. */
++	onVerifyActivity?: (command: AcceptanceVerifyCommand | undefined) => void;
+ }): Promise<AcceptanceLedger> {
+ 	const acceptance = input.acceptance;
+ 	const initialStatus = acceptance.level === "none" ? "not-required" : "claimed";
+@@ -1577,12 +1579,13 @@ export async function evaluateAcceptance(input: {
+ 		} else {
+ 			ledger.verifyRuns = [];
+ 			for (const command of acceptance.verify) {
++				input.onVerifyActivity?.(command);
+ 				const run = await runMemoizedVerifyCommand(command, input.cwd, {
+ 					signal: input.signal,
+ 					abortMessage: input.abortMessage,
+ 					artifactsDir: input.artifactsDir,
+ 					runId: input.runId,
+-				});
++				}).finally(() => input.onVerifyActivity?.(undefined));
+ 				if (command.output === "json") await applyTypedVerifyOutput(command, run);
+ 				ledger.verifyRuns.push(run);
+ 				if (input.signal?.aborted) break;
+diff --git a/src/runs/shared/subagent-control.ts b/src/runs/shared/subagent-control.ts
+index 935393a..c56ef38 100644
+--- a/src/runs/shared/subagent-control.ts
++++ b/src/runs/shared/subagent-control.ts
+@@ -118,7 +118,8 @@ export function shouldEmitOpenToolAttention(input: {
+ 	now?: number;
+ }): boolean {
+ 	if (!input.config.enabled || !input.currentTool || input.currentToolStartedAt === undefined) return false;
+-	if (isToolTimeoutExempt(input.currentTool)) return false;
++	// Host verification has its own command deadline and process cancellation.
++	if (input.currentTool === "host_verification" || isToolTimeoutExempt(input.currentTool)) return false;
+ 	const now = input.now ?? Date.now();
+ 	return Math.max(0, now - input.currentToolStartedAt) >= input.config.activeNoticeAfterMs;
+ }
+diff --git a/test/unit/acceptance.test.ts b/test/unit/acceptance.test.ts
+index 0a638ac..fa06269 100644
+--- a/test/unit/acceptance.test.ts
++++ b/test/unit/acceptance.test.ts
+@@ -161,6 +161,15 @@ describe("acceptance gates", () => {
+ 		assert.equal(verifiedLedger.verifyRuns[0]?.status, "passed");
+ 	});
+ 
++	it("reports host verification activity through success and failure without a model attestation", async () => {
++		const activity: Array<string | undefined> = [];
++		const acceptance = resolveEffectiveAcceptance({agentName: "worker", task: "Host checks", agentContract: {version: 1}, explicit: {level: "verified", verify: [{id: "pass", command: `${process.execPath} -e "process.exit(0)"`}, {id: "fail", command: `${process.execPath} -e "process.exit(1)"`}]}});
++		const ledger = await evaluateAcceptance({acceptance, output: "", cwd: process.cwd(), reportOptional: true, onVerifyActivity: command => activity.push(command?.id)});
++		assert.deepEqual(activity, ["pass", undefined, "fail", undefined]);
++		assert.equal(ledger.status, "rejected");
++		assert.deepEqual(ledger.verifyRuns.map(run => run.status), ["passed", "failed"]);
++	});
++
+ 	it("current/default acceptance still rejects missing required reports", async () => {
+ 		const current = resolveEffectiveAcceptance({ agentName: "worker", task: "Implement the fix", explicit: "checked" });
+ 		const ledger = await evaluateAcceptance({ acceptance: current, output: "done", cwd: process.cwd() });
+diff --git a/test/unit/subagent-control.test.ts b/test/unit/subagent-control.test.ts
+index 19a8066..da69f04 100644
+--- a/test/unit/subagent-control.test.ts
++++ b/test/unit/subagent-control.test.ts
+@@ -186,6 +186,8 @@ describe("subagent control attention state", () => {
+ 		assert.equal(shouldEmitOpenToolAttention({ config: defaults, currentTool: "bash", currentToolStartedAt: 0, now: 239_999 }), false);
+ 		assert.equal(shouldEmitOpenToolAttention({ config: defaults, currentTool: "bash", currentToolStartedAt: 0, now: 240_000 }), true);
+ 		assert.equal(shouldEmitOpenToolAttention({ config: defaults, currentTool: "contact_supervisor", currentToolStartedAt: 0, now: 999_999 }), false);
++		assert.equal(shouldEmitOpenToolAttention({ config: defaults, currentTool: "host_verification", currentToolStartedAt: 0, now: 999_999 }), false, "host command has its own deadline");
++		assert.equal(deriveActivityState({config: defaults, startedAt: 0, turnCount: 5, currentTool: "host_verification", now: 999_999}), undefined, "host verification is live work");
+ 		assert.equal(shouldEmitOpenToolAttention({ config: { ...defaults, enabled: false }, currentTool: "bash", currentToolStartedAt: 0, now: 999_999 }), false);
+ 	});
+ 

@@ -357,6 +357,8 @@ in
           conform-nvim = {
             enable = true;
             settings = {
+              formatters_by_ft.python = [ "ruff_format" ];
+              formatters.ruff_format.command = "${pkgs.ruff}/bin/ruff";
               format_on_save = {
                 timeout_ms = 500;
                 lsp_format = "fallback";

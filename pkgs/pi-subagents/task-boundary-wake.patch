@@ -1,0 +1,94 @@
+--- a/src/workflows/scripted-workflow.ts
++++ b/src/workflows/scripted-workflow.ts
+@@ -179,6 +179,8 @@
+ 	outputReference?: string;
+ 	error?: string;
+ 	workflowRunning: boolean;
++	/** Opt-in parent wake at a task boundary while sibling children continue. */
++	notifyOnComplete?: boolean;
+ 	/** The script-visible result, exactly as returned to the script. */
+ 	result: WorkflowScriptChildResult;
+ }
+@@ -1101,6 +1103,7 @@
+ 	const consoleEntries: WorkflowScriptResult["console"] = [];
+ 	const trace: WorkflowScriptTraceEntry[] = [];
+ 	const children = new Map<string, WorkflowScriptChildResult>();
++	const completionWakeKeys = new Set<string>();
+ 	const childOrder: string[] = [];
+ 	const launches = new Map<string, { fingerprint: string; promise: Promise<WorkflowScriptChildResult>; observed: boolean; generatedLaneKey?: string }>();
+ 	const steers = new Map<number, { key: string; promise: Promise<WorkflowSteerResult>; observed: boolean }>();
+@@ -1199,6 +1202,7 @@
+ 				...(outputReference ? { outputReference } : {}),
+ 				...(!result.ok && result.error ? { error: result.error } : {}),
+ 				workflowRunning: !settled && !finishing,
++				...(completionWakeKeys.has(key) ? { notifyOnComplete: true } : {}),
+ 				result,
+ 			});
+ 		} catch (error) {
+@@ -1540,6 +1544,12 @@
+ 			if (params.tasks !== undefined || params.chain !== undefined || params.parallel !== undefined || params.concurrency !== undefined || params.chainDir !== undefined) {
+ 				return respond(Promise.reject(new Error(`runs.run('${key}') accepts one child via { agent, task }; use runs.all(...) and JavaScript control flow for orchestration.`)));
+ 			}
++			if (params.notifyOnComplete !== undefined && typeof params.notifyOnComplete !== "boolean") {
++				return respond(Promise.reject(new Error(`runs.run('${key}') notifyOnComplete must be true or false.`)));
++			}
++			if (params.notifyOnComplete === true && params.async === true) {
++				return respond(Promise.reject(new Error(`runs.run('${key}') notifyOnComplete requires an awaited child; omit explicit async: true.`)));
++			}
+ 			if (params.worktree !== undefined && typeof params.worktree !== "boolean") {
+ 				return respond(Promise.reject(new Error(`runs.run('${key}') worktree must be true or false.`)));
+ 			}
+@@ -1569,6 +1579,7 @@
+ 			if (params.resume !== undefined && (typeof params.task !== "string" || !params.task.trim())) {
+ 				return respond(Promise.reject(new Error(`runs.run('${key}') resume requires a non-empty task follow-up.`)));
+ 			}
++			if (params.notifyOnComplete === true) completionWakeKeys.add(key);
+ 			const startedAt = Date.now();
+ 			const batch = isRecord(message.args.batch) && typeof message.args.batch.id === "string" && Array.isArray(message.args.batch.calls)
+ 				? { id: message.args.batch.id, calls: message.args.batch.calls.filter((call): call is { key: string; params: Record<string, unknown> } => isRecord(call) && typeof call.key === "string" && isRecord(call.params)) }
+@@ -1623,7 +1634,9 @@
+ 						if (predecessor?.continuation && predecessor.continuation.runIds.at(-1) === resolvedResumeId) resolvedResumeLineage = predecessor.continuation.runIds;
+ 					}
+ 				}
+-				const launchParams = resolvedResumeId ? { ...params, resume: resolvedResumeId } : params;
++				const launchParams = resolvedResumeId ? { ...params, resume: resolvedResumeId } : { ...params };
++				// Workflow notification policy is not part of a child's launch contract.
++				delete launchParams.notifyOnComplete;
+ 				await launchSemaphore.acquire();
+ 				try {
+ 					if (settled || finishing || stoppedLaunches.has(key) || childSignal.aborted) {
+--- a/src/runs/background/notify.ts
++++ b/src/runs/background/notify.ts
+@@ -80,6 +80,8 @@
+ 	outputReference?: string;
+ 	error?: string;
+ 	workflowRunning: boolean;
++	/** Explicit task-boundary wake requested by the parent workflow. */
++	notifyOnComplete?: boolean;
+ }
+ 
+ export interface CompletionNotification {
+@@ -410,10 +412,10 @@
+  * the barrier for hosts that do not emit a separate workflow completion wake.
+  */
+ export function incrementalChildCompletionTriggersTurn(
+-	child: Pick<IncrementalChildCompletion, "outcome" | "workflowRunning">,
++	child: Pick<IncrementalChildCompletion, "outcome" | "workflowRunning" | "notifyOnComplete">,
+ 	origin: ScheduleOrigin | undefined,
+ ): boolean {
+-	if (child.workflowRunning && child.outcome === "completed") return false;
++	if (child.workflowRunning && child.outcome === "completed" && child.notifyOnComplete !== true) return false;
+ 	return scheduledCompletionTriggersTurn(origin, child.outcome);
+ }
+ 
+--- a/docs/workflows.md
++++ b/docs/workflows.md
+@@ -14,6 +14,8 @@
+ 
+ Launch children in the background (`async` follows `asyncByDefault`, normally true) and consume each result at the point a later step depends on it. Native completion wakes the parent session, so the parent returns control instead of sleeping or polling. Use `async: false` only when the parent must block, not for final reviews or gates. When an oracle or advisor reaches an unknown that needs a decision, it asks through supervisor dialogue; use a one-shot oracle call only when one was requested.
+ 
++For a task boundary that needs parent judgment before sibling tasks finish, set `notifyOnComplete: true` on that task's final `runs.run` or `runs.all` child (usually its reviewer). Its settled result wakes the parent while the workflow continues; ordinary successful children remain quiet. This workflow-only boolean requires an awaited child (omit explicit child `async: true`), is consumed before child launch, adds no tools or execution authority, and respects quiet scheduled-success policy. `emit()` persists workflow data but does not wake the parent. Keep wakeups off intermediate implementation steps and consume the referenced report before accepting work. The option requests a wake after completion; it does not accept the task or launch dependencies automatically.
++
+ A background child awaited by an `async: false` workflow cannot receive a supervisor decision while its parent is blocked in that call. Its native `contact_supervisor` decision or interview request returns a tool error promptly, asking it to report the blocker and partial results and stop. The transport error is not a supervisor reply or approval. Use `async: true` for workflows whose children may need a decision. Progress updates remain non-blocking, and an explicit child `async: true` still returns its launch receipt without being awaited.
+ 
+ Child-safety boundaries are enforced at runtime:

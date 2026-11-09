@@ -10,6 +10,8 @@ let
   cfg = config.my.services.fcitx5;
 in
 {
+  imports = [ ./rime-wanxiang.nix ];
+
   options.my.services.fcitx5 = {
     enable = mkEnableOption "Fcitx5";
 

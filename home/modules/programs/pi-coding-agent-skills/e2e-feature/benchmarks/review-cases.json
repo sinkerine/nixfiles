@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "variants": [
+    {"id": "gemini-medium", "model": "magpie/group/argon:medium"},
+    {"id": "gemini-low", "model": "magpie/group/argon:low"},
+    {"id": "sol-medium", "model": "magpie/gpt-6.1-sol:medium"}
+  ],
+  "packets": {
+    "gallery": {
+      "repository": "element-web",
+      "contract": "Review the gallery-media integration. Both dm.filament.gallery and m.gallery are received. Each gallery has valid media itemtypes; the gallery itself has no top-level url or file. Existing media callers must keep working with gallery MatrixEvents, while callers may also construct helpers directly from individual media content. Preserve media metadata, encrypted-media behavior and existing single-media behavior. The packet contains the helper, gallery conversion/validation, media resolution, and excerpts of existing callers. Report concrete current defects in this contract. Do not report future feature tasks or missing files that this packet does not establish.",
+      "files": [
+        {"path": "apps/web/src/utils/MediaEventHelper.ts"},
+        {"path": "apps/web/src/utils/MediaCaptionContent.ts"},
+        {"path": "apps/web/src/customisations/Media.ts", "match": "mediaFromContent"},
+        {"path": "apps/web/src/components/views/messages/MessageEvent.tsx", "match": "MediaEventHelper"},
+        {"path": "apps/web/src/viewmodels/room/EventTileActionBarViewModel.ts", "match": "MediaEventHelper"}
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "gallery-before-fix",
+      "packet": "gallery",
+      "revision": "50cca4668d377578b25f2456f38347dd93d7f653",
+      "expected": [
+        {"id": "gallery-event-construction", "path": "apps/web/src/utils/MediaEventHelper.ts", "terms": ["gallery", "throw"]}
+      ]
+    },
+    {
+      "id": "gallery-after-fix",
+      "packet": "gallery",
+      "revision": "5f3adc12c5",
+      "expected": []
+    }
+  ]
+}
