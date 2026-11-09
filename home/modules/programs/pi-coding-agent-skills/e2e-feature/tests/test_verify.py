@@ -82,6 +82,14 @@ class VerificationTests(unittest.TestCase):
         Path(receipt["log"]).write_text("tampered")
         self.assertFalse(self.run_check()["reused"])
 
+    def test_directory_artifact_identity_round_trips_and_reuses(self):
+        self.check["command"] = "mkdir -p output; echo coverage > output/report"
+        self.check["artifacts"] = ["output"]
+        self.assertFalse(self.run_check()["reused"])
+        self.assertTrue(self.run_check()["reused"])
+        (self.root / "output" / "report").write_text("tampered")
+        self.assertFalse(self.run_check()["reused"])
+
     def test_missing_required_artifact_fails(self):
         self.check["artifacts"] = ["output"]
         self.assertEqual(self.run_check()["status"], "missing-artifact")

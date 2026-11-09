@@ -74,7 +74,7 @@ def load_recipe(path):
     for check in recipe["checks"]:
         if not isinstance(check, dict):
             raise ValueError("Each check must be an object")
-        if set(check) - {"id", "command", "timeout_seconds", "inputs", "artifacts", "proves", "phase", "needs", "resources"}:
+        if set(check) - {"id", "command", "timeout_seconds", "inputs", "artifacts", "proves", "phase", "needs", "resources", "environment_inputs"}:
             raise ValueError("Unknown check fields")
         name = check.get("id", "")
         if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}", name) or name in ids:
@@ -85,7 +85,7 @@ def load_recipe(path):
         timeout = check.get("timeout_seconds", 120)
         if type(timeout) is not int or not 1 <= timeout <= 86400:
             raise ValueError(f"{name}: timeout_seconds must be 1..86400")
-        for field in ("inputs", "artifacts", "proves"):
+        for field in ("inputs", "artifacts", "proves", "environment_inputs"):
             if field in check and (not isinstance(check[field], list) or not all(isinstance(v, str) and v for v in check[field])):
                 raise ValueError(f"{name}: {field} must be a list of strings")
         if "inputs" in check and not check["inputs"]:
@@ -108,7 +108,7 @@ def fingerprint(root, recipe, check):
             continue
         source.append((name, file_identity(root / name)))
     # Directory enumeration also covers ignored generated inputs when explicitly named.
-    extra = [(name, file_identity(root / name)) for name in recipe.get("environment_inputs", [])]
+    extra = [(name, file_identity(root / name)) for name in recipe.get("environment_inputs", []) + check.get("environment_inputs", [])]
     env_keys = sorted(set(recipe.get("env_keys", []) + ["PATH", "JAVA_HOME", "ANDROID_HOME", "NIX_PATH", "NIX_PROFILES", "NODE_OPTIONS", "CI", "DISPLAY", "WAYLAND_DISPLAY"]))
     env = {key: os.environ.get(key) for key in env_keys}
     return digest({"runner": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), "source": source, "environment_inputs": extra, "environment": env,

@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import tomllib
 import zipfile
 
 
@@ -78,7 +79,7 @@ def sdk_environment(root, repository, sha, abi, aar_sha, requirements):
 def make_recipe(root, run_dir, args, output):
     helper = Path(__file__).resolve()
     python = sys.executable
-    run = lambda *argv: command(python, helper, *argv)
+    run = lambda *argv: command(python, "-B", helper, *argv)
     if args.project == "element-web":
         require((root / "apps/web/project.json").is_file(), "This is not the supported Element Web monorepo")
         smoke = args.smoke_test or "apps/web/src/utils/arrays.test.ts"
@@ -91,9 +92,10 @@ def make_recipe(root, run_dir, args, output):
         build_command = "NX_DAEMON=false corepack pnpm --dir apps/web build"
         if args.web_config:
             build_command += " && " + command("cp", Path(args.web_config).resolve(), "apps/web/webapp/config.json")
+        prepared_outputs = ["apps/desktop/lib", "packages/module-api/lib", "packages/shared-utils/lib", "packages/playwright-common/lib", "packages/shared-components/typedoc", "packages/shared-components/dist"]
         checks = [
             {"id": "environment", "phase": "smoke", "command": "CI=1 " + run("web-environment"), "timeout_seconds": 60},
-            {"id": "prepare", "phase": "task", "needs": ["environment"], "command": "corepack pnpm exec nx run-many -t test:unit:prepare && corepack pnpm --dir apps/desktop exec tsc", "timeout_seconds": 900},
+            {"id": "prepare", "phase": "task", "needs": ["environment"], "command": "corepack pnpm exec nx run-many -t test:unit:prepare && corepack pnpm --dir apps/desktop exec tsc", "timeout_seconds": 900, "artifacts": prepared_outputs},
             {"id": "test-smoke", "phase": "task", "needs": ["prepare"], "command": "CI=1 NX_DAEMON=false corepack pnpm exec vitest run " + shlex.quote(smoke), "timeout_seconds": 60},
             {"id": "discovery", "needs": ["pin-build"], "command": "CI=1 corepack pnpm exec vitest list --json", "resources": ["browser", "host-cpu"], "timeout_seconds": 120},
             {"id": "units-coverage", "needs": ["discovery"], "command": "CI=1 NX_DAEMON=false corepack pnpm exec vitest run --coverage --maxWorkers=2", "resources": ["browser", "host-cpu"], "timeout_seconds": 1800, "artifacts": ["coverage/lcov.info"], "proves": ["all-configured-vitest-projects", "unit-and-browser-and-storybook", "coverage"]},
@@ -102,12 +104,20 @@ def make_recipe(root, run_dir, args, output):
             {"id": "app-build", "needs": ["i18n"], "command": build_command, "timeout_seconds": 1200, "artifacts": ["apps/web/webapp"]},
             {"id": "pin-build", "needs": ["app-build"], "command": run("pin", "--feature", args.feature, "--recipe", output, "--artifact", "apps/web/webapp"), "resources": ["app-output"], "artifacts": [str(run_dir / "pinned-build.json")]},
         ]
+        for check in checks:
+            if check["id"] in ["test-smoke", "discovery", "units-coverage", "lint", "app-build"]:
+                check["environment_inputs"] = prepared_outputs
         reports = ["coverage/lcov.info"]
         if legacy:
             checks.append({"id": "legacy-jest-coverage", "needs": ["pin-build"], "command": "CI=1 corepack pnpm --dir apps/web exec jest --coverage", "resources": ["legacy-jest", "host-cpu"], "timeout_seconds": 1800, "artifacts": ["apps/web/coverage/lcov.info"]})
             reports.append("apps/web/coverage/lcov.info")
+        config_path = root / "diff-cover.toml"
+        coverage_config = tomllib.loads(config_path.read_text()).get("tool", {}).get("diff_cover", {}) if config_path.exists() else {}
+        configured_threshold = coverage_config.get("fail_under", coverage_config.get("fail-under", 80))
+        require(type(configured_threshold) in (int, float) and 0 <= configured_threshold <= 100, "Invalid configured diff coverage threshold")
+        threshold = max(80, configured_threshold)
         checks.append({"id": "diff-coverage", "needs": ["units-coverage"] + (["legacy-jest-coverage"] if legacy else []),
-                       "command": run("coverage", *reports) + " && " + command("diff-cover", "--config-file", "diff-cover.toml", *reports), "resources": ["coverage-report"], "timeout_seconds": 120})
+                       "command": run("coverage", *reports) + " && " + command("diff-cover", "--config-file", "diff-cover.toml", "--fail-under", str(threshold), *reports), "resources": ["coverage-report"], "timeout_seconds": 120})
         if args.e2e_spec:
             require(not Path(args.e2e_spec).is_absolute() and ".." not in Path(args.e2e_spec).parts, "E2E spec must stay within apps/web")
             require((root / "apps/web" / args.e2e_spec).is_file(), "The approved E2E spec does not exist")

@@ -126,7 +126,10 @@ in
       }
       (lib.mkIf (cfg.plugins != { }) {
         xdg.dataFile = lib.mapAttrs' (
-          name: plugin: lib.nameValuePair "${pluginDirectory}/${name}" { source = plugin; }
+          name: plugin: lib.nameValuePair "${pluginDirectory}/${name}" {
+            source = plugin;
+            force = true;
+          }
         ) cfg.plugins;
 
         # The daemon rewrites config.json at runtime, so merge plugin entries instead of owning the file.

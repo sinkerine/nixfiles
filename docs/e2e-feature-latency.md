@@ -78,6 +78,12 @@ Verification and E2E have serial cost `V + E` and theoretical overlap cost `max(
 
 ## Implementation and remaining measurement
 
+The execution layer now supports prerequisite check graphs (`needs`), bounded `max_parallel`, named worktree/repository/host resources, and conservative serialization for undeclared commands. Failed prerequisites block their dependents while unrelated checks finish. Generated prerequisite artifacts participate in consumer fingerprints, and directory artifact identities survive receipt serialization. Results record queue/resource/capacity timing and cancellation terminates active command groups.
+
+The runner also provides copied build snapshots with source/environment and artifact validation before/after E2E. Concrete Element Web recipes prepare and pin the build before parallel verification readers, preserve full configured unit/browser/Storybook discovery, retain legacy Jest when present, and use a separate journey browser before allowing browser-test overlap. Android recipes validate existing and new SDK APIs plus AAR ABI/bindings before builds, then preserve the repository's required Gradle-before-emulator ordering.
+
+A six-request, two-snapshot [reviewer pilot](e2e-review-benchmark.md) has also been completed and adjudicated. Faster settings distinguished the known bug from its fixed control, but that sample is insufficient to change the default Gemini medium reviewer. The benchmark is opt-in and never an extra stage of ordinary feature work.
+
 The changes live in:
 
 - `home/modules/programs/pi-coding-agent-skills/e2e-feature/SKILL.md`: dependency-driven launch, task-boundary review wakes, compact reports, independent evidence reuse, early environment smoke, resource-aware locking, focused review briefs and conditional verification/E2E overlap.

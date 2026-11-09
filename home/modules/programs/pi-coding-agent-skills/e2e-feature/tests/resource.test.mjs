@@ -30,7 +30,7 @@ test("native verification runs and reuses host evidence without a model child", 
   if (!process.env.E2E_RUNNER) {
     mkdirSync(path.join(runner, "bin"), {recursive: true});
     const script = fileURLToPath(new URL("../scripts/verify.py", import.meta.url));
-    writeFileSync(path.join(runner, "bin/e2e-feature-run"), "#!/bin/sh\nexec python3 " + quote(script) + " \"$@\"\n", {mode: 0o755});
+    writeFileSync(path.join(runner, "bin/e2e-feature-run"), "#!/bin/sh\nexec python3 -B " + quote(script) + " \"$@\"\n", {mode: 0o755});
   }
   const source = readFileSync(new URL("../../../pi-coding-agent-extensions/e2e-verification.ts", import.meta.url), "utf8")
     .replaceAll("@SUBAGENTS@", packageRoot).replaceAll("@E2E_RUNNER@", runner);
@@ -42,8 +42,8 @@ test("native verification runs and reuses host evidence without a model child", 
   let children = 0;
   try {
     handlers.get("session_start")({}, ctx);
-    const invoke = async () => {
-      const resolved = resolveWorkflowResource("e2e-verify", {feature: "native", recipe, checks: ["units"]}, "native-test");
+    const invoke = async (extra = {}) => {
+      const resolved = resolveWorkflowResource("e2e-verify", {feature: "native", recipe, checks: ["units"], ...extra}, "native-test");
       assert.equal(resolved.ok, true, resolved.error);
       const resource = resolved.resource;
       assert.equal(typeof consumeWorkflowResourcePermit(resource.permit, resource.script), "object");
@@ -63,6 +63,15 @@ test("native verification runs and reuses host evidence without a model child", 
     const second = await invoke(); assert.equal(second.result.ok, true); assert.equal(second.detail.checks[0].reused, true);
     writeFileSync(path.join(cwd, "source"), "edited");
     assert.equal((await invoke()).detail.checks[0].reused, false);
+    assert.equal(resolveWorkflowResource("e2e-verify", {feature: "native", recipe, jobs: true}, "native-test").ok, false);
+    assert.equal(resolveWorkflowResource("e2e-verify", {feature: "native", recipe, jobs: 17}, "native-test").ok, false);
+    writeFileSync(recipe, JSON.stringify({version: 1, max_parallel: 2, resources: {browser: {}}, checks: [
+      {id: "setup", command: "test -f source", phase: "full"},
+      {id: "journey", command: "test -f source", needs: ["setup"], resources: ["browser"], phase: "e2e"},
+    ]}));
+    const journey = await invoke({checks: ["journey"], phase: "e2e", jobs: 1});
+    assert.equal(journey.detail.max_parallel, 1);
+    assert.deepEqual(journey.detail.checks.map(check => check.id), ["setup", "journey"]);
     writeFileSync(recipe, JSON.stringify({version: 1, checks: [{id: "units", command: "exit 9", timeout_seconds: 5}]}));
     await assert.rejects(invoke, /Host command .verify. failed/);
     assert.equal(children, 0);

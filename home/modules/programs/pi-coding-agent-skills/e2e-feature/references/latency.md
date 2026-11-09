@@ -30,12 +30,12 @@ A passing receipt can satisfy task acceptance or final verification after a read
 
 ## Overlap without a wave barrier
 
-Within one launch, use plain functions returning promise chains. Nested `async` functions are rejected by the installed Node/Bun-portable workflow sandbox. This schematic example runs each task's review immediately after its own gate; it never waits for a sibling implementation first. Fill `items` with the compatible ready task ids and exact commands from the approved plan, and use each task's assigned resource lock once.
+Within one launch, use plain functions returning promise chains. Nested `async` functions are rejected by the installed Node/Bun-portable workflow sandbox. This schematic example runs each task's review immediately after its own gate; it never waits for a sibling implementation first. Fill `items` with the compatible ready task ids and exact commands from the approved plan, and let the helper claim each task's complete assigned resource set; do not wrap it in another flock.
 
 ```js workflow
 const items = [
-  { id: "T2", key: "t2", gate: "flock <T2 resource lock> <T2 unit command>" },
-  { id: "T3", key: "t3", gate: "flock <T3 resource lock> <T3 unit command>" },
+  { id: "T2", key: "t2", gate: "e2e-feature-run verify --feature <feature> --recipe <run dir>/verification.json --check T2" },
+  { id: "T3", key: "t3", gate: "e2e-feature-run verify --feature <feature> --recipe <run dir>/verification.json --check T3" },
 ];
 function runTask(item) {
   return runs.run(item.key + "-implement", {

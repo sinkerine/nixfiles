@@ -23,14 +23,14 @@ let
     name = "e2e-feature-run";
     runtimeInputs = [ pkgs.python3 pkgs.git pkgs.bash ];
     text = ''
-      exec python3 ${./pi-coding-agent-skills/e2e-feature/scripts}/verify.py "$@"
+      exec python3 -B ${./pi-coding-agent-skills/e2e-feature/scripts}/verify.py "$@"
     '';
   };
   e2eReviewBenchmark = pkgs.writeShellApplication {
     name = "e2e-review-benchmark";
     runtimeInputs = [ pkgs.python3 pkgs.git piCodingAgent ];
     text = ''
-      exec python3 ${./pi-coding-agent-skills/e2e-feature/scripts}/benchmark.py \
+      exec python3 -B ${./pi-coding-agent-skills/e2e-feature/scripts}/benchmark.py \
         --pi ${piCodingAgent}/bin/pi \
         --manifest ${./pi-coding-agent-skills/e2e-feature/benchmarks/review-cases.json} "$@"
     '';
