@@ -218,7 +218,8 @@ in
         - { key: c, desc: Chrome, cmd: google-chrome-stable }
         - { key: d, desc: Nemo, cmd: nemo }
         - { key: s, desc: Screenshot, cmd: ${noctalia} msg screenshot-region }
-        - { key: S, desc: Screenshot in 3 seconds, cmd: ${toString delayedScreenshot} }
+        - { key: S, desc: Screenshot and annotate, cmd: screenshot-annotate }
+        - { key: D, desc: Screenshot in 3 seconds, cmd: ${toString delayedScreenshot} }
         - { key: m, desc: Music, cmd: dex "$HOME/.nix-profile/share/applications/feishin.desktop" }
         - { key: n, desc: Dismiss notifications, cmd: ${noctalia} msg notification-clear-active }
         - { key: h, desc: Notification history, cmd: ${noctalia} msg panel-toggle control-center notifications }

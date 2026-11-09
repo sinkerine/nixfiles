@@ -10,6 +10,15 @@
 let
   cfg = config.my.essentials.gui;
   inherit (mylib) applyChromeFlagsToDesktopExec;
+  screenshotAnnotate = pkgs.writeShellApplication {
+    name = "screenshot-annotate";
+    runtimeInputs = with pkgs; [ grim slurp satty ];
+    text = ''
+      # Cancelling selection leaves the clipboard untouched.
+      geometry=$(slurp) || exit 0
+      grim -g "$geometry" -t ppm - | satty --filename - --fullscreen
+    '';
+  };
 in
 {
   options.my.essentials.gui = {
@@ -97,6 +106,8 @@ in
           libnotify
           grim
           slurp
+          satty
+          screenshotAnnotate
           xdg-utils
           khinsider
           imagemagick
@@ -117,6 +128,17 @@ in
           prusa-slicer
           repomix
         ];
+
+        xdg.configFile."satty/config.toml".source = (pkgs.formats.toml { }).generate "satty-config.toml" {
+          general = {
+            copy-command = "${pkgs.wl-clipboard}/bin/wl-copy --type image/png";
+            early-exit = [ "copy" ];
+            actions-on-enter = [ "save-to-clipboard" ];
+            actions-on-escape = [ "exit" ];
+            auto-copy = false;
+            save-after-copy = false;
+          };
+        };
 
         my.programs.hyprland.enableGammastep = true;
 

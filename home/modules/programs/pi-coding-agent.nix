@@ -234,6 +234,11 @@ in
 
     home.sessionVariables.PI_CODING_AGENT_PACKAGE_ROOT = "${piCodingAgent}/lib/node_modules/pi-monorepo";
 
+    home.file.".pi/agent/extensions/bash-timeout.ts" = {
+      source = ./pi-coding-agent-extensions/bash-timeout.ts;
+      force = true;
+    };
+
     home.file.".pi/agent/skills/e2e-feature/SKILL.md" = {
       source = ./pi-coding-agent-skills/e2e-feature/SKILL.md;
       force = true;
