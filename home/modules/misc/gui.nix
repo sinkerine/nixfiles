@@ -67,6 +67,7 @@ in
           # libsForQt5.qt5ct
 
           # Development
+          antigravity-ide
           gnumake
           postgresql
           ccls
@@ -290,6 +291,31 @@ in
           google-chrome = {
             name = "Google Chrome";
             exec = applyChromeFlagsToDesktopExec "google-chrome-stable";
+          };
+          antigravity-ide = {
+            name = "Antigravity IDE";
+            genericName = "Text Editor";
+            comment = "Code Editing. Redefined.";
+            exec = "antigravity-ide %F";
+            icon = "antigravity-ide";
+            categories = [
+              "Utility"
+              "TextEditor"
+              "Development"
+              "IDE"
+            ];
+            startupNotify = true;
+            settings = {
+              Keywords = "vscode";
+              StartupWMClass = "Antigravity IDE";
+            };
+            actions = {
+              new-empty-window = {
+                name = "New Empty Window";
+                exec = "antigravity-ide --new-window %F";
+                icon = "antigravity-ide";
+              };
+            };
           };
           "com.github.iwalton3.jellyfin-media-player" = {
             name = "Jellyfin Media Player";
