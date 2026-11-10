@@ -26,7 +26,9 @@ class LocalHost:
         self.events = events
         self.agents = {}
         self.projects = {}
+        self.project_names = {}
         self.workspaces = {}
+        self.workspace_titles = {}
         self.launches = []
         self.fail_launch = None
         self.fail_archive = False
@@ -52,10 +54,14 @@ class LocalHost:
         if args[0] == "logs":
             return {"agentId": args[1], "items": [{"type": "user_message", "text": "Finish the task"}]}
         if args[:2] == ("project", "ls"):
-            return [{"projectId": key, "path": value} for key, value in self.projects.items()]
+            return [{"projectId": key, "path": value, "name": self.project_names.get(key)}
+                    for key, value in self.projects.items()]
         if args[:2] == ("project", "create"):
             self.projects["project"] = args[2]
             return {"projectId": "project"}
+        if args[:2] == ("project", "rename"):
+            self.project_names[args[2]] = args[3]
+            return {"projectId": args[2], "name": args[3]}
         if args[:2] == ("workspace", "create"):
             if args[args.index("--isolation") + 1] == "worktree":
                 cwd = str(self.root / "worktree")
@@ -64,6 +70,7 @@ class LocalHost:
             else:
                 cwd = args[args.index("--path") + 1]
             self.workspaces["away-workspace"] = cwd
+            self.workspace_titles["away-workspace"] = args[args.index("--title") + 1]
             return {"workspaceId": "away-workspace", "cwd": cwd}
         if args[:2] == ("workspace", "archive"):
             if self.fail_archive:
@@ -91,6 +98,25 @@ class LocalHost:
         raise AssertionError(args)
 
 
+class RemoteHelperTests(unittest.TestCase):
+    def test_large_transcript_streamed_over_stdin(self):
+        host = dispatch.Host("sachi")
+        host.local = False
+        real_run = dispatch.subprocess.run
+
+        def remote_python(command, **kwargs):
+            self.assertEqual(command[-2:], ["python3", "-"])
+            self.assertLess(max(map(len, command)), 1024)
+            return real_run(["python3", "-"], **kwargs)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "transcript.json"
+            transcript = {"text": "x" * 200_000}
+            with patch.object(dispatch.subprocess, "run", side_effect=remote_python):
+                host.call("write_json", path=str(path), data=transcript)
+            self.assertEqual(json.loads(path.read_text()), transcript)
+
+
 class WorkspaceTransferTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -114,7 +140,8 @@ class WorkspaceTransferTests(unittest.TestCase):
         (self.worktree / "new").write_bytes(b"binary\x00file")
         (self.worktree / "ignored").write_text("host-local")
         self.entry = {
-            "feature": "workspace-test", "name": "Ordinary work", "home": "kazuki", "host": "kazuki",
+            "feature": "workspace-test", "name": "Ordinary work", "projectName": "Original project",
+            "home": "kazuki", "host": "kazuki",
             "worktree": str(self.worktree), "workspaceId": "home-workspace", "background": False,
             "isGit": True, "gitDir": dispatch.git_dir(str(self.worktree)), "moves": [], "tabs": [],
             "runJson": self.home.call("state_path", key="workspace-test"),
@@ -138,6 +165,63 @@ class WorkspaceTransferTests(unittest.TestCase):
 
     def outgoing(self):
         return dispatch.move(self.entry, self.home, self.away, self.args)
+
+    def test_current_tab_workspace_is_skipped_before_any_transfer(self):
+        for dry_run in (False, True):
+            for going_home in (False, True):
+                with self.subTest(dry_run=dry_run, going_home=going_home):
+                    self.args.dry_run = dry_run
+                    source, destination = (self.away, self.home) if going_home else (self.home, self.away)
+                    before = list(self.events)
+                    with patch.dict(os.environ, {"PASEO_AGENT_ID": "original-0"}), \
+                            patch.object(dispatch, "say") as output:
+                        self.assertIsNone(dispatch.move(self.entry, source, destination, self.args))
+                    self.assertEqual(self.events, before)
+                    self.assertIn("current tab original-0", output.call_args.args[0])
+                    self.assertFalse(self.home.agents["original-1"]["Archived"])
+
+    def test_other_workspace_still_moves_with_current_tab_excluded(self):
+        with patch.dict(os.environ, {"PASEO_AGENT_ID": "caller-in-another-workspace"}):
+            self.assertEqual(len(self.outgoing()), 2)
+
+    def test_forwarded_return_preserves_current_tab_identity(self):
+        import runpy
+        import shlex
+
+        with patch.dict(os.environ, {"PASEO_AGENT_ID": "away-caller"}), \
+                patch.object(dispatch.socket, "gethostname", return_value="sachi"), \
+                patch.object(dispatch.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as remote:
+            with self.assertRaises(SystemExit) as exited:
+                dispatch.forward_back()
+        self.assertEqual(exited.exception.code, 0)
+        bootstrap = shlex.split(remote.call_args.args[0][-1])[2]
+        with patch.dict(os.environ, {"PASEO_AGENT_ID": "unrelated-home-value"}), \
+                patch.object(dispatch.socket, "gethostname", return_value="kazuki"), \
+                patch.object(dispatch.sys, "stdin") as stdin, \
+                patch.object(dispatch.sys, "argv", ["dispatcher", "back"]), \
+                patch.object(runpy, "run_path"):
+            stdin.buffer.read.return_value = b""
+            exec(bootstrap, {})
+            self.assertEqual(os.environ["PASEO_AGENT_ID"], "away-caller")
+
+    def test_transfer_preserves_project_and_workspace_names(self):
+        self.outgoing()
+        self.assertEqual(self.away.project_names["project"], "Original project")
+        self.assertEqual(self.away.workspace_titles["away-workspace"], "Ordinary work")
+
+    def test_directory_transfer_preserves_project_and_workspace_names(self):
+        self.entry["isGit"] = False
+        self.outgoing()
+        self.assertEqual(self.away.project_names["project"], "Original project")
+        self.assertEqual(self.away.workspace_titles["away-workspace"], "Ordinary work")
+
+    def test_reused_transfer_project_gets_source_name(self):
+        path = str(self.away.root / "repos/workspace-test")
+        self.away.projects["existing"] = path
+        self.away.project_names["existing"] = "workspace-test"
+        self.assertEqual(dispatch.ensure_project(self.away, path, "Original project"), "existing")
+        self.assertEqual(self.away.project_names["existing"], "Original project")
+        self.assertEqual(list(self.away.projects), ["existing"])
 
     def test_multiple_tabs_dirty_local_checkout_and_return(self):
         original_tree = dispatch.tree_of(str(self.worktree))
@@ -246,7 +330,7 @@ class WorkspaceTransferTests(unittest.TestCase):
 
     def test_inventory_groups_unregistered_tabs_and_excludes_closed_tabs(self):
         real_run = dispatch.run
-        workspaces = [{"workspaceId": "workspace", "name": "Local checkout", "cwd": str(self.worktree),
+        workspaces = [{"workspaceId": "workspace", "name": "Local checkout", "project": "Original project", "cwd": str(self.worktree),
                        "isolation": "local", "background": True}]
         rows = [{"id": agent_id, "status": "running", "cwd": "~/abbreviated"} for agent_id in self.home.agents]
         rows.append({"id": "closed", "status": "closed"})
@@ -268,6 +352,8 @@ class WorkspaceTransferTests(unittest.TestCase):
             entries = dispatch.h_list_runs()
         self.assertEqual(len(entries), 1)
         self.assertEqual(len(entries[0]["tabs"]), 2)
+        self.assertEqual(entries[0]["projectName"], "Original project")
+        self.assertEqual(entries[0]["name"], "Local checkout")
         self.assertTrue(entries[0]["background"])
         self.assertTrue(entries[0]["isGit"])
 

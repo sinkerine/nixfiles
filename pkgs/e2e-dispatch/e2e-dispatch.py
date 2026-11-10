@@ -503,6 +503,7 @@ def h_list_runs():
                           and item.get("host") == here), {})
             key = state.get("feature") or workspace["workspaceId"]
             groups[root] = {**state, "version": 2, "feature": key, "name": workspace.get("name") or key,
+                            "projectName": workspace.get("project") or state.get("projectName"),
                             "home": state.get("home", here), "host": here, "worktree": root,
                             "workspaceId": workspace["workspaceId"], "background": workspace.get("background", False),
                             "isGit": is_git, "tabs": [], "moves": state.get("moves", []),
@@ -559,7 +560,11 @@ class Host:
         payload = base64.b64encode(json.dumps({"helper": helper, "kwargs": kwargs}).encode()).decode()
         with open(os.path.realpath(__file__), "rb") as handle:
             source = handle.read()
-        result = subprocess.run(["ssh", *SSH_OPTS, self.ssh, "python3", "-", "_helper", payload],
+        # Stream requests with the source: transcripts can exceed SSH/exec's
+        # per-argument size limit even when the overall command is small.
+        source = (f"import sys\nsys.argv = ['workspace-dispatch', '_helper', {payload!r}]\n".encode()
+                  + source)
+        result = subprocess.run(["ssh", *SSH_OPTS, self.ssh, "python3", "-"],
                                 input=source, capture_output=True)
         lines = result.stdout.decode(errors="replace").strip().splitlines()
         try:
@@ -583,15 +588,19 @@ class Host:
         return path if self.local else f"{self.ssh}:{path}"
 
 
-def ensure_project(host, path):
-    for project in host.paseo("project", "ls", "--json"):
-        if os.path.normpath(project.get("path", "")) == os.path.normpath(path):
-            return project.get("projectId") or project.get("id")
-    reply = host.paseo("project", "create", path, "--json")
-    project = reply.get("project", reply) if isinstance(reply, dict) else {}
+def ensure_project(host, path, name=None):
+    project = next((project for project in host.paseo("project", "ls", "--json")
+                    if os.path.normpath(project.get("path", "")) == os.path.normpath(path)), None)
+    if project is None:
+        reply = host.paseo("project", "create", path, "--json")
+        project = reply.get("project", reply) if isinstance(reply, dict) else {}
     project_id = project.get("projectId") or project.get("id")
     if not project_id:
-        raise Failure(f"unexpected `paseo project create` reply: {reply}")
+        raise Failure(f"unexpected project reply: {project}")
+    # Dedicated transfer paths use dispatch IDs; their visible labels should
+    # still match the source project, including when reusing a transfer repo.
+    if name and project.get("name") != name:
+        host.paseo("project", "rename", project_id, name, "--json")
     return project_id
 
 
@@ -717,6 +726,10 @@ def move(entry, source, destination, args):
     going_home = destination.name == home_entry.get("home", HOME)
     source_worktree = entry["worktree"]
     tabs = entry.get("tabs", [])
+    caller = os.environ.get("PASEO_AGENT_ID")
+    if caller and any(tab["agentId"] == caller for tab in tabs):
+        say(f"skip {key}: current tab {caller} stays here; tabs sharing its workspace stay together")
+        return None
     previous_goals = source.call("goal_states", worktree=source_worktree)
     source_run_dir = entry["runDir"]
     repo = (home_entry.get("away") or {}).get("repo")
@@ -756,9 +769,10 @@ def move(entry, source, destination, args):
             leftovers = destination.call("branch_worktrees", repo=repo, branch=transfer_branch)
             if leftovers:
                 raise Failure(f"partial destination worktree exists: {', '.join(leftovers)}; inspect it before retrying")
-            project_id = ensure_project(destination, repo)
+            project_id = ensure_project(destination, repo, entry.get("projectName"))
         else:
             destination.call("mkdir", path=destination_worktree)
+            project_id = ensure_project(destination, destination_worktree, entry.get("projectName"))
 
     frozen = source.call("freeze", worktree=source_worktree, agent_ids=[tab["agentId"] for tab in tabs])
     launched_tabs = []
@@ -804,7 +818,7 @@ def move(entry, source, destination, args):
             warnings = []
             if not going_home:
                 workspace = destination.paseo("workspace", "create", "--isolation", "local", "--path", destination_worktree,
-                    "--title", entry.get("name", key), "--background" if entry.get("background") else "--no-background", "--json")
+                    "--project", project_id, "--title", entry.get("name", key), "--background" if entry.get("background") else "--no-background", "--json")
                 created_workspace = field(workspace, "workspaceId", "id")
                 destination_workspace = created_workspace
                 if not created_workspace:
@@ -942,8 +956,7 @@ def move(entry, source, destination, args):
 def require_home():
     if socket.gethostname() != HOME:
         raise Failure(f"run this on {HOME}, the home host")
-    # A move kills the source orchestrator, which may be the process that started this command
-    # (for example over SSH). Losing that session must not interrupt the move halfway.
+    # An SSH disconnect must not interrupt a move halfway.
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
 
@@ -961,7 +974,8 @@ def forward_back():
         "if socket.gethostname() != expected:",
         "    sys.exit(f'e2e-dispatch: expected {expected}, reached {socket.gethostname()}')",
         "signal.signal(signal.SIGHUP, signal.SIG_IGN)",
-        f"os.environ.update(E2E_DISPATCH_HOME={HOME!r}, E2E_DISPATCH_AWAY={AWAY!r})",
+        f"os.environ.update(E2E_DISPATCH_HOME={HOME!r}, E2E_DISPATCH_AWAY={AWAY!r}, "
+        f"PASEO_AGENT_ID={os.environ.get('PASEO_AGENT_ID', '')!r})",
         "with tempfile.TemporaryDirectory(prefix='e2e-dispatch-') as directory:",
         "    path = os.path.join(directory, 'e2e-dispatch.py')",
         "    with open(path, 'wb') as handle:",
@@ -1012,9 +1026,6 @@ def cmd_out(args):
         say(f"Nothing to move: no active workspace tabs on {home.name}")
         return
     failures = 0
-    # Move the invoking tab last: archiving it can disconnect the caller.
-    caller = os.environ.get("PASEO_AGENT_ID")
-    candidates.sort(key=lambda entry: any(tab["agentId"] == caller for tab in entry.get("tabs", [])))
     for entry in candidates:
         try:
             reasons = out_blockers(home, entry, args.include_paused)

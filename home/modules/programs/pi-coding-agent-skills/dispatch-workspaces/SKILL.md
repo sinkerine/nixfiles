@@ -7,7 +7,7 @@ description: Move all active Paseo workspace agent tabs and their files from kaz
 
 Use the Nix-installed `workspace-dispatch` command. Its source is `/nixfiles/pkgs/e2e-dispatch/e2e-dispatch.py`. `e2e-dispatch` remains a CLI alias for compatibility. No registration or feature plan is required for ordinary tabs.
 
-The scope is all **running and idle agent tabs**, including background workspaces and any provider exposed by Paseo. Tabs sharing a Git checkout or directory move together so their files are transferred once. Closed and archived tabs are excluded. Terminal tabs stay on their original host and appear separately in `status`.
+The scope is all **running and idle agent tabs**, including background workspaces and any provider exposed by Paseo, **always excluding the current tab invoking this skill**. Tabs sharing a Git checkout or directory move together so their files are transferred once; skip the entire workspace containing the current tab to preserve that rule. This exclusion applies to outgoing moves, returns, previews, and explicit workspace or feature selections. Closed and archived tabs are excluded. Terminal tabs stay on their original host and appear separately in `status`.
 
 This starts replacement agents with transferred files and per-tab transcript handoffs. Live provider sessions, terminal processes, Pi goals, and subagent runtime IDs do not transfer. Registered e2e-feature agents with committed plans use `/skill:e2e-feature resume`; design-phase and ordinary tabs continue from their transcript without inventing feature registration or bypassing approval.
 
@@ -19,7 +19,7 @@ Check `hostname`. Run `out` on **kazuki**. Run `back` on **kazuki or sachi**; on
 # Read-only inventory of workspace IDs, tab IDs, hosts, and terminals.
 workspace-dispatch status
 
-# Preview all active workspace agents moving to sachi.
+# Preview eligible workspace agents moving to sachi (current workspace stays).
 workspace-dispatch out --dry-run
 
 # Move all eligible workspace agents.
@@ -33,15 +33,15 @@ workspace-dispatch back --dry-run
 workspace-dispatch back [<workspace-id> ...]
 ```
 
-Selectors also accept exact workspace names or registered feature names when unambiguous. Prefer the dispatch ID printed by `status`. Selecting a workspace or feature includes every active tab sharing its files. Preserve the user's selection between preview and execution. Creating or editing this skill does not authorize moving agents.
+Selectors also accept exact workspace names or registered feature names when unambiguous. Prefer the dispatch ID printed by `status`. Selecting a workspace or feature includes every active tab sharing its files, unless it contains the current tab, in which case the entire workspace is skipped. Preserve the user's selection between preview and execution. Creating or editing this skill does not authorize moving agents.
 
 ## Execute an authorized move
 
-1. Run `status` and the matching `out --dry-run` or `back --dry-run`. Review every workspace, tab, skip, and blocker. Preview contacts SSH and Paseo but does not freeze processes, create transfer files, or launch agents. Both daemons must be reachable; the destination needs each tab's provider/model and any skills its resumed task uses. Remote shells need `python3`, Git, and rsync.
-2. Run the same command without `--dry-run`. A request to move or return agents is authorization; do not ask again after a successful preview. Do not suspend kazuki until all requested workspaces finish moving. The dispatcher moves its invoking tab last; if that tab is included, the operator session may disconnect when its replacement starts. Use a detached shell job with output redirected to a known log when needed, and verify completion from that log and the destination inventory.
-3. Run `status` again. Report each workspace's host and replacement tab IDs, and all skips or failures. Exit status zero may include skips. A replacement reaching `running` or `idle` confirms startup, not completion of its task.
+1. Identify the current tab from `PASEO_AGENT_ID` before dispatch. Preserve this environment variable when invoking the command; the dispatcher also carries it over SSH for forwarded returns. If it is unavailable, resolve the current tab's ID through Paseo and pass it as `PASEO_AGENT_ID`; if the identity cannot be established, stop before moving agents. Run `status` and the matching `out --dry-run` or `back --dry-run`. Review every workspace, tab, skip, and blocker. Preview contacts SSH and Paseo but does not freeze processes, create transfer files, or launch agents. Both daemons must be reachable; the destination needs each tab's provider/model and any skills its resumed task uses. Remote shells need `python3`, Git, and rsync.
+2. Run the same command without `--dry-run`. A request to move or return agents is authorization; do not ask again after a successful preview. Do not suspend kazuki until all requested workspaces finish moving. The dispatcher skips the workspace containing its invoking tab. Never bypass this exclusion, even when that workspace is explicitly selected. Report the skipped workspace and current tab ID.
+3. Run `status` again and inspect the destination's Paseo workspace and project inventories. Verify that both the project display name (the sidebar heading) and workspace title match the source; `status` alone does not verify the project heading. Dedicated transfer paths and internal IDs may contain dispatch IDs, but visible names must retain the originals. If a heading differs, rename only the dedicated transfer project with `paseo --host <destination-endpoint> project rename <project-id> <original-project-name>`; repair a workspace title with `paseo --host <destination-endpoint> workspace rename <workspace-id> <original-workspace-title>`. Report each workspace's host and replacement tab IDs, and all skips or failures. Exit status zero may include skips. A replacement reaching `running` or `idle` confirms startup, not completion of its task.
 
-The dispatcher exports each tab's Paseo history, freezes the workspace's agent processes and descendants, snapshots and transfers the files, verifies them, and launches every replacement. It records destination ownership before killing and archiving the old agents. Each replacement retains its tab title, provider/model, thinking level, and nondefault mode unless explicitly overridden.
+The dispatcher exports each tab's Paseo history, freezes the workspace's agent processes and descendants, snapshots and transfers the files, verifies them, and launches every replacement. It records destination ownership before killing and archiving the old agents. Each destination workspace retains the source project display name and workspace title, including for plain directories and reused transfer repositories. Each replacement retains its tab title, provider/model, thinking level, and nondefault mode unless explicitly overridden.
 
 Git workspaces transfer commits, tracked edits, and nonignored untracked files into a dedicated away repository and worktree. The original branch and checkout remain on kazuki; ignored build files and `.pi` runtime changes stay on their original host. Plain directories transfer files and symlinks, excluding the root `.pi` runtime directory. Directories containing the dispatcher's own state, such as the entire home directory, require a narrower workspace to prevent recursive copies.
 

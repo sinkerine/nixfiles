@@ -156,6 +156,11 @@ in
             reviewer = {
               model = "group/argon";
               thinking = "high";
+              toolBudget = {
+                soft = 8;
+                hard = 12;
+                block = "*";
+              };
             };
             oracle = {
               model = "group/astra";
