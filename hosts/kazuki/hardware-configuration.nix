@@ -69,13 +69,6 @@
     options = [ "nodev" "nofail" ];
   };
 
-  fileSystems."/home/sinkerine/vmware" = {
-    device = "rpool/data/home/sinkerine/vmware";
-    fsType = "zfs";
-    options = [ "zfsutil" "X-mount.mkdir" ];
-    neededForBoot = true;
-  };
-
   swapDevices = [ ];
   networking.useDHCP = lib.mkDefault true;
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";

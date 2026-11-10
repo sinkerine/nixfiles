@@ -229,6 +229,14 @@ in
             maxTokens = 65536;
           }
           {
+            id = "group/fable";
+            name = "Claude Fable 5.2";
+            reasoning = true;
+            input = [ "text" "image" ];
+            contextWindow = 1000000;
+            maxTokens = 128000;
+          }
+          {
             id = "group/opus";
             name = "Opus";
             reasoning = true;
@@ -289,6 +297,8 @@ in
     home.file.".pi/agent/hindsight-memory.json".text = builtins.toJSON {
       apiUrl = "https://hindsight-engineer-api.sachi.m.mado.moe";
       bankId = "pi";
+      subagents = "off";
+      digest.maxTokens = 800;
       recall.policy = "smart";
       retain.auto = true;
     };

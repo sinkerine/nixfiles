@@ -39,8 +39,8 @@ let
   screenshotDir = "${config.home.homeDirectory}/Screenshots";
   noctalia = lib.getExe config.programs.noctalia.package;
   screenshot = command: "mkdir -p ${escapeShellArg screenshotDir}; ${command} ${screenshotDir}/$(date +%Y-%m-%d-%H%M%S.png)";
-  delayedScreenshot = pkgs.writeShellScript "niri-delayed-screenshot" ''
-    ${pkgs.systemd}/bin/systemd-run --user --collect --on-active=3s --no-block ${pkgs.runtimeShell} -c ${escapeShellArg "${noctalia} msg screenshot-region"}
+  delayedScreenshotAnnotate = pkgs.writeShellScript "niri-delayed-screenshot-annotate" ''
+    ${pkgs.systemd}/bin/systemd-run --user --collect --on-active=3s --no-block ${pkgs.runtimeShell} -c ${escapeShellArg "screenshot-annotate"}
   '';
   playerCommand = action: [ "playerctl" "-p" cfg.musicPlayer action ];
   nameDynamicWorkspace = pkgs.writeShellScript "niri-name-dynamic-workspace" ''
@@ -126,6 +126,7 @@ in
           "Mod+O" = { spawn = [ "wlr-which-key" "apps" ]; };
           "Mod+Return" = { spawn = [ "foot" ]; };
           "Mod+D" = { spawn = [ noctalia "msg" "panel-toggle" "launcher" ]; };
+          "Mod+W" = { spawn = [ noctalia "msg" "panel-toggle" "launcher" "/win " ]; };
           "Mod+C" = { spawn = [ noctalia "msg" "panel-toggle" "clipboard" ]; };
           "Super+Alt+L" = { spawn = [ noctalia "msg" "session" "lock" ]; };
           "Mod+S" = { toggle-overview = {}; };
@@ -217,9 +218,8 @@ in
         - { key: f, desc: Firefox, cmd: firefox }
         - { key: c, desc: Chrome, cmd: google-chrome-stable }
         - { key: d, desc: Nemo, cmd: nemo }
-        - { key: s, desc: Screenshot, cmd: ${noctalia} msg screenshot-region }
-        - { key: S, desc: Screenshot and annotate, cmd: screenshot-annotate }
-        - { key: D, desc: Screenshot in 3 seconds, cmd: ${toString delayedScreenshot} }
+        - { key: s, desc: Screenshot and annotate, cmd: screenshot-annotate }
+        - { key: S, desc: Screenshot and annotate in 3 seconds, cmd: ${toString delayedScreenshotAnnotate} }
         - { key: m, desc: Music, cmd: dex "$HOME/.nix-profile/share/applications/feishin.desktop" }
         - { key: n, desc: Dismiss notifications, cmd: ${noctalia} msg notification-clear-active }
         - { key: h, desc: Notification history, cmd: ${noctalia} msg panel-toggle control-center notifications }

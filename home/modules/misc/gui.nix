@@ -131,12 +131,14 @@ in
 
         xdg.configFile."satty/config.toml".source = (pkgs.formats.toml { }).generate "satty-config.toml" {
           general = {
+            output-filename = "/home/sinkerine/Screenshots/Screenshot-%Y-%m-%d_%H-%M-%S.png";
             copy-command = "${pkgs.wl-clipboard}/bin/wl-copy --type image/png";
             early-exit = [ "copy" ];
             actions-on-enter = [ "save-to-clipboard" ];
             actions-on-escape = [ "exit" ];
             auto-copy = false;
-            save-after-copy = false;
+            save-after-copy = true;
+            disable-notifications = true;
           };
         };
 
