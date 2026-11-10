@@ -27,7 +27,8 @@ with pkgs; {
   pi-collapse-tools = callPackage ./pi-collapse-tools { };
   pi-goal-x = callPackage ./pi-goal-x { };
   pi-hindsight = callPackage ./pi-hindsight { };
-  e2e-dispatch = callPackage ./e2e-dispatch { };
+  workspace-dispatch = callPackage ./e2e-dispatch { };
+  e2e-dispatch = pkgs.workspace-dispatch;
   pi-web-access = callPackage ./pi-web-access { };
   pi-subagents = callPackage ./pi-subagents { };
 }

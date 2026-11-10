@@ -278,8 +278,8 @@ in
       recursive = true;
       force = true;
     };
-    home.file.".pi/agent/skills/dispatch-e2e/SKILL.md" = {
-      source = ./pi-coding-agent-skills/dispatch-e2e/SKILL.md;
+    home.file.".pi/agent/skills/dispatch-workspaces/SKILL.md" = {
+      source = ./pi-coding-agent-skills/dispatch-workspaces/SKILL.md;
       force = true;
     };
     # Runs through pi-subagents' claude-code adapter, which needs the claude CLI.
@@ -316,8 +316,9 @@ in
       piSolFast
       piOpus
       piLunaFast
-      # Moves running e2e-feature runs between hosts; the e2e-feature skill registers runs with it.
-      pkgs.e2e-dispatch
+      # Moves active workspace agent tabs between hosts; also provides the e2e-dispatch alias
+      # that the e2e-feature skill uses to register runs.
+      pkgs.workspace-dispatch
       e2eFeatureRun
       e2eReviewBenchmark
     ] ++ optional config.my.programs.claude-code.enable claudeReviewer;

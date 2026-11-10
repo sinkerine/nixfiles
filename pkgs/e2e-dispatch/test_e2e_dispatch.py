@@ -61,7 +61,8 @@ class ReturnForwardingTests(unittest.TestCase):
         # Execute the actual SSH bootstrap locally with a harmless stand-in dispatcher.
         # Its __file__ must remain readable while running, including after stdin is consumed.
         actual_host = socket.gethostname()
-        with patch.object(dispatch, "HOME", actual_host):
+        hosts = {**dispatch.HOSTS, actual_host: {"ssh": actual_host, "paseo": ""}}
+        with patch.object(dispatch, "HOME", actual_host), patch.object(dispatch, "HOSTS", hosts):
             call = self.forward(["back", "--dry-run", "a feature"])
         command = shlex.split(call.args[0][-1])
         source = b"import json, pathlib, sys\nprint(json.dumps([sys.argv, pathlib.Path(__file__).read_text()]))\nsys.exit(7)\n"

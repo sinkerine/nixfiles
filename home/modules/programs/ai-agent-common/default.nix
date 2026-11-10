@@ -16,7 +16,7 @@ in {
     home.file.".codex/AGENTS.md".text = agentsTemplate;
     home.file.".claude/CLAUDE.md".text = agentsTemplate;
     home.file.".pi/agent/AGENTS.md" = mkIf config.my.programs.pi-coding-agent.enable {
-      text = agentsTemplate;
+      text = agentsTemplate + builtins.readFile ./pi-agents-extra.md;
     };
   };
 }

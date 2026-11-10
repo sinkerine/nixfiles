@@ -1,35 +1,26 @@
 #!/usr/bin/env python3
-"""Move a running /skill:e2e-feature run between hosts.
+"""Move active Paseo workspace agent tabs between hosts.
 
-`e2e-dispatch out` runs on the home host (kazuki) before it suspends and moves each active
-run to the away host (sachi); `e2e-dispatch back` brings them home from either host.
-When invoked on sachi, `back` forwards to kazuki over SSH. A move:
+`workspace-dispatch out` moves running and idle agent tabs from kazuki to sachi;
+`workspace-dispatch back` returns them from either host. Tabs sharing files move
+as one workspace, with a transcript and handoff for each replacement agent.
+Registered e2e-feature agents retain their specialized resume protocol.
 
-1. freezes the run's processes (its pi orchestrator, pi-subagents runners, and their
-   descendants) with SIGSTOP;
-2. snapshots the worktree (commits plus uncommitted and untracked files) as a commit under
-   refs/e2e-dispatch/<feature>/;
-3. transfers the branch, the snapshot, the run directory, and a copy of the orchestrator
-   transcript, then checks that the destination worktree matches the snapshot exactly;
-4. starts a fresh orchestrator there in `/skill:e2e-feature resume` mode and waits until
-   Paseo reports it running;
-5. only then kills the frozen processes, archives the old orchestrator, and moves its goal
-   files aside.
+The source is frozen until every replacement starts. A failed startup archives
+partial destination agents before thawing the source. Home directories are kept
+and checked for changes before returning. This does not preserve live provider
+sessions, terminal processes, Pi goals, or subagent runtime ids.
 
-A failure before step 5 thaws the source, so the run continues where it was.
-
-The away host's half of each step runs this same file, streamed over SSH, so both hosts
-always run one version.
-
-TODO: once this is stable, run `e2e-dispatch out` automatically when kazuki suspends (a
-logind delay inhibitor plus a raised InhibitDelayMaxSec) and `e2e-dispatch back` after it
-resumes, instead of by hand.
+The same Python source is streamed over SSH to both hosts. `e2e-dispatch` remains
+an alias, including its `register` command for e2e-feature workflows.
 """
 
 import argparse
 import base64
 import datetime
+import fcntl
 import glob
+import hashlib
 import re
 import json
 import os
@@ -46,8 +37,9 @@ HOSTS = {
     "kazuki": {"ssh": "kazuki", "paseo": "tcp://paeso.kazuki.m.mado.moe:443?ssl=true"},
     "sachi": {"ssh": "sachi", "paseo": "tcp://paeso.sachi.m.mado.moe:443?ssl=true"},
 }
-HOME = os.environ.get("E2E_DISPATCH_HOME", "kazuki")
-AWAY = os.environ.get("E2E_DISPATCH_AWAY", "sachi")
+HOME = os.environ.get("WORKSPACE_DISPATCH_HOME", os.environ.get("E2E_DISPATCH_HOME", "kazuki"))
+AWAY = os.environ.get("WORKSPACE_DISPATCH_AWAY", os.environ.get("E2E_DISPATCH_AWAY", "sachi"))
+ACTIVE = ("running", "idle")
 REF_NS = "refs/e2e-dispatch"
 # Pi's goal files and subagent state are per host and per session; they never move.
 PI_STATE_DIR = ".pi"
@@ -68,7 +60,7 @@ def log(message):
     # The caller may be the very orchestrator this move kills (for example over SSH), so a
     # vanished stderr must not stop the move.
     try:
-        print(f"[e2e-dispatch] {message}", file=sys.stderr, flush=True)
+        print(f"[workspace-dispatch] {message}", file=sys.stderr, flush=True)
     except (BrokenPipeError, OSError):
         pass
 
@@ -99,6 +91,7 @@ def pipe(first, second):
     consumer = subprocess.run(second, stdin=producer.stdout, capture_output=True)
     producer.stdout.close()
     producer_err = producer.stderr.read().decode(errors="replace")
+    producer.stderr.close()
     if producer.wait() != 0:
         raise Failure(f"`{shlex.join(first)}` failed: {producer_err.strip()}")
     if consumer.returncode != 0:
@@ -189,7 +182,7 @@ def h_snapshot(worktree, feature, seq):
     if (busy := operation_in_progress(worktree)):
         raise Failure(f"{worktree} has a git operation in progress ({', '.join(busy)}); finish or abort it first")
     head = git(worktree, "rev-parse", "HEAD").strip()
-    branch = git(worktree, "symbolic-ref", "--short", "HEAD").strip()
+    branch = git(worktree, "symbolic-ref", "--short", "-q", "HEAD", check=False).strip()
     tree = tree_of(worktree)
     commit = git(worktree, "commit-tree", tree, "-p", head, "-m", f"e2e-dispatch snapshot of {feature} (move {seq})").strip()
     head_ref = f"{REF_NS}/{feature}/head-{seq}"
@@ -252,8 +245,11 @@ def proc_table():
                 fields = handle.read().rsplit(")", 1)[1].split()
             with open(f"/proc/{pid}/cmdline", "rb") as handle:
                 cmdline = [part.decode(errors="replace") for part in handle.read().split(b"\0") if part]
+            with open(f"/proc/{pid}/environ", "rb") as handle:
+                agent_id = next((part.split(b"=", 1)[1].decode(errors="replace")
+                                 for part in handle.read().split(b"\0") if part.startswith(b"PASEO_AGENT_ID=")), None)
             table[pid] = {"ppid": int(fields[1]), "uid": os.stat(f"/proc/{pid}").st_uid,
-                          "cwd": os.path.realpath(f"/proc/{pid}/cwd"), "cmdline": cmdline}
+                          "cwd": os.path.realpath(f"/proc/{pid}/cwd"), "cmdline": cmdline, "agentId": agent_id}
         except (OSError, IndexError, ValueError):
             continue
     return table
@@ -296,7 +292,7 @@ def h_inflight(session_file):
     return [{key: value for key, value in item.items() if key != "pid"} for item in async_runs(session_file)]
 
 
-def h_freeze(worktree, session_file=None):
+def h_freeze(worktree, session_file=None, agent_ids=None):
     """SIGSTOP the run's pi processes and their descendants; returns what was stopped."""
     root = os.path.realpath(worktree)
     uid = os.getuid()
@@ -314,7 +310,9 @@ def h_freeze(worktree, session_file=None):
     for _ in range(8):
         table = proc_table()
         roots = {pid for pid, info in table.items()
-                 if info["uid"] == uid and within(info["cwd"], root) and is_pi_process(info["cmdline"])}
+                 if info["uid"] == uid and (
+                     (agent_ids is not None and info.get("agentId") in agent_ids)
+                     or (agent_ids is None and within(info["cwd"], root) and is_pi_process(info["cmdline"])))}
         roots |= {pid for pid in runner_pids if pid in table and table[pid]["uid"] == uid}
         targets, queue = set(roots), list(roots)
         while queue:
@@ -434,27 +432,108 @@ def h_session_guess(worktree):
     return max(candidates, key=os.path.getmtime) if candidates else None
 
 
+def state_root():
+    return os.path.expanduser("~/.local/state/workspace-dispatch")
+
+
+def h_state_path(key):
+    # Never use user-provided names as filesystem or Git-ref components.
+    key = hashlib.sha256(key.encode()).hexdigest()[:20]
+    return os.path.join(state_root(), "records", key + ".json")
+
+
+def h_directory_tree(worktree):
+    """Fingerprint non-Git files, modes and symlinks without following links."""
+    digest = hashlib.sha256()
+    for directory, dirs, files in os.walk(worktree, followlinks=False):
+        if directory == worktree:
+            dirs[:] = [name for name in dirs if name != PI_STATE_DIR]
+        for name in sorted(dirs + files):
+            path = os.path.join(directory, name)
+            stat = os.lstat(path)
+            digest.update(json.dumps([os.path.relpath(path, worktree), stat.st_mode]).encode())
+            if os.path.islink(path):
+                digest.update(os.readlink(path).encode())
+            elif os.path.isfile(path):
+                with open(path, "rb") as handle:
+                    while chunk := handle.read(1024 * 1024):
+                        digest.update(chunk)
+            elif not os.path.isdir(path):
+                raise Failure(f"cannot transfer special file {path}")
+        dirs.sort()
+    return digest.hexdigest()
+
+
+def h_capture_directory(worktree, key, seq):
+    if within(state_root(), os.path.realpath(worktree)):
+        raise Failure(f"{worktree} contains dispatcher state; select a narrower workspace directory")
+    parent = os.path.join(state_root(), "snapshots", hashlib.sha256(key.encode()).hexdigest()[:20])
+    os.makedirs(parent, exist_ok=True)
+    path = tempfile.mkdtemp(prefix=f"{seq}-", dir=parent)
+    # rsync preserves symlinks and permissions. Never copy live Pi runtime state.
+    run(["rsync", "-a", "--exclude=/.pi", worktree + "/", path + "/"])
+    return {"directory": path, "tree": h_directory_tree(path), "head": None, "commit": None, "wipStat": ""}
+
+
 def h_list_runs():
-    """Every e2e-feature run recorded in this host's Paseo worktrees."""
-    try:
-        workspaces = json.loads(run(["paseo", "workspace", "ls", "--json"]))
-    except (Failure, ValueError, FileNotFoundError):
-        workspaces = []
-    found = []
-    for workspace in workspaces:
-        cwd = workspace.get("cwd")
-        if workspace.get("isolation") != "worktree" or not cwd or not os.path.isdir(cwd):
+    """Discover all active tabs, grouping tabs sharing a Git root or directory."""
+    here = socket.gethostname()
+    saved = [h_read_json(path) for path in sorted(glob.glob(os.path.join(state_root(), "records", "*.json")))]
+    away = [entry for entry in saved if entry and entry.get("home") == here and entry.get("host") != here]
+    workspaces = json.loads(run(["paseo", "workspace", "ls", "--background", "--json"]))
+    agents = json.loads(run(["paseo", "ls", "--global", "--background", "--json"]))
+    groups = {}
+    for row in agents:
+        if str(row.get("status", "")).lower() not in ACTIVE:
             continue
-        try:
-            directory = git_dir(cwd)
-        except Failure:
+        agent = json.loads(run(["paseo", "inspect", row["id"], "--json"]))
+        if agent.get("Archived") or str(agent.get("Status", "")).lower() not in ACTIVE:
             continue
-        for path in glob.glob(os.path.join(directory, "e2e-feature", "*", "run.json")):
-            data = h_read_json(path) or {}
-            data["runJson"] = path
-            data.setdefault("workspaceId", workspace.get("workspaceId"))
-            found.append(data)
-    return found
+        cwd = os.path.realpath(os.path.expanduser(agent["Cwd"]))
+        # Inspect supplies absolute paths; list rows abbreviate the home directory.
+        workspace = next((item for item in workspaces if os.path.realpath(item["cwd"]) == cwd), None)
+        if not workspace:
+            workspace = {"workspaceId": "directory-" + hashlib.sha256(cwd.encode()).hexdigest()[:16],
+                         "cwd": cwd, "name": os.path.basename(cwd), "background": row.get("background", False)}
+        result = subprocess.run(["git", "-C", cwd, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+        is_git = result.returncode == 0
+        root = os.path.realpath(result.stdout.strip()) if is_git else cwd
+        if root not in groups:
+            state = next((item for item in saved if item and item.get("worktree") == root
+                          and item.get("host") == here), {})
+            key = state.get("feature") or workspace["workspaceId"]
+            groups[root] = {**state, "version": 2, "feature": key, "name": workspace.get("name") or key,
+                            "home": state.get("home", here), "host": here, "worktree": root,
+                            "workspaceId": workspace["workspaceId"], "background": workspace.get("background", False),
+                            "isGit": is_git, "tabs": [], "moves": state.get("moves", []),
+                            "runJson": state.get("runJson") or h_state_path(key)}
+            entry = groups[root]
+            entry["runDir"] = os.path.join(os.path.dirname(entry["runJson"]), "..", "artifacts", key)
+            if is_git:
+                entry.update(h_worktree_state(root))
+                porcelain = git(root, "worktree", "list", "--porcelain").splitlines()
+                entry["repoRoot"] = porcelain[0][len("worktree "):]
+                entry["origin"] = git(root, "remote", "get-url", "origin", check=False).strip() or None
+        entry = groups[root]
+        e2e = None
+        if is_git:
+            for path in glob.glob(os.path.join(entry["gitDir"], "e2e-feature", "*", "run.json")):
+                data = h_read_json(path) or {}
+                if data.get("orchestratorAgentId") == agent["Id"]:
+                    e2e = data
+                    break
+        e2e_resume = bool(e2e and f"{e2e['feature']}: add plan" in [
+            subject for _, subject in h_log_subjects(root, e2e.get("base"))])
+        entry["tabs"].append({"agentId": agent["Id"], "name": agent["Name"], "cwd": cwd,
+                              "workspaceId": workspace["workspaceId"], "agent": agent, "e2e": e2e,
+                              "e2eResume": e2e_resume})
+    # An active tab created in a retained workspace while away must not overwrite
+    # the record needed to bring its original tabs home.
+    for entry in groups.values():
+        if any(item["worktree"] == entry["worktree"] for item in away):
+            continue
+        away.append(entry)
+    return away
 
 
 HELPERS = {name[2:]: value for name, value in dict(globals()).items() if name.startswith("h_") and callable(value)}
@@ -493,7 +572,10 @@ class Host:
 
     def paseo(self, *args, parse=True):
         command = ["paseo"] + ([] if self.local else ["--host", self.endpoint]) + list(args)
-        out = run(command)
+        # Migration is an operator action: replacements must not become children
+        # of the tab invoking the dispatcher, which may itself be archived.
+        env = {key: value for key, value in os.environ.items() if key != "PASEO_AGENT_ID"}
+        out = run(command, env=env)
         return json.loads(out) if parse else out
 
     def remote_path(self, path):
@@ -541,8 +623,11 @@ def rsync(source, destination, *extra):
 
 
 def agent_launch_args(previous, overrides):
-    provider = overrides.provider or f"{previous.get('Provider', 'pi')}/{previous.get('Model', 'magpie/gpt-6.1-sol')}".rstrip("/")
-    thinking = overrides.thinking or previous.get("Thinking") or "medium"
+    provider = overrides.provider or previous["Provider"]
+    model = previous.get("Model")
+    if not overrides.provider and model and model != "-":
+        provider += f"/{model}"
+    thinking = overrides.thinking or previous.get("Thinking")
     return provider, thinking
 
 
@@ -558,227 +643,295 @@ def home_runs(home):
 def select(runs, features):
     if not features:
         return runs
-    wanted = set(features)
-    chosen = [entry for entry in runs if entry.get("feature") in wanted]
-    missing = wanted - {entry.get("feature") for entry in chosen}
-    if missing:
-        raise Failure(f"no run named {', '.join(sorted(missing))}")
+    chosen = []
+    for name in features:
+        matches = [entry for entry in runs if name in (
+            entry["feature"], entry.get("name"), entry.get("workspaceId"),
+            *(tab.get("e2e", {}).get("feature") for tab in entry.get("tabs", []) if tab.get("e2e")))]
+        if len(matches) != 1:
+            raise Failure(f"workspace selector {name!r} matches {len(matches)} workspaces; use an ID from status")
+        if matches[0] not in chosen:
+            chosen.append(matches[0])
     return chosen
 
 
 def out_blockers(home, entry, include_paused=False):
-    """Reasons a home run cannot move out now, empty when it can."""
+    """Apply workspace safety checks without requiring an e2e registration or plan."""
     reasons = []
     if not include_paused:
         for goal in home.call("goal_states", worktree=entry["worktree"]):
             if goal.get("status") == "paused":
-                reasons.append(f"goal paused by {goal.get('stopReason') or 'someone'}; `/goal-resume` it first or pass --include-paused")
-    agent_id = entry.get("orchestratorAgentId")
-    if entry.get("host", home.name) != home.name:
-        return [f"already on {entry.get('host')}"]
-    if not agent_id:
-        return ["no orchestrator recorded (run `e2e-dispatch register` in its session)"]
-    try:
-        agent = home.paseo("inspect", agent_id, "--json")
-    except Failure as error:
-        return [f"orchestrator {agent_id[:8]} not found: {error}"]
-    if agent.get("Archived") or str(agent.get("Status", "")).lower() not in ("running", "idle"):
-        reasons.append(f"orchestrator {agent_id[:8]} is {'archived' if agent.get('Archived') else agent.get('Status')}")
-    state = home.call("worktree_state", worktree=entry["worktree"])
-    if state["inProgress"]:
-        reasons.append(f"git operation in progress: {', '.join(state['inProgress'])}")
-    subjects = [subject for _, subject in home.call("log_subjects", worktree=entry["worktree"], base=entry.get("base"))]
-    if f"{entry['feature']}: add plan" not in subjects:
-        reasons.append("plan not approved and committed yet (design phase)")
-    for agent_row in home.paseo("ls", "--json"):
-        if agent_row.get("cwd") == entry["worktree"] and str(agent_row.get("name", "")).startswith("Design:") \
-                and str(agent_row.get("status", "")).lower() not in ("closed", "archived"):
-            reasons.append("design tab still open")
+                reasons.append("goal paused; pass --include-paused only when explicitly requested")
+    if entry.get("isGit"):
+        state = home.call("worktree_state", worktree=entry["worktree"])
+        if state["inProgress"]:
+            reasons.append(f"git operation in progress: {', '.join(state['inProgress'])}")
+        # Decide the e2e resume mode without making design approval an
+        # eligibility condition. Design tabs use the generic history handoff.
+        subjects = None
+        for tab in entry.get("tabs", []):
+            if tab.get("e2e"):
+                if subjects is None:
+                    subjects = [subject for _, subject in home.call("log_subjects", worktree=entry["worktree"], base=None)]
+                tab["e2eResume"] = f"{tab['e2e']['feature']}: add plan" in subjects
+    elif within(state_root(), os.path.realpath(entry["worktree"])):
+        reasons.append("directory contains dispatcher state; select a narrower workspace directory")
+    for tab in entry.get("tabs", []):
+        agent = home.paseo("inspect", tab["agentId"], "--json")
+        if agent.get("Archived") or str(agent.get("Status", "")).lower() not in ACTIVE:
+            reasons.append(f"tab {tab['agentId']} is no longer active")
     return reasons
 
 
-def move(entry, source, destination, args):
-    """Move one run from `source` to `destination`.
+def fingerprint(host, entry):
+    return host.call("tree_of" if entry["isGit"] else "directory_tree", worktree=entry["worktree"])
 
-    `entry` is the run's run.json on the source host; `args.home_entry` is its run.json on the
-    home host (the same dict when moving out). The home host's worktree stays in place while a
-    run is away, so its ignored build state survives; the away host gets a fresh worktree each
-    time, archived again when the run comes home.
-    """
-    feature = entry["feature"]
+
+def transfer_directory(source, path, destination, target, *options):
+    rsync(source.remote_path(path.rstrip("/") + "/"), destination.remote_path(target.rstrip("/") + "/"), *options)
+
+
+def resume_prompt(tab, packet_path, args):
+    if args.resume_prompt:
+        return args.resume_prompt.format(packet=packet_path)
+    if tab.get("e2e") and tab.get("e2eResume", True):
+        return f"/skill:e2e-feature resume {packet_path}"
+    return (
+        f"Continue the task from a workspace moved to this host. First read the handoff JSON at {packet_path} "
+        "and the transcript it references. Recover the user's request, decisions, completed work, pending "
+        "questions, and next steps from that history, then continue the authorized work. Files already "
+        "contain the transferred work. Use the path mapping in the handoff. Other tabs in the workspace "
+        "are being resumed separately; continue only this tab's task. Live provider sessions, Pi goals, "
+        "and subagent runtime IDs were not transferred: inspect saved artifacts and reconstruct necessary "
+        "tracking rather than waiting on old IDs. Preserve any user pause or unanswered approval; the "
+        "host move itself does not authorize resuming paused work. If the history shows the task is "
+        "complete, report its state without repeating completed actions."
+    )
+
+
+def move(entry, source, destination, args):
+    """Transfer files once and resume every active agent tab in the workspace."""
+    key = entry["feature"]
     home_entry = args.home_entry
     seq = len(home_entry.get("moves", [])) + 1
     going_home = destination.name == home_entry.get("home", HOME)
     source_worktree = entry["worktree"]
-    source_git_dir = source.call("git_dir", worktree=source_worktree)
-    source_run_dir = os.path.join(source_git_dir, "e2e-feature", feature)
-    branch = entry["branch"]
-    previous_agent_id = entry.get("orchestratorAgentId")
-    previous = source.paseo("inspect", previous_agent_id, "--json") if previous_agent_id else {}
-    provider, thinking = agent_launch_args(previous, args)
-    session_file = entry.get("sessionFile") or source.call("session_guess", worktree=source_worktree)
+    tabs = entry.get("tabs", [])
     previous_goals = source.call("goal_states", worktree=source_worktree)
-    log(f"{feature}: {source.name} -> {destination.name} (move {seq})")
+    source_run_dir = entry["runDir"]
+    repo = (home_entry.get("away") or {}).get("repo")
+    transfer_branch = f"workspace-dispatch/{key}"
+    log(f"{entry.get('name', key)}: {source.name} -> {destination.name}, {len(tabs)} tabs (move {seq})")
 
-    # Checks and preparation that leave the source untouched.
     if going_home:
         destination_worktree = home_entry["worktree"]
-        destination_workspace = home_entry.get("workspaceId")
-        departure_tree = home_entry["moves"][-1]["homeTree"]
-        repo = home_entry["away"]["repo"]
-        current = destination.call("tree_of", worktree=destination_worktree)
-        if current != departure_tree:
-            raise Failure(f"{destination_worktree} changed since {feature} left it; inspect it before bringing the run back")
-        if args.dry_run:
-            log(f"{feature}: would freeze it on {source.name}, snapshot it, and continue it in {destination_worktree}")
-            return None
+        destination_workspace = home_entry["workspaceId"]
+        departure = home_entry["moves"][-1]
+        if fingerprint(destination, home_entry) != departure["homeTree"]:
+            raise Failure(f"{destination_worktree} changed while away; preserve both versions before returning")
+        if home_entry["isGit"]:
+            state = destination.call("worktree_state", worktree=destination_worktree)
+            if state["head"] != departure["homeHead"] or state["branch"] != departure["homeBranch"]:
+                raise Failure(f"{destination_worktree} HEAD or branch changed while away")
     else:
-        repo = os.path.join(destination.call("ping")["home"], "dev", os.path.basename(entry["repoRoot"].rstrip("/")))
-        if args.dry_run:
-            log(f"{feature}: would freeze it, push {branch} to {destination.name}:{repo}, and start {provider} there")
-            return None
-        created = destination.call("ensure_repo", path=repo, origin=entry.get("origin"))
-        if created.get("created"):
-            log(f"{feature}: created {destination.name}:{repo}" + (f" from {created['clonedFrom']}" if created.get("clonedFrom") else ""))
-        leftovers = destination.call("branch_worktrees", repo=repo, branch=branch)
-        if leftovers:
-            raise Failure(f"{branch} is already checked out on {destination.name} at {', '.join(leftovers)}; archive that workspace first")
-        project_id = ensure_project(destination, repo)
+        destination_home = destination.call("ping")["home"]
+        # Each source workspace has a separate repository: never force-push a
+        # working branch into an unrelated checkout in ~/dev on the away host.
+        repo = os.path.join(destination_home, ".local/share/workspace-dispatch/repos", key)
+        destination_worktree = os.path.join(destination_home, ".local/share/workspace-dispatch/workspaces", key)
+    if args.dry_run:
+        log(f"{key}: would transfer {source_worktree} and {len(tabs)} tabs to {destination.name}:{destination_worktree}")
+        for tab in tabs:
+            provider, thinking = agent_launch_args(tab["agent"], args)
+            log(f"  {tab['agentId']} {tab['name']} ({provider}, thinking={thinking or 'default'})")
+        return None
 
-    frozen = source.call("freeze", worktree=source_worktree, session_file=session_file)
-    log(f"{feature}: froze {len(frozen['pids'])} processes on {source.name}")
-    new_agent_id = None
+    # Export through Paseo before SIGSTOP: a live provider may need to service
+    # the history RPC. Failure to export must leave the source running.
+    transcripts = {tab["agentId"]: source.paseo("logs", tab["agentId"], "--json") for tab in tabs}
     created_workspace = None
+    if not going_home:
+        if entry["isGit"]:
+            destination.call("ensure_repo", path=repo)
+            leftovers = destination.call("branch_worktrees", repo=repo, branch=transfer_branch)
+            if leftovers:
+                raise Failure(f"partial destination worktree exists: {', '.join(leftovers)}; inspect it before retrying")
+            project_id = ensure_project(destination, repo)
+        else:
+            destination.call("mkdir", path=destination_worktree)
+
+    frozen = source.call("freeze", worktree=source_worktree, agent_ids=[tab["agentId"] for tab in tabs])
+    launched_tabs = []
     adopted_tree = None
     try:
-        snapshot = source.call("snapshot", worktree=source_worktree, feature=feature, seq=seq)
-        inflight = source.call("inflight", session_file=session_file)
-        accepted = [subject for _, subject in source.call("log_subjects", worktree=source_worktree, base=entry.get("base"))
-                    if subject.startswith(f"{feature}: ")]
-
-        # Git. The home host drives every transfer, since only it can reach the other over SSH.
-        if going_home:
-            incoming = f"{REF_NS}/{feature}/incoming-{seq}"
-            git(destination_worktree, "fetch", "--quiet", "--no-tags", "--force", source.remote_path(repo),
-                f"{snapshot['headRef']}:{incoming}", f"{snapshot['snapshotRef']}:{snapshot['snapshotRef']}")
-        else:
-            git(source_worktree, "push", "--quiet", "--no-verify", "--force", destination.remote_path(repo),
-                f"{snapshot['head']}:refs/heads/{branch}", f"{snapshot['headRef']}:{snapshot['headRef']}",
-                f"{snapshot['snapshotRef']}:{snapshot['snapshotRef']}")
-            workspace = destination.paseo("workspace", "create", "--isolation", "worktree", "--mode", "checkout-branch",
-                                          "--branch", branch, "--project", project_id, "--title", feature, "--json")
-            created_workspace = field(workspace, "workspaceId", "id")
-            destination_worktree = field(workspace, "cwd", "path", "worktreePath")
-            destination_workspace = created_workspace
-            if not created_workspace or not destination_worktree:
-                raise Failure(f"unexpected `paseo workspace create` reply: {workspace}")
-
-        destination_git_dir = destination.call("git_dir", worktree=destination_worktree)
-        destination_run_dir = os.path.join(destination_git_dir, "e2e-feature", feature)
-        destination.call("mkdir", path=os.path.join(destination_run_dir, "handoff"))
-        # run.json is written only at the commit point below, so a failed move never rewrites it.
-        if source.local:
-            rsync(source_run_dir + "/", destination.remote_path(destination_run_dir) + "/", "--exclude=/run.json")
-        else:
-            rsync(source.remote_path(source_run_dir) + "/", destination_run_dir + "/", "--exclude=/run.json")
-        transcript = None
-        if session_file:
-            transcript = os.path.join(destination_run_dir, "handoff", f"{seq}-orchestrator-{source.name}.jsonl")
-            if source.local:
-                rsync(session_file, destination.remote_path(transcript))
+        snapshot = source.call("snapshot", worktree=source_worktree, feature=key, seq=seq) if entry["isGit"] else source.call(
+            "capture_directory", worktree=source_worktree, key=key, seq=seq)
+        if entry["isGit"]:
+            if going_home:
+                incoming = f"{REF_NS}/{key}/incoming-{seq}"
+                git(destination_worktree, "fetch", "--quiet", "--no-tags", "--force", source.remote_path(repo),
+                    f"{snapshot['headRef']}:{incoming}", f"{snapshot['snapshotRef']}:{snapshot['snapshotRef']}")
             else:
-                rsync(source.remote_path(session_file), transcript)
-        destination.call("rewrite_paths", run_dir=destination_run_dir,
-                         mapping={source_worktree: destination_worktree, source_git_dir: destination_git_dir})
-
-        if going_home:
-            warnings = destination.call("adopt_incoming", worktree=destination_worktree, head_ref=incoming,
-                                        snapshot_ref=snapshot["snapshotRef"], expected_tree=snapshot["tree"],
-                                        departure_tree=departure_tree)
-            adopted_tree = snapshot["tree"]
+                git(source_worktree, "push", "--quiet", "--no-verify", "--force", destination.remote_path(repo),
+                    f"{snapshot['head']}:refs/heads/{transfer_branch}", f"{snapshot['headRef']}:{snapshot['headRef']}",
+                    f"{snapshot['snapshotRef']}:{snapshot['snapshotRef']}")
+                workspace = destination.paseo("workspace", "create", "--isolation", "worktree", "--mode", "checkout-branch",
+                    "--branch", transfer_branch, "--project", project_id, "--title", entry.get("name", key),
+                    "--background" if entry.get("background") else "--no-background", "--json")
+                created_workspace = field(workspace, "workspaceId", "id")
+                destination_worktree = field(workspace, "cwd", "path", "worktreePath")
+                destination_workspace = created_workspace
+                if not destination_worktree or not created_workspace:
+                    raise Failure(f"unexpected workspace create reply: {workspace}")
+            destination_git_dir = destination.call("git_dir", worktree=destination_worktree)
+            if going_home:
+                adopted_tree = snapshot["tree"]
+                warnings = destination.call("adopt_incoming", worktree=destination_worktree, head_ref=incoming,
+                    snapshot_ref=snapshot["snapshotRef"], expected_tree=snapshot["tree"], departure_tree=departure["homeTree"])
+            else:
+                warnings = destination.call("apply_snapshot", worktree=destination_worktree,
+                    snapshot_ref=snapshot["snapshotRef"], expected_tree=snapshot["tree"])
         else:
-            warnings = destination.call("apply_snapshot", worktree=destination_worktree,
-                                        snapshot_ref=snapshot["snapshotRef"], expected_tree=snapshot["tree"])
-        for warning in warnings:
-            log(f"{feature}: {warning}")
+            destination_git_dir = None
+            # The outgoing snapshot also retains a complete pre-return backup.
+            if going_home:
+                destination.call("capture_directory", worktree=destination_worktree, key=key + "-return-backup", seq=seq)
+            adopted_tree = snapshot["tree"] if going_home else None
+            transfer_directory(source, snapshot["directory"], destination, destination_worktree, "--delete", "--exclude=/.pi")
+            if destination.call("directory_tree", worktree=destination_worktree) != snapshot["tree"]:
+                raise Failure("destination directory differs from the snapshot")
+            adopted_tree = snapshot["tree"] if going_home else None
+            warnings = []
+            if not going_home:
+                workspace = destination.paseo("workspace", "create", "--isolation", "local", "--path", destination_worktree,
+                    "--title", entry.get("name", key), "--background" if entry.get("background") else "--no-background", "--json")
+                created_workspace = field(workspace, "workspaceId", "id")
+                destination_workspace = created_workspace
+                if not created_workspace:
+                    raise Failure(f"unexpected workspace create reply: {workspace}")
 
-        packet_path = os.path.join(destination_run_dir, "handoff", f"{seq}.json")
-        destination.call("write_json", path=packet_path, data={
-            "version": 1, "seq": seq, "feature": feature, "from": source.name, "to": destination.name,
-            "home": home_entry.get("home", HOME), "at": now_iso(), "branch": branch, "base": entry.get("base"),
-            "head": snapshot["head"], "snapshot": snapshot["commit"], "wipStat": snapshot["wipStat"],
-            "plan": f"docs/features/{feature}-plan.md", "acceptedCommits": accepted, "inFlight": inflight,
-            "worktree": destination_worktree, "gitDir": destination_git_dir, "runDir": destination_run_dir,
-            "sourceWorktree": source_worktree, "transcript": transcript, "warnings": warnings,
-            "previousOrchestrator": {"host": source.name, "agentId": previous_agent_id, "provider": provider, "thinking": thinking},
-            "previousGoals": previous_goals,
-        })
-        prompt = (args.resume_prompt or "/skill:e2e-feature resume {packet}").format(packet=packet_path)
-        launched = destination.paseo("run", "--no-wait", "--json", "--provider", provider, "--thinking", thinking,
-                                     "--workspace", destination_workspace, "--cwd", destination_worktree,
-                                     "--title", f"{feature} · orchestrator on {destination.name}",
-                                     "--label", f"e2e-feature={feature}", prompt)
-        new_agent_id = field(launched, "agentId", "id")
-        if not new_agent_id:
-            raise Failure(f"unexpected `paseo run` reply: {launched}")
-        wait_running(destination, new_agent_id)
-        log(f"{feature}: orchestrator {new_agent_id[:8]} is running on {destination.name}")
+        destination_record = home_entry["runJson"] if going_home else destination.call("state_path", key=key)
+        destination_run_dir = os.path.join(os.path.dirname(destination_record), "..", "artifacts", key)
+        destination.call("mkdir", path=destination_run_dir)
+        # Preserve earlier handoffs across repeated moves.
+        if source.call("read_json", path=entry["runJson"]):
+            transfer_directory(source, source_run_dir, destination, destination_run_dir)
+        path_mapping = {source_worktree: destination_worktree}
+        if entry["isGit"]:
+            path_mapping[entry["gitDir"]] = destination_git_dir
+        destination.call("rewrite_paths", run_dir=destination_run_dir, mapping=path_mapping)
+        for index, tab in enumerate(tabs):
+            previous = source.paseo("inspect", tab["agentId"], "--json")
+            provider, thinking = agent_launch_args(previous, args)
+            transcript = os.path.join(destination_run_dir, f"{seq}-tab-{index}-transcript.json")
+            destination.call("write_json", path=transcript, data=transcripts[tab["agentId"]])
+            packet_path = os.path.join(destination_run_dir, f"{seq}-tab-{index}.json")
+            tab_cwd = os.path.join(destination_worktree, os.path.relpath(tab["cwd"], source_worktree))
+            e2e = tab.get("e2e")
+            run_dir = destination_run_dir
+            inflight = []
+            accepted = []
+            if e2e:
+                run_dir = os.path.join(destination_git_dir, "e2e-feature", e2e["feature"])
+                destination.call("mkdir", path=run_dir)
+                transfer_directory(source, e2e["runDir"], destination, run_dir, "--exclude=/run.json")
+                destination.call("rewrite_paths", run_dir=run_dir, mapping=path_mapping)
+                inflight = source.call("inflight", session_file=e2e.get("sessionFile"))
+                accepted = [subject for _, subject in source.call("log_subjects", worktree=source_worktree, base=e2e.get("base"))
+                            if subject.startswith(e2e["feature"] + ": ")]
+                # Seed the registration before launch; a fast resumed agent may
+                # register itself immediately. Do not overwrite its sessionFile.
+                destination.call("write_json", path=os.path.join(run_dir, "run.json"), data={**e2e,
+                    "host": destination.name, "home": home_entry.get("home", HOME), "worktree": destination_worktree,
+                    "gitDir": destination_git_dir, "runDir": run_dir, "workspaceId": destination_workspace,
+                    "orchestratorAgentId": None, "sessionFile": None, "away": None})
+            destination.call("write_json", path=packet_path, data={
+                "version": 2, "seq": seq, "feature": e2e["feature"] if e2e else key,
+                "from": source.name, "to": destination.name, "home": home_entry.get("home", HOME), "at": now_iso(),
+                "branch": snapshot.get("branch"), "base": e2e.get("base") if e2e else None,
+                "head": snapshot["head"], "snapshot": snapshot["commit"], "wipStat": snapshot["wipStat"],
+                "plan": f"docs/features/{e2e['feature']}-plan.md" if e2e else None,
+                "acceptedCommits": accepted, "inFlight": inflight, "worktree": destination_worktree,
+                "gitDir": destination_git_dir, "runDir": run_dir, "sourceWorktree": source_worktree,
+                "transcript": transcript, "pathMapping": path_mapping, "warnings": warnings,
+                "previousOrchestrator": {"host": source.name, "agentId": tab["agentId"], "provider": provider, "thinking": thinking},
+                "previousGoals": previous_goals, "previousAgent": previous, "tabs": [item["name"] for item in tabs],
+            })
+            launch_args = ["run", "--no-wait", "--json", "--provider", provider,
+                           "--workspace", destination_workspace, "--cwd", tab_cwd, "--title", tab["name"]]
+            if thinking and thinking != "auto":
+                launch_args.extend(["--thinking", thinking])
+            if previous.get("Mode") and previous["Mode"] != "default":
+                launch_args.extend(["--mode", previous["Mode"]])
+            launched = destination.paseo(*launch_args, resume_prompt(tab, packet_path, args))
+            agent_id = field(launched, "agentId", "id")
+            if not agent_id:
+                raise Failure(f"unexpected agent launch reply: {launched}")
+            new_tab = {**tab, "agentId": agent_id, "cwd": tab_cwd, "workspaceId": destination_workspace}
+            launched_tabs.append(new_tab)
+            wait_running(destination, agent_id)
+            if e2e:
+                registration = destination.call("read_json", path=os.path.join(run_dir, "run.json")) or {}
+                registration.update(orchestratorAgentId=agent_id)
+                destination.call("write_json", path=os.path.join(run_dir, "run.json"), data=registration)
+                new_tab["e2e"] = registration
     except BaseException:
-        source.call("thaw", pids=frozen["pids"])
-        log(f"{feature}: move failed; thawed it on {source.name}, where it continues")
-        if new_agent_id:
+        # Stop destination writers before allowing source writers to continue.
+        cleanup_failed = False
+        for tab in launched_tabs:
             try:
-                destination.paseo("archive", "--force", new_agent_id, "--json", parse=False)
-            except Failure as cleanup_error:
-                log(f"{feature}: could not archive the new agent {new_agent_id}: {cleanup_error}")
+                destination.paseo("archive", "--force", tab["agentId"], "--json", parse=False)
+            except Failure as error:
+                cleanup_failed = True
+                log(f"could not archive replacement {tab['agentId']}: {error}")
         if created_workspace:
             try:
                 destination.paseo("workspace", "archive", created_workspace, "--json", parse=False)
-            except Failure as cleanup_error:
-                log(f"{feature}: could not archive the partial workspace {created_workspace}: {cleanup_error}")
+                cleanup_failed = False
+            except Failure as error:
+                log(f"could not archive partial workspace {created_workspace}: {error}")
         if adopted_tree:
-            # The home worktree already holds the incoming state; expect that state next time.
-            home_entry["moves"][-1]["homeTree"] = adopted_tree
-            destination.call("write_json", path=home_entry["runJson"],
-                             data={key: value for key, value in home_entry.items() if key != "runJson"})
+            home_entry["moves"][-1]["homeTree"] = fingerprint(destination, home_entry)
+            if entry["isGit"]:
+                state = destination.call("worktree_state", worktree=home_entry["worktree"])
+                home_entry["moves"][-1].update(homeHead=state["head"], homeBranch=state["branch"])
+            destination.call("write_json", path=home_entry["runJson"], data=home_entry)
+        if cleanup_failed:
+            log(f"source remains frozen to avoid two writers; inspect replacements, then thaw PIDs {frozen['pids']}")
+        else:
+            source.call("thaw", pids=frozen["pids"])
         raise
 
-    # Commit point: the destination owns the run from here on.
+    record = {"seq": seq, "from": source.name, "to": destination.name, "at": now_iso(),
+              "head": snapshot["head"], "snapshot": snapshot["commit"], "tabs": [tab["agentId"] for tab in launched_tabs]}
+    here = {**home_entry, "host": destination.name, "worktree": destination_worktree,
+            "gitDir": destination_git_dir, "runDir": destination_run_dir, "runJson": destination_record,
+            "workspaceId": destination_workspace, "tabs": launched_tabs, "away": None,
+            "moves": list(home_entry.get("moves", [])) + [record], "updatedAt": now_iso()}
+    if not going_home:
+        record.update(homeTree=snapshot["tree"], homeHead=snapshot["head"], homeBranch=snapshot.get("branch"))
+        source.call("write_json", path=home_entry["runJson"], data={**home_entry, "host": destination.name,
+            "moves": here["moves"], "away": {"host": destination.name, "repo": repo, "worktree": destination_worktree,
+            "runDir": destination_run_dir, "runJson": destination_record, "workspaceId": destination_workspace,
+            "tabs": launched_tabs}, "updatedAt": now_iso()})
+    destination.call("write_json", path=destination_record, data=here)
+    # Ownership records now point to the destination; do not thaw after this point.
     survivors = source.call("kill", pids=frozen["pids"])
     if survivors:
-        log(f"{feature}: processes still alive on {source.name}: {survivors}")
-    if previous_agent_id:
+        log(f"processes still alive on {source.name}: {survivors}")
+    for tab in tabs:
         try:
-            source.paseo("archive", "--force", previous_agent_id, "--json", parse=False)
+            source.paseo("archive", "--force", tab["agentId"], "--json", parse=False)
         except Failure as error:
-            log(f"{feature}: could not archive {previous_agent_id}: {error}")
-    record = {"seq": seq, "from": source.name, "to": destination.name, "at": now_iso(), "head": snapshot["head"],
-              "snapshot": snapshot["commit"], "fromAgentId": previous_agent_id, "toAgentId": new_agent_id,
-              "toWorkspaceId": destination_workspace, "warnings": warnings}
-    moves = list(home_entry.get("moves", [])) + [record]
-    base_entry = {key: value for key, value in home_entry.items() if key != "runJson"}
-    here = {"host": destination.name, "worktree": destination_worktree, "gitDir": destination_git_dir,
-            "runDir": destination_run_dir, "workspaceId": destination_workspace, "orchestratorAgentId": new_agent_id,
-            "sessionFile": None, "away": None, "moves": moves, "updatedAt": now_iso()}
+            log(f"could not archive old tab {tab['agentId']}: {error}")
+    source.call("move_goals_aside", worktree=source_worktree,
+                destination=os.path.join(source_run_dir, f"{seq}-goals-{source.name}"))
     if going_home:
-        try:
-            source.paseo("workspace", "archive", entry["workspaceId"], "--json", parse=False)
-        except Failure as error:
-            log(f"{feature}: could not archive the {source.name} workspace {entry.get('workspaceId')}: {error}")
-        destination.call("write_json", path=os.path.join(destination_run_dir, "run.json"), data={**base_entry, **here})
-    else:
-        source.call("move_goals_aside", worktree=source_worktree,
-                    destination=os.path.join(source_run_dir, "handoff", f"{seq}-goals-{source.name}"))
-        record["homeTree"] = snapshot["tree"]
-        destination.call("write_json", path=os.path.join(destination_run_dir, "run.json"), data={**base_entry, **here})
-        source.call("write_json", path=os.path.join(source_run_dir, "run.json"), data={
-            **base_entry, "host": destination.name, "orchestratorAgentId": None, "sessionFile": None, "moves": moves,
-            "updatedAt": now_iso(),
-            "away": {"host": destination.name, "repo": repo, "worktree": destination_worktree, "gitDir": destination_git_dir,
-                     "runDir": destination_run_dir, "workspaceId": destination_workspace, "agentId": new_agent_id},
-        })
-    log(f"{feature}: done; it continues on {destination.name} as agent {new_agent_id}")
-    return new_agent_id
+        # This is our dedicated away workspace; all of its agent tabs have moved.
+        source.paseo("workspace", "archive", entry["workspaceId"], "--json", parse=False)
+        # Local directory workspaces retain their files; keep them as recovery copies.
+        source.call("write_json", path=entry["runJson"], data={**entry, "host": destination.name, "tabs": []})
+    return [tab["agentId"] for tab in launched_tabs]
 
 
 # ---------------------------------------------------------------------------
@@ -826,66 +979,52 @@ def forward_back():
 
 def cmd_status(args):
     here = socket.gethostname()
-    if here != HOME:
-        # Keep status local on the away host, even when home is asleep.
-        runs = HELPERS["list_runs"]()
-        if not runs:
-            print(f"No e2e-feature runs on {here}.")
-            return
-        print(f"{'FEATURE':24} {'ORCHESTRATOR':22} WORKTREE ON {here.upper()}")
-        for entry in runs:
-            agent = entry.get("orchestratorAgentId")
-            status = "-"
-            if agent:
-                try:
-                    info = json.loads(run(["paseo", "inspect", agent, "--json"]))
-                    status = "archived" if info.get("Archived") else str(info.get("Status"))
-                except (Failure, ValueError):
-                    status = "unknown"
-            print(f"{entry.get('feature', '?'):24} {(agent or '-')[:8] + ' ' + status:22} {entry.get('worktree', '')}")
-        print(f"Run `e2e-dispatch back` here or on {HOME} to bring runs home ({HOME} must be awake).")
-        return
-    home = Host(HOME)
-    rows = []
-    for entry in home_runs(home):
-        where = entry.get("host", home.name)
-        agent = (entry.get("away") or {}).get("agentId") if where != home.name else entry.get("orchestratorAgentId")
-        host = Host(where)
-        status = "-"
-        if agent:
+    host = Host(here)
+    entries = home_runs(host) if here == HOME else host.call("list_runs")
+    if not entries:
+        say(f"No active workspace agent tabs on {here}.")
+    for entry in entries:
+        where = entry.get("host", here)
+        tabs = (entry.get("away") or {}).get("tabs", []) if where != here else entry.get("tabs", [])
+        say(f"{entry['feature']}  {entry.get('name', '')}  on {where}  {entry['worktree']}")
+        for tab in tabs:
             try:
-                info = host.paseo("inspect", agent, "--json")
-                status = "archived" if info.get("Archived") else str(info.get("Status"))
+                info = Host(where).paseo("inspect", tab["agentId"], "--json")
+                status = "archived" if info.get("Archived") else info.get("Status", "unknown")
             except Failure:
-                status = "unknown"
-        rows.append((entry.get("feature", "?"), where, f"{agent[:8] if agent else '-'} {status}", entry.get("worktree", "")))
-    if not rows:
-        print("No e2e-feature runs registered on", home.name)
-        return
-    print(f"{'FEATURE':24} {'ON':8} {'ORCHESTRATOR':22} WORKTREE ON {home.name.upper()}")
-    for feature, where, agent, worktree in rows:
-        print(f"{feature:24} {where:8} {agent:22} {worktree}")
+                status = "unreachable"
+            say(f"  {tab['agentId']}  {status}  {tab['name']}")
+    # Terminal tabs are deliberately not migrated. Surface them in the inventory.
+    for terminal in host.paseo("terminal", "ls", "--json"):
+        say(f"terminal (stays on {here}): {terminal.get('id') or terminal.get('terminalId')} {terminal.get('title', '')}")
+    if here != HOME:
+        say(f"Run workspace-dispatch back here or on {HOME}; {HOME} must be awake.")
 
 
 def cmd_out(args):
     require_home()
     home, away = Host(HOME), Host(args.to)
+    if away.name == home.name:
+        raise Failure("destination must differ from the home host")
     away.call("ping")
     candidates = select([entry for entry in home_runs(home) if entry.get("host", home.name) == home.name], args.features)
     if not candidates:
-        say(f"Nothing to move: no active runs on {home.name}")
+        say(f"Nothing to move: no active workspace tabs on {home.name}")
         return
     failures = 0
+    # Move the invoking tab last: archiving it can disconnect the caller.
+    caller = os.environ.get("PASEO_AGENT_ID")
+    candidates.sort(key=lambda entry: any(tab["agentId"] == caller for tab in entry.get("tabs", [])))
     for entry in candidates:
-        reasons = out_blockers(home, entry, args.include_paused)
-        if reasons:
-            say(f"skip {entry['feature']}: {'; '.join(reasons)}")
-            continue
         try:
+            reasons = out_blockers(home, entry, args.include_paused)
+            if reasons:
+                say(f"skip {entry['feature']}: {'; '.join(reasons)}")
+                continue
             args.home_entry = entry
-            agent = move(entry, home, away, args)
-            if agent:
-                say(f"moved {entry['feature']} to {away.name}: agent {agent}")
+            agents = move(entry, home, away, args)
+            if agents is not None:
+                say(f"moved {entry['feature']} to {away.name}: agents {', '.join(agents) or '(files only)'}")
         except Failure as error:
             failures += 1
             say(f"FAILED {entry['feature']}: {error}")
@@ -900,25 +1039,33 @@ def cmd_back(args):
     home = Host(HOME)
     candidates = select([entry for entry in home_runs(home) if entry.get("host", home.name) != home.name], args.features)
     if not candidates:
-        say(f"Nothing to bring back: every run is on {home.name}")
+        say(f"Nothing to bring back: every workspace is on {home.name}")
         return
     failures = 0
     for home_entry in candidates:
         away_info = home_entry.get("away") or {}
         source = Host(away_info.get("host") or home_entry["host"])
         try:
-            entry = source.call("read_json", path=os.path.join(away_info["runDir"], "run.json"))
+            entry = source.call("read_json", path=away_info["runJson"])
             if not entry:
-                raise Failure(f"no run.json on {source.name} at {away_info.get('runDir')}")
-            entry["orchestratorAgentId"] = entry.get("orchestratorAgentId") or away_info.get("agentId")
+                raise Failure(f"no dispatch record on {source.name} at {away_info['runJson']}")
+            for row in home.paseo("ls", "--global", "--background", "--json"):
+                if str(row.get("status", "")).lower() in ACTIVE:
+                    agent = home.paseo("inspect", row["id"], "--json")
+                    if within(agent["Cwd"], home_entry["worktree"]):
+                        raise Failure(f"active home tab {row['id']} uses the retained workspace; stop it before returning")
+            # Include tabs opened after dispatch, and do not resume closed tasks.
+            live = next((item for item in source.call("list_runs") if item["worktree"] == entry["worktree"]), None)
+            entry["tabs"] = live["tabs"] if live else []
             args.home_entry = home_entry
-            agent = move(entry, source, home, args)
-            if agent:
-                say(f"brought {home_entry['feature']} back to {home.name}: agent {agent}")
+            agents = move(entry, source, home, args)
+            if agents is not None:
+                say(f"brought {home_entry['feature']} back to {home.name}: agents {', '.join(agents) or '(files only)'}")
         except Failure as error:
             failures += 1
             say(f"FAILED {home_entry['feature']}: {error}")
     sys.exit(1 if failures else 0)
+
 
 
 def cmd_register(args):
@@ -975,16 +1122,16 @@ def main():
     if len(sys.argv) == 3 and sys.argv[1] == "_helper":
         cmd_helper(sys.argv[2])
         return
-    parser = argparse.ArgumentParser(prog="e2e-dispatch", description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(prog="workspace-dispatch", description=__doc__.split("\n\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("status", help="list e2e-feature runs and where they run")
+    commands.add_parser("status", help="list active workspace tabs and where they run")
     for name, help_text in (("out", f"move runs from {HOME} to another host"), ("back", f"bring runs back to {HOME}")):
         command = commands.add_parser(name, help=help_text)
-        command.add_argument("features", nargs="*", help="run names (default: every eligible run)")
+        command.add_argument("features", nargs="*", help="workspace IDs, names, or e2e feature names (default: all active tabs)")
         command.add_argument("--dry-run", action="store_true", help="report what would move, change nothing")
-        command.add_argument("--resume-prompt", help="prompt for the new orchestrator; {packet} is the handoff file")
-        command.add_argument("--provider", help="provider/model for the new orchestrator (default: the previous one's)")
-        command.add_argument("--thinking", help="thinking level for the new orchestrator (default: the previous one's)")
+        command.add_argument("--resume-prompt", help="prompt for replacement agents; {packet} is each tab's handoff file")
+        command.add_argument("--provider", help="provider/model for replacement agents (default: preserve each tab's)")
+        command.add_argument("--thinking", help="thinking level for replacement agents (default: preserve each tab's)")
         if name == "out":
             command.add_argument("--to", default=AWAY, help=f"destination host (default: {AWAY})")
             command.add_argument("--include-paused", action="store_true", help="also move runs whose goal is paused")
@@ -993,9 +1140,18 @@ def main():
     register.add_argument("--home", help="host that delivers the run (default: this host)")
     args = parser.parse_args()
     try:
-        {"status": cmd_status, "out": cmd_out, "back": cmd_back, "register": cmd_register}[args.command](args)
+        if args.command in ("out", "back") and socket.gethostname() == HOME and not args.dry_run:
+            os.makedirs(state_root(), exist_ok=True)
+            with open(os.path.join(state_root(), "transfer.lock"), "w") as lock:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    raise Failure("another workspace transfer is already running")
+                {"out": cmd_out, "back": cmd_back}[args.command](args)
+        else:
+            {"status": cmd_status, "out": cmd_out, "back": cmd_back, "register": cmd_register}[args.command](args)
     except Failure as error:
-        print(f"e2e-dispatch: {error}", file=sys.stderr)
+        print(f"workspace-dispatch: {error}", file=sys.stderr)
         sys.exit(1)
 
 
