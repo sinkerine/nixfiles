@@ -2,16 +2,16 @@
 
 buildNpmPackage {
   pname = "better-paseo";
-  version = "1.5.1";
+  version = "1.5.2";
 
   src = fetchFromGitHub {
-    owner = "roundreddot";
+    owner = "sinkerine";
     repo = "better-paseo";
-    rev = "36a6bb52a17802a6576d9b61b79fb1819c50e020";
-    hash = "sha256-yc0c+ZwWWHdCMj+1zZhBC4T8+lO+bZW/7pIvPjrDXDw=";
+    rev = "86a6697be54929eea1b02ba35f3074d04ef48cec";
+    hash = "sha256-lf0EFGtVnnqnhGPv9LdZz6sCl38etlDWcifn/rgix9Q=";
   };
 
-  npmDepsHash = "sha256-JhfDpwIAEBDnaVlJieM7zOY4BfzOnu/kxK5M1hHA8dc=";
+  npmDepsHash = "sha256-DHIyXm7ntgz/SfKYZ+wvp+DNsiq4YuMUwKS0lL5V5XA=";
   npmFlags = [ "--ignore-scripts" ];
   npmBuildScript = "build:client";
   npmBuildFlags = [ "--" "--install" "--force" ];
@@ -28,7 +28,7 @@ buildNpmPackage {
 
   meta = {
     description = "Task board and enhanced chat timeline for Paseo";
-    homepage = "https://github.com/roundreddot/better-paseo";
+    homepage = "https://github.com/sinkerine/better-paseo";
     license = lib.licenses.mit;
     platforms = lib.platforms.unix;
   };

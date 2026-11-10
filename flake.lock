@@ -986,11 +986,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1794163460,
-        "narHash": "sha256-QYJ+DY7nEyIlneWYjuPXzQwn0tsR33opNIGnoDL+lYc=",
+        "lastModified": 1794351479,
+        "narHash": "sha256-MGF1nYo4A6KPCKGmBRjFVlqDfi4C8ugDYF8OC770XQU=",
         "owner": "sinkerine",
         "repo": "paseo",
-        "rev": "788bce64eb1ec90d8caa901160384469924053fc",
+        "rev": "7a1dacf00f16af796db08d53215cf77fcad7c7df",
         "type": "github"
       },
       "original": {
