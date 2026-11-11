@@ -7,8 +7,8 @@ buildNpmPackage {
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "better-paseo";
-    rev = "86a6697be54929eea1b02ba35f3074d04ef48cec";
-    hash = "sha256-lf0EFGtVnnqnhGPv9LdZz6sCl38etlDWcifn/rgix9Q=";
+    rev = "f38e5e360fda6a3a8f62c1e90094f15d5dfac807";
+    hash = "sha256-qp+/ngdvcP51ZwV60QA5dp4kF+o7f9olZa6fiLrm0Lk=";
   };
 
   npmDepsHash = "sha256-DHIyXm7ntgz/SfKYZ+wvp+DNsiq4YuMUwKS0lL5V5XA=";
