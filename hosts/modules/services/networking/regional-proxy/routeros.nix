@@ -28,13 +28,13 @@ in
     };
 
     networking.wireguard.interfaces.wg-routeros = {
-      ips = [ "172.31.241.1/30" ];
+      ips = [ "172.31.241.1/30" "fd31:241::1/64" ];
       listenPort = 51820;
       privateKeyFile = config.sops.secrets.regional-proxy-michiru-private-key.path;
       peers = [
         {
           publicKey = cfg.routerOsPeerPublicKey;
-          allowedIPs = [ "172.31.241.2/32" ];
+          allowedIPs = [ "172.31.241.2/32" "fd31:241::2/128" ];
           persistentKeepalive = 25;
         }
       ];
@@ -47,22 +47,30 @@ in
     # LAN clients advertise Ethernet MSS, but this path crosses a smaller
     # WireGuard link. Clamp both SYN directions to avoid PMTU black holes.
     networking.firewall.extraCommands = ''
-      for direction in -i -o; do
-        iptables -t mangle -C FORWARD "$direction" wg-routeros -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || \
-          iptables -t mangle -A FORWARD "$direction" wg-routeros -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+      for tool in iptables ip6tables; do
+        for direction in -i -o; do
+          $tool -t mangle -C FORWARD "$direction" wg-routeros -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || \
+            $tool -t mangle -A FORWARD "$direction" wg-routeros -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+        done
       done
     '';
     networking.firewall.extraStopCommands = ''
-      for direction in -i -o; do
-        iptables -t mangle -D FORWARD "$direction" wg-routeros -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
+      for tool in iptables ip6tables; do
+        for direction in -i -o; do
+          $tool -t mangle -D FORWARD "$direction" wg-routeros -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
+        done
       done
     '';
     networking.nat = {
       enable = true;
+      enableIPv6 = true;
       externalInterface = "eth0";
       internalInterfaces = [ "wg-routeros" ];
+      internalIPv6s = [ "fd31:241::/64" ];
     };
     boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
+    # Michiru learns its IPv6 uplink using SLAAC even while forwarding.
+    boot.kernel.sysctl."net.ipv6.conf.eth0.accept_ra" = 2;
 
     services.unbound = {
       enable = true;

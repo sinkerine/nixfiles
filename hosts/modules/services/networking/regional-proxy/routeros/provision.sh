@@ -227,6 +227,9 @@ PY
   allowlist)
     python3 "$here/allowlist.py" apply --router "$router"
     ;;
+  ipv6)
+    python3 "$here/ipv6.py" --router "$router"
+    ;;
   on)
     ssh "$router" '/system script run regional-hk-on'
     ;;
@@ -240,6 +243,9 @@ PY
     require_router_count "enabled regional DNS entries" '/ip dns static print count-only where comment="regional-hk-owned" and disabled=no' 0
     require_router_count "enabled regional address-list entries" '/ip firewall address-list print count-only where comment="regional-hk-owned" and disabled=no and dynamic=no' 0
     require_router_count "enabled regional IPv6 rules" '/ipv6 firewall filter print count-only where comment="regional-hk-owned" and disabled=no' 0
+    for path in '/ipv6 address' '/ipv6 route' '/ipv6 firewall mangle' '/ipv6 firewall nat' '/ipv6 firewall filter' '/ipv6 firewall address-list'; do
+      require_router_count "enabled regional IPv6 objects" "$path print count-only where comment=\"regional-hk-ipv6-owned\" and disabled=no" 0
+    done
     require_router_count "enabled regional routes" '/ip route print count-only where comment="regional-hk-owned" and disabled=no' 0
     require_router_count "enabled regional WireGuard address" '/ip address print count-only where comment="regional-hk-owned" and disabled=no' 0
     require_router_count "enabled regional WireGuard interface" '/interface wireguard print count-only where name="wg-regional-hk" and disabled=no' 0
@@ -249,7 +255,7 @@ PY
     ssh "$router" '/system script run regional-hk-status'
     ;;
   *)
-    echo "usage: $0 install|refresh-on|allowlist|on|off|status" >&2
+    echo "usage: $0 install|refresh-on|allowlist|ipv6|on|off|status" >&2
     exit 2
     ;;
 esac

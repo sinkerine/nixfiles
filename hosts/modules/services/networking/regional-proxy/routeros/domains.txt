@@ -1,2 +1,3 @@
-# RouterOS HK domain allowlist. Empty by default.
+# RouterOS HK domain allowlist.
 # One domain per line; includes its subdomains. No IPs, CIDRs or wildcards.
+amap.com

@@ -55,12 +55,14 @@
 /ip dhcp-server network set [find where address="192.168.88.0/24"] dns-server=192.168.88.1
 /ip firewall nat enable [find where comment="regional-hk-owned"]
 /ip firewall mangle enable [find where comment="regional-hk-owned"]
+:if ([:len [/system script find where name="regional-hk-ipv6-on"]] = 1) do={ /system script run regional-hk-ipv6-on }
 :delay 2s
 /ip dns cache flush
 :put "regional HK routing enabled; allowlisted destinations fail closed through wg-regional-hk"
 }
 /system script add name=regional-hk-off comment="regional-hk-owned" policy=read,write,test source={
 /system script run regional-hk-state
+:if ([:len [/system script find where name="regional-hk-ipv6-off"]] = 1) do={ /system script run regional-hk-ipv6-off }
 /ip firewall mangle disable [find where comment="regional-hk-owned"]
 :local regionalHkConnections [/ip firewall connection find where connection-mark=regional-hk-cn]
 :foreach regionalHkConnection in=$regionalHkConnections do={ :do { /ip firewall connection remove $regionalHkConnection } on-error={} }
@@ -82,6 +84,8 @@
 /system script add name=regional-hk-status comment="regional-hk-owned" policy=read,test source={
 /interface wireguard peers print detail where interface=wg-regional-hk
 /ip route print detail where routing-table=hk-cn
+/ipv6 route print detail where routing-table=hk-cn
+/ipv6 firewall connection print count-only where connection-mark=regional-hk-cn
 /ip firewall connection print count-only where connection-mark=regional-hk-cn
 :put "Inspect regional-hk-owned disabled flags and DNS dynamic address-list timeouts for full status."
 }

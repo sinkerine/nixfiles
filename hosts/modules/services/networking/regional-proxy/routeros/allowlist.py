@@ -67,6 +67,14 @@ def apply(names, target):
     ]:
         if ssh(target, command) != expected:
             raise RuntimeError(f"unexpected {description}; no configuration changed")
+    ipv6_marker = '[find where comment="regional-hk-ipv6-owned" and action="mark-connection"]'
+    ipv6_route_marker = '[find where comment="regional-hk-ipv6-owned" and action="mark-routing"]'
+    ipv6_count = ssh(target, '/ipv6 firewall mangle print count-only where comment="regional-hk-ipv6-owned" and action="mark-connection"')
+    if ipv6_count not in ("0", "1"):
+        raise RuntimeError("unexpected IPv6 connection marking rules; no configuration changed")
+    ipv6 = ipv6_count == "1"
+    if ipv6 and ssh(target, '/ipv6 firewall mangle print count-only where comment="regional-hk-ipv6-owned" and action="mark-routing"') != "1":
+        raise RuntimeError("unexpected IPv6 routing marking rules; no configuration changed")
     if ssh(target, ':put [/ip dns get address-list-extra-time]') not in ("0s", "00:00:00"):
         raise RuntimeError("DNS address-list-extra-time must be zero; no configuration changed")
     active = ssh(target, ':put [/interface wireguard get [find where name="wg-regional-hk"] disabled]')
@@ -76,12 +84,17 @@ def apply(names, target):
     # Stop new HK classification before removing stale lists and marked sessions.
     # Failure leaves classification disabled; rerunning apply is idempotent.
     ssh(target, '/ip firewall mangle disable ' + marker + '; /ip firewall mangle disable ' + route_marker)
+    if ipv6:
+        ssh(target, '/ipv6 firewall mangle disable ' + ipv6_marker + '; /ipv6 firewall mangle disable ' + ipv6_route_marker)
+        ssh(target, ':foreach c in=[/ipv6 firewall connection find where connection-mark="regional-hk-cn"] do={ :do { /ipv6 firewall connection remove $c } on-error={} }')
     ssh(target, ':foreach c in=[/ip firewall connection find where connection-mark="regional-hk-cn"] do={ :do { /ip firewall connection remove $c } on-error={} }')
     ssh(target, '/ip firewall mangle set ' + marker + ' dst-address-list=' + LIST)
     ssh(target, '/ip dns static remove [find where comment="regional-hk-owned" and address-list="regional-hk-cn"]; '
         '/ip dns static remove [find where comment="regional-hk-owned" and address-list="regional-hk-allowlist"]; '
         '/ip firewall address-list remove [find where list="regional-hk-cn"]; '
         '/ip firewall address-list remove [find where list="regional-hk-allowlist"]')
+    if ipv6:
+        ssh(target, '/ipv6 firewall address-list remove [find where list="regional-hk-allowlist"]')
     for row in render(names, disabled=not enabled):
         ssh(target, row)
     ssh(target, '/ip dns cache flush')
@@ -92,6 +105,8 @@ def apply(names, target):
         raise RuntimeError("old China address list remains; classification remains disabled")
     if enabled:
         ssh(target, '/ip firewall mangle enable ' + marker + '; /ip firewall mangle enable ' + route_marker)
+        if ipv6:
+            ssh(target, '/ipv6 firewall mangle enable ' + ipv6_marker + '; /ipv6 firewall mangle enable ' + ipv6_route_marker)
     print(f"Applied {len(names)} allowlisted domains; GeoIP removed; proxy {'ON' if enabled else 'OFF'}.")
 
 

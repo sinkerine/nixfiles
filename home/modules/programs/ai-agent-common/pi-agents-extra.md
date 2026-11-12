@@ -1,4 +1,8 @@
 
+## UI Mockups and Showcases
+
+For UI mockups and any UI showcase, prefer Pi artifacts over generated images.
+
 ## Subagent Delegation
 
 Skip this section when the session already defines an orchestration workflow, such as a loaded skill or user instructions on how to use subagents.
