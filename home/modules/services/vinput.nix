@@ -26,8 +26,7 @@ in
           "provider.openai-compatible.streaming"
         else
           "provider.openai-compatible";
-      registryRevision = "1ef1a7eb9ec4aa3622e9ee5dbd4f826d5c7a1eac";
-      asrProviderUrl = "https://raw.githubusercontent.com/sinkerine/vinput-registry/${registryRevision}/resources/providers/openai-compatible/${asrProvider}/entry.py";
+      asrProviderUrl = "https://raw.githubusercontent.com/sinkerine/vinput-registry/main/resources/providers/openai-compatible/${asrProvider}/entry.py";
       asrProviderHash =
         if cfg.enableStreaming then
           "sha256-kg8P8Xl/4/Rxhj7UapQx2nFbi8ygo3PM+DowRN0lMrs="
