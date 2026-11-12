@@ -11,6 +11,15 @@
 
   imports = [ ../common ];
 
+  services.pi-artifacts = {
+    enable = true;
+    enablePiExtension = true;
+    bindAddress = "127.0.0.1";
+    port = 4317;
+    publicUrl = "https://artifacts.kazuki.m.mado.moe";
+    serviceUrl = "http://127.0.0.1:4317";
+  };
+
   my.programs.vm-test.enable = true;
   my.programs.paseo = {
     enable = true;

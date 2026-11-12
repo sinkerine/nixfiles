@@ -64,6 +64,11 @@
     cua = {
       url = "github:trycua/cua";
     };
+    pi-artifacts = {
+      url = "github:sinkerine/pi-artifacts";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
     paseo = {
       url = "github:sinkerine/paseo";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -153,7 +158,10 @@
       homeConfigurationArgs = {
         "sinkerine@kazuki" = {
           pkgs = packages."x86_64-linux";
-          modules = [ ./home/users/sinkerine/kazuki ] ++ noctaliaHomeModules;
+          modules = [
+            ./home/users/sinkerine/kazuki
+            self.inputs.pi-artifacts.homeManagerModules.default
+          ] ++ noctaliaHomeModules;
           extraSpecialArgs = {
             hostname = "kazuki";
           };

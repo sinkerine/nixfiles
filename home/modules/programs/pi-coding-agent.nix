@@ -89,7 +89,7 @@ let
     name = "pi-gemini";
     runtimeInputs = [ piCodingAgent ];
     text = ''
-      exec pi --provider magpie --model group/argon "$@"
+      exec pi --provider magpie --model group/gemini-4 "$@"
     '';
   };
   piOpus = pkgs.writeShellApplication {
@@ -119,7 +119,7 @@ in
       package = piCodingAgent;
       settings = {
         defaultProvider = "magpie";
-        defaultModel = "gpt";
+        defaultModel = "gpt-6.1-sol";
         defaultThinkingLevel = "medium";
         tuiMode = "regular";
         defaultProjectTrust = "always";
@@ -154,7 +154,7 @@ in
               thinking = "medium";
             };
             reviewer = {
-              model = "group/argon";
+              model = "group/gemini-4";
               thinking = "high";
               toolBudget = {
                 soft = 8;
@@ -194,14 +194,6 @@ in
         apiKey = "dummykey";
         models = [
           {
-            id = "group/gpt";
-            name = "GPT";
-            reasoning = true;
-            input = [ "text" "image" ];
-            contextWindow = 1050000;
-            maxTokens = 128000;
-          }
-          {
             id = "gpt-6-luna";
             name = "GPT-6 Luna";
             reasoning = true;
@@ -226,8 +218,8 @@ in
             maxTokens = 128000;
           }
           {
-            id = "group/argon";
-            name = "Gemini 4 Argon";
+            id = "group/gemini-4";
+            name = "Gemini 4";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1048576;
@@ -281,6 +273,10 @@ in
     home.file.".pi/agent/skills/e2e-feature" = {
       source = ./pi-coding-agent-skills/e2e-feature;
       recursive = true;
+      force = true;
+    };
+    home.file.".pi/agent/skills/pi-artifacts/SKILL.md" = {
+      source = ./pi-coding-agent-skills/pi-artifacts/SKILL.md;
       force = true;
     };
     home.file.".pi/agent/skills/dispatch-workspaces/SKILL.md" = {

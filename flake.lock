@@ -999,6 +999,29 @@
         "type": "github"
       }
     },
+    "pi-artifacts": {
+      "inputs": {
+        "home-manager": [
+          "home-manager"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1794345953,
+        "narHash": "sha256-/FFUL5jgkPh+G74iZ8tJ9aC2VI95U0iXOJaZofvQKYo=",
+        "owner": "sinkerine",
+        "repo": "pi-artifacts",
+        "rev": "3e327b23a59fa572669b69ce8b76b96e37eac229",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sinkerine",
+        "repo": "pi-artifacts",
+        "type": "github"
+      }
+    },
     "pre-commit-hooks": {
       "inputs": {
         "flake-compat": "flake-compat_2",
@@ -1080,6 +1103,7 @@
         "noctalia": "noctalia",
         "nur": "nur",
         "paseo": "paseo",
+        "pi-artifacts": "pi-artifacts",
         "proxmox-nixos": "proxmox-nixos",
         "proxmox-nixpkgs": "proxmox-nixpkgs",
         "sops-nix": "sops-nix"

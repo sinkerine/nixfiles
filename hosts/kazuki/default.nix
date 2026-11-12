@@ -382,6 +382,20 @@ in
       { url = "http://127.0.0.1:8081"; }
     ];
   };
+  services.traefik.dynamicConfigOptions.http = {
+    routers.pi-artifacts = {
+      rule = "Host(`artifacts.${hostname}.m.mado.moe`)";
+      entryPoints = [ "websecure" ];
+      tls.certResolver = "default";
+      middlewares = [ "lan-only@file" ];
+      service = "pi-artifacts";
+    };
+    services.pi-artifacts.loadBalancer = {
+      servers = [ { url = "http://127.0.0.1:4317"; } ];
+      responseForwarding.flushInterval = "-1ms";
+    };
+  };
+
   my.services.smartd.enable = true;
   my.services.metrics = {
     enable = true;

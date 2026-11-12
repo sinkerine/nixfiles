@@ -1,6 +1,6 @@
 ---
 name: e2e-feature
-description: "Opt-in end-to-end feature workflow: a high-reasoning Pi Fable design tab in Paseo (Pi Gemini on Pi Fable quota exhaustion) that hands the plan back, Pi-sol implementation subagents, Pi Gemini review loops with high reasoning, and an AGENTS.md-driven e2e check."
+description: "Opt-in end-to-end feature workflow: a high-reasoning Pi Opus design tab in Paseo (Pi Gemini on Pi Opus quota exhaustion) that hands the plan back, Pi-sol implementation subagents, Pi Gemini review loops with high reasoning, and an AGENTS.md-driven e2e check."
 disable-model-invocation: true
 ---
 
@@ -84,14 +84,14 @@ Waves describe the dependency graph; they are not whole-wave barriers unless the
 Group the run as one Workflow row with one row per task:
 
 - **Workflow row.** Create one mission before the first launch with `subagent({ action: "mission.create", options: { mission: { title: "e2e-feature: <feature>", objective: "<one-line goal>" } } })`, and pass its `missionId` to every later launch so all children collect under it.
-- **Task rows.** Launch each child from a workflow script, a ```` ```js workflow ```` block sent with `subagent({ workflow: true, async: true, cwd: "<worktree>", options: { missionId: "<mission id>" } })` in the same reply, using `runs.run(key, { label, phase, agent, task })`. One reply carries one block. Always set `phase` to the task id from the plan (or `review` for consolidated review); it is what nests a run under its task row, and a run without it shows flat under the Workflow row. The key is stable and lowercase, `<task>-<step>`; the label is `<task> · <step>`, where `<step>` is `implement`, `review rN`, `fix rN`, or `journey rN`. Use `e2e` for E2E journey and repair work and `review` for consolidated review scopes. For example, the second feature review is `runs.run("review-feature-r2", { label: "Review · feature r2", phase: "review", agent: "reviewer", model: "magpie/group/argon:high", task })`. When a script launches several tasks from a list, set `phase: item.id` on each run.
+- **Task rows.** Launch each child from a workflow script, a ```` ```js workflow ```` block sent with `subagent({ workflow: true, async: true, cwd: "<worktree>", options: { missionId: "<mission id>" } })` in the same reply, using `runs.run(key, { label, phase, agent, task })`. One reply carries one block. Always set `phase` to the task id from the plan (or `review` for consolidated review); it is what nests a run under its task row, and a run without it shows flat under the Workflow row. The key is stable and lowercase, `<task>-<step>`; the label is `<task> · <step>`, where `<step>` is `implement`, `review rN`, `fix rN`, or `journey rN`. Use `e2e` for E2E journey and repair work and `review` for consolidated review scopes. For example, the second feature review is `runs.run("review-feature-r2", { label: "Review · feature r2", phase: "review", agent: "reviewer", model: "magpie/group/gemini-4:high", task })`. When a script launches several tasks from a list, set `phase: item.id` on each run.
 - **Subtitles, not nesting.** Put a task's wave and dependencies in its row summary, such as `wave 2 · after T1, T2`, with its state: `pending`, `implementing`, `implemented (awaiting feature review)`, `fix rN`, `accepted`, or `needs human`. Give the Review row its scope and round.
 
 Whenever you report progress, list completed implementation tasks on one line each and expand only active work. Keep consolidated review in its own row:
 
 ```
 Workflow: e2e-feature: <feature>
-├─ Design (Pi Fable / Pi Gemini tab)      ✓ plan approved
+├─ Design (Pi Opus / Pi Gemini tab)      ✓ plan approved
 ├─ T1 · wave 1                          ✓ implemented · awaiting feature review
 ├─ T2 · wave 1                          ✓ implemented · awaiting feature review
 ├─ T3 · wave 2 · after T1, T2            ⟳ implementing
@@ -126,13 +126,13 @@ Keep the run's state in files as you go, not only in this session, so a new orch
 
 Read `$PASEO_AGENT_ID`; it is your own Paseo agent id, and the design tab uses it to hand the plan back to you. If it is empty, you are not running inside Paseo: drop the handoff paragraph from the brief and wait for the user to tell you the plan is ready instead.
 
-Create a new, independent, user-facing Paseo agent for design, using Pi Fable (`pi/magpie/group/fable`) with thinking set to `high`. Both Pi Fable and the Pi Gemini fallback must use high reasoning. Do not use a Pi subagent, agent-scoped MCP creation, or a create-then-detach sequence for this phase. A plain agent-originated `paseo run` inherits parentage through `PASEO_AGENT_ID`; `--workspace` controls placement but does not remove parentage.
+Create a new, independent, user-facing Paseo agent for design, using Pi Opus (`pi/magpie/group/opus`) with thinking set to `high`. Both Pi Opus and the Pi Gemini fallback must use high reasoning. Do not use a Pi subagent, agent-scoped MCP creation, or a create-then-detach sequence for this phase. A plain agent-originated `paseo run` inherits parentage through `PASEO_AGENT_ID`; `--workspace` controls placement but does not remove parentage.
 
 First capture the orchestrator's agent ID for the brief's explicit `PLAN_READY` handoff. The design agent goes in the same worktree workspace as you, `<workspace id>`. Then unset `PASEO_AGENT_ID` only for the design launch command with `env -u`, and pass the existing workspace explicitly. Keep the orchestrator's own environment and the daemon connection settings unchanged. This workflow explicitly authorizes creating the design session as a top-level agent:
 
 ```bash
 env -u PASEO_AGENT_ID paseo run --no-wait --json \
-  --provider pi/magpie/group/fable --thinking high \
+  --provider pi/magpie/group/opus --thinking high \
   --workspace <workspace id> \
   --cwd <worktree> --title "Design: <feature>" \
   "$(cat <brief file>)"
@@ -140,23 +140,23 @@ env -u PASEO_AGENT_ID paseo run --no-wait --json \
 
 Capture the returned agent ID and run `paseo inspect <design agent id> --json`. Require `ParentAgentId` to be `null`, and verify through Paseo's agent/workspace metadata that the agent belongs to the intended workspace. If either check fails, preserve the launch output and exact state and report the infrastructure blocker; do not silently proceed with a subagent or create duplicate design sessions.
 
-### Pi Fable quota fallback
+### Pi Opus quota fallback
 
-If Pi Fable is already known to be out of quota, launch Pi Gemini directly instead. If the Pi Fable design launch or a later design turn reports quota exhaustion or a usage limit that blocks design, replace that design tab with Pi Gemini automatically; do not wait for a quota reset or ask the user to approve the substitution. This exception applies only to Pi Fable quota exhaustion, not unrelated launch or infrastructure failures.
+If Pi Opus is already known to be out of quota, launch Pi Gemini directly instead. If the Pi Opus design launch or a later design turn reports quota exhaustion or a usage limit that blocks design, replace that design tab with Pi Gemini automatically; do not wait for a quota reset or ask the user to approve the substitution. This exception applies only to Pi Opus quota exhaustion, not unrelated launch or infrastructure failures.
 
-Before replacing an existing Pi Fable tab, preserve its agent ID, exact quota error, and any available design context. Prepare a replacement brief containing the original brief, the current plan file if present, and the design decisions, unresolved questions, and approval status available from the Pi Fable session. Archive the blocked Pi Fable agent with `paseo archive <old design agent id>` before launching the replacement, so only one design tab remains active. If Pi Fable never created an agent, skip the archive step.
+Before replacing an existing Pi Opus tab, preserve its agent ID, exact quota error, and any available design context. Prepare a replacement brief containing the original brief, the current plan file if present, and the design decisions, unresolved questions, and approval status available from the Pi Opus session. Archive the blocked Pi Opus agent with `paseo archive <old design agent id>` before launching the replacement, so only one design tab remains active. If Pi Opus never created an agent, skip the archive step.
 
 Launch the replacement as an independent agent in the same workspace and worktree, keeping the original title and orchestrator's `PLAN_READY` handoff:
 
 ```bash
 env -u PASEO_AGENT_ID paseo run --no-wait --json \
-  --provider pi/magpie/group/argon --thinking high \
+  --provider pi/magpie/group/gemini-4 --thinking high \
   --workspace <workspace id> \
   --cwd <worktree> --title "Design: <feature>" \
   "$(cat <replacement brief file>)"
 ```
 
-Apply the same independence and workspace checks to the replacement, then record its ID as the current design agent ID for all later messages and cleanup. Tell the user Pi Fable exhausted its quota and the design tab now uses Pi Gemini with high reasoning. Continue the existing design and approval process from the preserved context; replacing the tab does not approve the plan. If the fallback fails, preserve the exact error and report the blocker rather than repeatedly creating agents.
+Apply the same independence and workspace checks to the replacement, then record its ID as the current design agent ID for all later messages and cleanup. Tell the user Pi Opus exhausted its quota and the design tab now uses Pi Gemini with high reasoning. Continue the existing design and approval process from the preserved context; replacing the tab does not approve the plan. If the fallback fails, preserve the exact error and report the blocker rather than repeatedly creating agents.
 
 ### Design brief and handoff
 
@@ -177,7 +177,7 @@ Write the brief to a temporary file first. It contains the user's request, what 
 >
 > Then tell the user the plan has been handed off. If the orchestrator later sends you questions about the plan, update the file and send `PLAN_READY` again.
 
-Record the design agent's ID and workspace ID after verifying independence and placement. Tell the user the independent `Design: <feature>` agent is available in that workspace's agent list, to open it and work out the plan there, and that it will hand the plan back to you when they approve it. While design is underway, use at most 60 seconds for an environment smoke check from the existing project recipe: validate runner discovery, one existing test, browser/device availability, ports, and generated dependencies as applicable. Keep logs under `<run dir>`, avoid product edits and shared-state mutations, and report blockers for the design to resolve; do not launch a long suite or install software outside this workflow's authority. This check is setup evidence, not final feature verification. Then end your turn. Do not poll the tab. On a notification or user report that Pi Fable is blocked by quota exhaustion, apply the Pi Fable quota fallback above and hand the replacement tab back to the user. Otherwise ignore turn-finished notifications from the design tab; continue into implementation only on a `PLAN_READY` message or when the user tells you the plan is ready.
+Record the design agent's ID and workspace ID after verifying independence and placement. Tell the user the independent `Design: <feature>` agent is available in that workspace's agent list, to open it and work out the plan there, and that it will hand the plan back to you when they approve it. While design is underway, use at most 60 seconds for an environment smoke check from the existing project recipe: validate runner discovery, one existing test, browser/device availability, ports, and generated dependencies as applicable. Keep logs under `<run dir>`, avoid product edits and shared-state mutations, and report blockers for the design to resolve; do not launch a long suite or install software outside this workflow's authority. This check is setup evidence, not final feature verification. Then end your turn. Do not poll the tab. On a notification or user report that Pi Opus is blocked by quota exhaustion, apply the Pi Opus quota fallback above and hand the replacement tab back to the user. Otherwise ignore turn-finished notifications from the design tab; continue into implementation only on a `PLAN_READY` message or when the user tells you the plan is ready.
 
 When the plan arrives:
 
@@ -229,7 +229,7 @@ return { task: "T3", stage: "implement", ok: impl.ok, writerRunId: impl.runId, r
 
 ## Review
 
-Start the consolidated feature review only after all implementation tasks and their required host gates finish, their interfaces match the plan, and no implementation writers remain. An explicit planned early review is a focused exception and never substitutes for this integrated review. Use Pi Gemini (`magpie/group/argon:high`) with high reasoning for every reviewer launch, overriding the agent default. The opt-in experiment in `references/reviewer-benchmark.md` is never an extra feature stage and never changes this setting automatically.
+Start the consolidated feature review only after all implementation tasks and their required host gates finish, their interfaces match the plan, and no implementation writers remain. An explicit planned early review is a focused exception and never substitutes for this integrated review. Use Pi Gemini (`magpie/group/gemini-4:high`) with high reasoning for every reviewer launch, overriding the agent default. The opt-in experiment in `references/reviewer-benchmark.md` is never an extra feature stage and never changes this setting automatically.
 
 Default to one reviewer for the complete feature diff against the recorded base commit, including uncommitted and untracked additions. For a feature too large for one coherent review, use a few reviewers with explicit nonoverlapping responsibilities and one assigned owner for cross-module integration. Record the coverage map; do not recreate one review per implementation task or add a redundant full review on top of the partitioned reviews. Each review scope gets at most 3 rounds; a failed launch does not count. A round is the initial review or a verification of repairs for confirmed Critical/Important findings or other product-behavior changes. Generated, lint-only, formatting, and test-setup deltas with passing receipts and no product-behavior change do not consume a round: record a ruling, and batch them into one uncounted delta check before acceptance only when their correctness is not obvious from receipts. Do not send verification-evidence adequacy (baselines, provenance) to the code reviewer unless the plan names it as a review item; judge it against the literal criterion with host checks. The reviewer can read files and `watchdog_diff` but cannot run commands, so save its evidence as files first.
 
@@ -245,7 +245,7 @@ Default to one reviewer for the complete feature diff against the recorded base 
 
 ```js workflow
 const review = await runs.run("review-feature-r1", {
-  label: "Review · feature r1", phase: "review", agent: "reviewer", model: "magpie/group/argon:high",
+  label: "Review · feature r1", phase: "review", agent: "reviewer", model: "magpie/group/gemini-4:high",
   task: "Review the completed feature. Read <run dir>/feature-review-r1.md and follow it exactly.",
   notifyOnComplete: true,
   output: "<run dir>/feature-review-r1-result.md", outputMode: "file-only",
