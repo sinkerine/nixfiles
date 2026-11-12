@@ -279,6 +279,10 @@ in
       source = ./pi-coding-agent-skills/pi-artifacts/SKILL.md;
       force = true;
     };
+    home.file.".pi/agent/skills/merge-and-archive/SKILL.md" = {
+      source = ./pi-coding-agent-skills/merge-and-archive/SKILL.md;
+      force = true;
+    };
     home.file.".pi/agent/skills/dispatch-workspaces/SKILL.md" = {
       source = ./pi-coding-agent-skills/dispatch-workspaces/SKILL.md;
       force = true;
