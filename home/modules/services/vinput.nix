@@ -13,7 +13,9 @@ in
   options.my.services.vinput = {
     enable = mkEnableOption "Vinput voice input";
 
-    enableStreaming = mkEnableOption "streaming ASR through the OpenAI Realtime API";
+    enableStreaming = mkEnableOption "streaming ASR through the OpenAI Realtime API" // {
+      default = true;
+    };
   };
 
   config = mkIf cfg.enable (
@@ -24,16 +26,17 @@ in
           "provider.openai-compatible.streaming"
         else
           "provider.openai-compatible";
-      asrProviderUrl =
-        if cfg.enableStreaming then
-          "https://raw.githubusercontent.com/xifan2333/vinput-registry/main/resources/providers/openai-compatible/streaming/entry.py"
-        else
-          "https://raw.githubusercontent.com/xifan2333/vinput-registry/main/resources/providers/openai-compatible/batch/entry.py";
+      registryRevision = "1ef1a7eb9ec4aa3622e9ee5dbd4f826d5c7a1eac";
+      asrProviderUrl = "https://raw.githubusercontent.com/sinkerine/vinput-registry/${registryRevision}/resources/providers/openai-compatible/${asrProvider}/entry.py";
       asrProviderHash =
         if cfg.enableStreaming then
-          "sha256-RQPa3xvz/G/+Jsi1/VJ6fE2Of8e5p0n2IOH3wSJbK3g="
+          "sha256-kg8P8Xl/4/Rxhj7UapQx2nFbi8ygo3PM+DowRN0lMrs="
         else
           "sha256-u7XqXkuRb4xL5m8gdS7omOY9zTuexCK1p3YLZToWVaM=";
+      asrProviderSource = pkgs.fetchurl {
+        url = asrProviderUrl;
+        hash = asrProviderHash;
+      };
       asrProviderPath = "${config.home.homeDirectory}/.local/share/vinput/providers/openai-compatible/${asrProvider}";
       postprocessingPrompt = ''
         You are a multilingual transcription post-processor supporting English, Simplified Chinese, Traditional Chinese, Japanese, and mixed-language speech.
@@ -64,7 +67,7 @@ in
       '';
       asrEnv = {
         VINPUT_ASR_API_KEY = config.sops.placeholder.vinputOpenAIAPIKey;
-        VINPUT_ASR_MODEL = if cfg.enableStreaming then "gpt-realtime-whisper" else "gpt-transcribe";
+        VINPUT_ASR_MODEL = if cfg.enableStreaming then "gpt-live-transcribe" else "gpt-transcribe";
         VINPUT_ASR_URL =
           if cfg.enableStreaming then
             "wss://api.openai.com/v1/realtime"
@@ -72,7 +75,8 @@ in
             "https://api.openai.com/v1/audio/transcriptions";
       }
       // optionalAttrs cfg.enableStreaming {
-        VINPUT_ASR_FINISH_GRACE_SECS = "2";
+        VINPUT_ASR_DELAY = "medium";
+        VINPUT_ASR_LANGUAGES = builtins.toJSON [ "en" "zh" "ja" ];
       };
     in
     {
@@ -81,10 +85,7 @@ in
       home.packages = [ pkgs.fcitx5-vinput ];
 
       home.file.".local/share/vinput/providers/openai-compatible/${asrProvider}" = {
-        source = pkgs.fetchurl {
-          url = asrProviderUrl;
-          hash = asrProviderHash;
-        };
+        source = asrProviderSource;
         executable = true;
       };
 
@@ -173,7 +174,7 @@ in
                   "label": "Magpie correction",
                   "prompt": ${builtins.toJSON postprocessingPrompt},
                   "provider_id": "Magpie",
-                  "model": "group/gpt",
+                  "model": "group/luna-ultrafast",
                   "context_lines": 3,
                   "raw_cand": false,
                   "raw_prev": false,
@@ -184,7 +185,7 @@ in
                   "id": "__command__",
                   "prompt": "# Command Mode Prompt\n\n## Role\n\nYou are an assistant that applies a spoken command to the user-provided text.\n\n## Output Language\n\n- Always render Chinese output using Simplified Chinese characters.\n- Never output Traditional Chinese characters; convert any Traditional Chinese source text to Simplified Chinese.\n- Preserve non-Chinese languages unless the spoken command requests translation.\n\n## Context\n\n- The user message is the source text to operate on.\n- The spoken command may contain ASR errors.\n- The spoken command is appended at runtime in the `## Task` section.\n\n## Task\n",
                   "provider_id": "Magpie",
-                  "model": "group/gpt",
+                  "model": "group/luna-ultrafast",
                   "timeout_ms": 30000
                 }
               ]
