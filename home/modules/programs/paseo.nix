@@ -26,6 +26,9 @@ let
     set -e
     ${pkgs.systemd}/bin/systemctl --user start paseo.service
     ${waitForDaemon}
+    # The Nix build is unpackaged Electron; a worktree cwd would select a
+    # separate development profile and bypass the running desktop's lock.
+    cd ${lib.escapeShellArg config.home.homeDirectory}
     exec ${lib.getExe cfg.desktop.package} "$@"
   '';
   pluginDirectory = "paseo/plugins";
@@ -170,6 +173,13 @@ in
         '';
       })
       (lib.mkIf cfg.desktop.enable {
+        # The CLI's Linux desktop discovery checks this path instead of PATH.
+        # Use the active profile so it also picks up the daemon-aware launcher.
+        home.file."Applications/Paseo.AppImage".source =
+          config.lib.file.mkOutOfStoreSymlink "${config.home.profileDirectory}/bin/${
+            cfg.desktop.package.meta.mainProgram or "paseo-desktop"
+          }";
+
         # Resolve through the active profile even when the app menu retains an old PATH.
         xdg.desktopEntries.paseo-desktop = {
           name = "Paseo";
