@@ -31,4 +31,5 @@ with pkgs; {
   e2e-dispatch = pkgs.workspace-dispatch;
   pi-web-access = callPackage ./pi-web-access { };
   pi-subagents = callPackage ./pi-subagents { };
+  pi-btw = callPackage ./pi-btw { };
 }

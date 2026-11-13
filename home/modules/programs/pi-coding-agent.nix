@@ -18,6 +18,7 @@ let
   piAstGrep = pkgs.pi-ast-grep;
   piCollapseTools = pkgs.pi-collapse-tools;
   piSubagents = pkgs.pi-subagents;
+  piBtw = pkgs.pi-btw;
   piGoalX = pkgs.pi-goal-x;
   e2eFeatureRun = pkgs.writeShellApplication {
     name = "e2e-feature-run";
@@ -89,7 +90,7 @@ let
     name = "pi-gemini";
     runtimeInputs = [ piCodingAgent ];
     text = ''
-      exec pi --provider magpie --model group/gemini-4 "$@"
+      exec pi --provider magpie --model group/gemini "$@"
     '';
   };
   piOpus = pkgs.writeShellApplication {
@@ -154,7 +155,7 @@ in
               thinking = "medium";
             };
             reviewer = {
-              model = "group/gemini-4";
+              model = "group/gemini";
               thinking = "high";
               toolBudget = {
                 soft = 8;
@@ -185,6 +186,7 @@ in
           "${piHindsight}/lib/node_modules/pi-hindsight-memory"
           "${piSubagents}/lib/node_modules/pi-subagents"
           "${piWebAccess}/lib/node_modules/pi-web-access"
+          "${piBtw}/lib/node_modules/@sinkerine/pi-btw"
         ];
       };
 
@@ -218,8 +220,8 @@ in
             maxTokens = 128000;
           }
           {
-            id = "group/gemini-4";
-            name = "Gemini 4";
+            id = "group/gemini";
+            name = "Gemini 4 Hydrogen";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1048576;
