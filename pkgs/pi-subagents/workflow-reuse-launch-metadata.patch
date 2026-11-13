@@ -1,0 +1,140 @@
+--- a/src/runs/foreground/subagent-executor.ts
++++ b/src/runs/foreground/subagent-executor.ts
+@@ -6289,10 +6289,12 @@
+ 					// A reused child launches nothing, so neither the launch observer nor the post-launch classification
+ 					// runs. Capacity release holds the workflow's slot while any step lacks `async`, so name the reused run
+ 					// and whether it ran detached (it has a run directory); its own process proof then decides.
+-					const recordReusedWorkflowChild = (key: string, runId: string | undefined): void => {
++					const recordReusedWorkflowChild = (key: string, runId: string | undefined, launch?: Pick<SingleResult, "sessionFile" | "sessionName">): void => {
+ 						const step = status.steps?.find((candidate) => candidate.workflowKey === key);
+ 						if (!step) return;
+ 						if (runId) step.runId = runId;
++						if (launch?.sessionFile) step.sessionFile = launch.sessionFile;
++						if (launch?.sessionName) step.sessionName = launch.sessionName;
+ 						step.async = runId !== undefined && path.basename(runId) === runId && fs.existsSync(path.join(path.dirname(asyncDir), runId));
+ 						persist({ tolerateStatusWriteFailure: true });
+ 					};
+@@ -6389,7 +6391,9 @@
+ 								const priorChild = workflowReuseSource ? matchWorkflowReuse(workflowReuseSource, key, journalFingerprint) : undefined;
+ 								if (priorChild?.kind === "settled") {
+ 									if (priorChild.result.runId) workflowChildRunIds.set(key, priorChild.result.runId);
+-									recordReusedWorkflowChild(key, priorChild.result.runId);
++									const priorResult = priorChild.result.results?.length === 1 ? priorChild.result.results[0] : undefined;
++									const priorLaunch = priorResult && (!priorResult.runId || priorResult.runId === priorChild.result.runId) ? priorResult : undefined;
++									recordReusedWorkflowChild(key, priorChild.result.runId, priorLaunch);
+ 									return { ...priorChild.result, reused: true };
+ 								}
+ 								if (priorChild?.kind === "started") {
+@@ -6398,7 +6402,14 @@
+ 									const priorRunId = priorChild.runId;
+ 									const priorAsyncDir = path.join(DIRS.async, priorRunId);
+ 									appendWorkflowChildJournal(asyncDir, { type: "start", key, fingerprint: journalFingerprint, runId: priorRunId });
+-									recordReusedWorkflowChild(key, priorRunId);
++									let priorLaunch: Pick<SingleResult, "sessionFile" | "sessionName"> | undefined;
++									try {
++										const priorStatus = readStatus(priorAsyncDir);
++										if (priorStatus?.runId === priorRunId && priorStatus.mode === "single" && priorStatus.steps?.length === 1) priorLaunch = priorStatus.steps[0];
++									} catch {
++										// Metadata is optional; the existing await path owns unreadable status and fallback.
++									}
++									recordReusedWorkflowChild(key, priorRunId, priorLaunch);
+ 									// The journal names this exact run, which may belong to another session anywhere in the relaunch chain.
+ 									const stopListener = stopAwaitedAsyncChildOnAbort(workflowSignal, deps.state, priorRunId, priorAsyncDir, deps.kill, true);
+ 									const reattached = await awaitExistingAsyncRun(priorAsyncDir, priorRunId, workflowSignal).finally(stopListener.remove);
+--- a/test/integration/workflow-owner-killed.test.ts
++++ b/test/integration/workflow-owner-killed.test.ts
+@@ -10,6 +10,7 @@
+ import { createEventBus, makeAgent, makeMinimalCtx } from "../support/helpers.ts";
+ import { installAsyncExecutionHooks, available, createSubagentExecutor, waitForAsyncState, ASYNC_DIR, tempDir, mockPi } from "../support/async-execution-fixture.ts";
+ import type { AsyncStatus } from "../../src/shared/types.ts";
++import { runtimeReplacedAbortReason } from "../../src/workflows/workflow-reuse.ts";
+ 
+ const repo = fileURLToPath(new URL("../../", import.meta.url));
+ 
+@@ -87,6 +88,27 @@
+ 	return { script, args, release, callsBefore, killed, finish };
+ }
+ 
++async function assertReusedLaunchMetadata(sourceId: string, resumedId: string, stage2RunId: string): Promise<void> {
++	const source = readJson<AsyncStatus>(path.join(ASYNC_DIR, sourceId, "status.json"))!;
++	const resumed = await pollFor("both reused step identities", () => {
++		const status = readJson<AsyncStatus>(path.join(ASYNC_DIR, resumedId, "status.json"));
++		return status?.steps?.find((step) => step.workflowKey === "stage2")?.runId === stage2RunId ? status : undefined;
++	}, 30_000);
++	for (const key of ["stage1", "stage2"]) {
++		const original = source.steps!.find((step) => step.workflowKey === key)!;
++		const reused = resumed.steps!.find((step) => step.workflowKey === key)!;
++		assert.ok(original.sessionFile, `${key} originally published a session file`);
++		assert.ok(original.sessionName, `${key} originally published a session name`);
++		assert.equal(reused.runId, original.runId, `${key} reuses its child`);
++		assert.equal(reused.sessionFile, original.sessionFile, `${key} publishes its original file before gate release`);
++		assert.equal(reused.sessionName, original.sessionName, `${key} publishes its original name before gate release`);
++		assert.equal(reused.parentWorkflowRunId, resumedId, `${key} belongs to the resumed workflow`);
++	}
++	const child = readJson<AsyncStatus>(path.join(ASYNC_DIR, stage2RunId, "status.json"))!;
++	assert.equal(child.state, "running", "reattachment publishes metadata while the child is held");
++	assert.equal(child.parentWorkflowRunId, sourceId, "reattachment does not rewrite child ownership");
++}
++
+ type Handler = (event: unknown, ctx: unknown) => unknown;
+ 
+ /** Opens the session again in this process through the extension's session start, as `pi --session <file>` does. */
+@@ -135,9 +157,10 @@
+ 		const run = startKilledWorkflow(nonce, `session-killed-${nonce}`);
+ 		try {
+ 			const { killedId, stage2RunId } = await run.killed;
++			const workflowControllers = new Map<string, AbortController>();
+ 			const executor = createSubagentExecutor!({
+ 				pi: { events: createEventBus(), getSessionName: () => undefined, sendMessage: () => {} },
+-				state: { baseCwd: tempDir, currentSessionId: null, asyncJobs: new Map(), foregroundControls: new Map(), lastForegroundControlId: null },
++				state: { baseCwd: tempDir, currentSessionId: null, asyncJobs: new Map(), foregroundControls: new Map(), lastForegroundControlId: null, workflowControllers },
+ 				config: {},
+ 				asyncByDefault: false,
+ 				tempArtifactsDir: tempDir,
+@@ -150,17 +173,27 @@
+ 			mockPi.onCall({ matchArgIncludes: `Stage three ${nonce}`, output: "stage three done" });
+ 			const relaunch = await executor.execute(`${nonce}-relaunch`, { workflowScript: run.script, args: run.args, async: true, mission: false, reuseFrom: killedId }, new AbortController().signal, undefined, ctx);
+ 			assert.notEqual(relaunch.isError, true, relaunch.content[0]?.text);
+-			const relaunchId = relaunch.details.asyncId!;
++			let relaunchId = relaunch.details.asyncId!;
+ 			const killed = readJson<AsyncStatus>(path.join(ASYNC_DIR, killedId, "status.json"));
+ 			assert.equal(killed?.state, "failed");
+ 			assert.equal(killed?.workflow?.stopCause, "owner-exited");
+ 
+ 			await waitForAsyncState(relaunchId, (status) => (status as AsyncStatus).workflow?.trace.some((entry) => entry.key === "stage2" && entry.state === "started") ?? false, 30_000);
++			await assertReusedLaunchMetadata(killedId, relaunchId, stage2RunId);
+ 			assert.equal(mockPi.callCount(), run.callsBefore + 2, "the relaunch launched nothing for stage1 or stage2");
++			workflowControllers.get(relaunchId)!.abort(runtimeReplacedAbortReason());
++			await waitForAsyncState(relaunchId, (status) => status.state === "stopped", 30_000);
++			const replacedId = relaunchId;
++			const secondRelaunch = await executor.execute(`${nonce}-relaunch-again`, { workflowScript: run.script, args: run.args, async: true, mission: false, reuseFrom: replacedId }, new AbortController().signal, undefined, ctx);
++			assert.notEqual(secondRelaunch.isError, true, secondRelaunch.content[0]?.text);
++			relaunchId = secondRelaunch.details.asyncId!;
++			await assertReusedLaunchMetadata(killedId, relaunchId, stage2RunId);
++			assert.equal(readJson<AsyncStatus>(path.join(ASYNC_DIR, relaunchId, "status.json"))?.workflow?.reusedFrom, replacedId);
++			assert.equal(mockPi.callCount(), run.callsBefore + 2, "a second replacement still launches no duplicate children");
+ 			fs.writeFileSync(run.release, "go");
+ 			const done = await waitForAsyncState(relaunchId, terminal, 60_000) as AsyncStatus;
+ 			assert.equal(done.state, "complete", done.error);
+-			assert.equal(done.workflow?.reusedFrom, killedId);
++			assert.equal(done.workflow?.reusedFrom, replacedId);
+ 			assert.deepEqual(done.workflow?.value, { first: "stage one done", firstReused: true, second: "stage two done", secondReused: true, third: "stage three done" });
+ 			assert.equal(done.steps?.find((step) => step.workflowKey === "stage2")?.runId, stage2RunId, "stage2 is the same run, not a second copy");
+ 			assert.equal(mockPi.callCount(), run.callsBefore + 3, "stage1 and stage2 ran once each, stage3 exactly once");
+@@ -180,7 +213,7 @@
+ 		const run = startKilledWorkflow(nonce, sessionFile);
+ 		let reopened: Awaited<ReturnType<typeof reopenSession>> | undefined;
+ 		try {
+-			const { killedId } = await run.killed;
++			const { killedId, stage2RunId } = await run.killed;
+ 			mockPi.onCall({ matchArgIncludes: `Stage three ${nonce}`, output: "stage three done" });
+ 			reopened = await reopenSession(sessionFile, agentDir);
+ 			const resumedRuns = () => fs.readdirSync(ASYNC_DIR).filter((entry) => readJson<AsyncStatus>(path.join(ASYNC_DIR, entry, "status.json"))?.workflow?.resumeOrigin?.sourceRunId === killedId);
+@@ -188,6 +221,7 @@
+ 			assert.deepEqual(readJson<AsyncStatus>(path.join(ASYNC_DIR, resumedId, "status.json"))?.workflow?.resumeOrigin, { sourceRunId: killedId, attempt: 1 });
+ 
+ 			await waitForAsyncState(resumedId, (status) => (status as AsyncStatus).workflow?.trace.some((entry) => entry.key === "stage2" && entry.state === "started") ?? false, 30_000);
++			await assertReusedLaunchMetadata(killedId, resumedId, stage2RunId);
+ 			assert.equal(mockPi.callCount(), run.callsBefore + 2, "the resume launched nothing for stage1 or stage2");
+ 			fs.writeFileSync(run.release, "go");
+ 			const done = await waitForAsyncState(resumedId, terminal, 30_000) as AsyncStatus;

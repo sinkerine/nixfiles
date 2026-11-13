@@ -46,12 +46,13 @@
  			const startedAt = Date.now();
  			const batch = isRecord(message.args.batch) && typeof message.args.batch.id === "string" && Array.isArray(message.args.batch.calls)
  				? { id: message.args.batch.id, calls: message.args.batch.calls.filter((call): call is { key: string; params: Record<string, unknown> } => isRecord(call) && typeof call.key === "string" && isRecord(call.params)) }
-@@ -1623,7 +1634,9 @@
+@@ -1623,7 +1634,10 @@
  						if (predecessor?.continuation && predecessor.continuation.runIds.at(-1) === resolvedResumeId) resolvedResumeLineage = predecessor.continuation.runIds;
  					}
  				}
 -				const launchParams = resolvedResumeId ? { ...params, resume: resolvedResumeId } : params;
-+				const launchParams = resolvedResumeId ? { ...params, resume: resolvedResumeId } : { ...params };
++				const launchParams = { ...params };
++				if (resolvedResumeId) launchParams.resume = resolvedResumeId;
 +				// Workflow notification policy is not part of a child's launch contract.
 +				delete launchParams.notifyOnComplete;
  				await launchSemaphore.acquire();

@@ -14,13 +14,14 @@ buildNpmPackage {
   src = fetchFromGitHub {
     owner = "nicobailon";
     repo = "pi-subagents";
-    rev = "v0.84.0";
+    rev = "0398b9e8d6f03dc6054dbf13dfe851c7a20bff3a";
     hash = "sha256-yJHclk8TqJX0OGDteZYAbcW9qGDY9a8BSVy0kxcRpEU=";
   };
 
   patches = [
     ./task-boundary-wake.patch
     ./host-verification-activity.patch
+    ./workflow-reuse-launch-metadata.patch
   ];
 
   npmDepsHash = "sha256-4iHfVe/7y5xTT3tu8hhbrjOMr8OpkvgpCiDdWqMGVoQ=";
