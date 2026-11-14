@@ -1,6 +1,6 @@
 # pi-goal implementation verification
 
-The implementation follows `docs/pi-goal-design.md`: in-tree session goal package, consumer migration, and a separate Paseo adapter on `feat/pi-goal-adapter`. Legacy `.pi/goals` and the old package remain untouched. No activation, push, default-branch merge, or Paseo input bump was performed.
+The implementation follows `docs/pi-goal-design.md`: in-tree session goal package, consumer migration, and a separate Paseo adapter. The user subsequently authorized merging both branches into their repositories' `main` and updating nixfiles. The integration is recorded below; legacy `.pi/goals` and the old package remain untouched.
 
 ## Checks
 
@@ -77,9 +77,12 @@ Optional legacy import and child usage roll-up are omitted. Child completion usa
 
 The independent review found and rechecked the ownership-transfer fixes and reported no remaining issues. Final regressions also verify budget steering is not delayed by waits/retries and only the process that commits a budget/expiration transition emits its notice.
 
-## Follow-up, requiring the user's go-ahead
+## Repository integration
 
-1. Have the owner of `/nixfiles`' overlapping uncommitted e2e-feature/e2e-dispatch edits preserve and commit that work. Rebase `feat/pi-goal` onto the resulting branch tip, resolve the expected consumer-file overlaps, and rerun the listed affected checks. Do not discard those edits or copy this worktree wholesale over them.
-2. Push `feat/pi-goal-adapter` to the Paseo fork, review/integrate it into the fork's default branch under the owner's chosen delivery workflow, and record the integrated revision.
-3. Update only the `paseo` flake input to that integrated revision; verify the lock diff and rebuild the affected packages/configuration.
-4. Integrate the rebased nixfiles branch as directed. Activate standalone Home Manager through the repository's deployment skill; restart Paseo through its restart skill and verify running store paths. Reload/restart Pi sessions to load the replacement extension. The NixOS build alone does not activate standalone Home Manager or update already-running sessions.
+Paseo `main` includes the adapter at `2e9d69649f39770d3ced777900d6be8bcfba269e`, published to `sinkerine/paseo`. The feature branch was integrated with the existing local main changes before main was advanced. The merged adapter/agent checks pass (194 tests), as do server typecheck, full workspace typecheck, lint and formatting. Both Nix daemon and desktop packages build successfully from the merged input.
+
+The nixfiles feature branch was rebased onto main `bd83ab9fba` and merged into local main. Commit `2f26ae193e` updates only the `paseo` lock node to the published revision; daemon and desktop evaluate to `0.15.3-2e9d696`. The Pi package setting evaluates to `pi-goal`, with no `pi-goal-x` package loaded.
+
+Existing `/nixfiles` changes were preserved as uncommitted work, including both intent-to-add skills and the untracked capability reference. Restoring them required resolving three skill-document overlaps: keep the newer capability, recovery and host-placement guidance, while using session-bound creation, automatic continuation, adoption and pause-preserving host handoffs. No unrelated edits were committed. The combined working tree passes 15 verification tests and 23 dispatch tests, including the existing project denylist regressions; the kazuki configuration build also passes.
+
+Activation remains separate from this repository-integration request. Use the deployment/restart skills to activate standalone Home Manager and restart Paseo when requested, then reload/restart Pi sessions. Building the NixOS configuration alone does not activate standalone Home Manager or update already-running sessions.
