@@ -2,13 +2,13 @@
 
 stdenvNoCC.mkDerivation {
   pname = "pi-hindsight";
-  version = "0.1.0-unstable-2026-11-10";
+  version = "0.1.0-unstable-2026-11-13";
 
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "pi-hindsight";
-    rev = "18b8162e7fc6d7f7d768fd7d64248a1c4e5db684";
-    hash = "sha256-VvwOxb+YRU8XBFwKlxH1vtKxHaqh5FqoELsWbf1+Pz4=";
+    rev = "cb26ab553dfa1536797ecc7901970e03ef16fa1d";
+    hash = "sha256-M7jMQEGKX0AZ7yS5cqQGe0GqciBKCNpHjgI1D3/9DgQ=";
   };
 
   dontConfigure = true;
