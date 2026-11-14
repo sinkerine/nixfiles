@@ -14,7 +14,7 @@ nix build --no-link .#pi-goal .#e2e-dispatch
 nixos-rebuild build --flake .#kazuki
 ```
 
-All pass: 17 extension tests (also run in the Nix checkPhase), 15 verification tests, and 21 dispatch tests. Strict TypeScript checking of the extension and its tests also passes:
+All pass: 20 extension tests (also run in the Nix checkPhase), 15 verification tests, and 21 dispatch tests. Strict TypeScript checking of the extension and its tests also passes:
 
 ```sh
 /home/sinkerine/.paseo/worktrees/28vpgp2p/pi-goal-adapter/node_modules/.bin/tsc \
@@ -30,7 +30,7 @@ python3 pkgs/pi-goal/tests/smoke.py --adapter \
   /home/sinkerine/.paseo/worktrees/28vpgp2p/pi-goal-adapter/packages/server/src/server/agent/providers/pi/extensions/pi-goal/index.ts
 ```
 
-This passes using the installed Pi executable, a temporary Git repository, isolated configuration/session/state directories, and a deterministic local OpenAI-compatible endpoint. It executes `/goal`, observes two automatic goal turns, pauses out of band during streaming, restarts the session while paused, resumes, and pauses again. Actual emitted custom messages map through the real Paseo adapter to active/paused todos, suppress default prompt rendering, and replay the latest paused state. The same smoke also passes with `--extension /nix/store/mwrwvji92na1bvy37ik4ah4f55dp41hi-pi-goal-1.0.0/lib/node_modules/pi-goal/extensions/index.ts`, exercising the Nix-installed runtime without development peer symlinks. This is a real Pi RPC smoke, not a GUI screenshot or a remote-model quality evaluation.
+This passes using the installed Pi executable, a temporary Git repository, isolated configuration/session/state directories, and a deterministic local OpenAI-compatible endpoint. It executes `/goal`, observes two automatic goal turns, pauses out of band during streaming, restarts the session while paused, resumes, and pauses again. Actual emitted custom messages map through the real Paseo adapter to active/paused todos, suppress default prompt rendering, and replay the latest paused state. The same smoke also passes with `--extension /nix/store/02vr5wi5v4jbwjxzyw8y92ig5dvp8y6b-pi-goal-1.0.0/lib/node_modules/pi-goal/extensions/index.ts`, exercising the Nix-installed runtime without development peer symlinks. This is a real Pi RPC smoke, not a GUI screenshot or a remote-model quality evaluation.
 
 In the Paseo adapter worktree, the adapter worker ran these commands successfully:
 
@@ -54,7 +54,7 @@ These cover 229 tests (27 adapter, 14 host, 21 history mapper, 167 agent). Forma
 | F1: unfocused reminders | Runtime and production-hook tests inject no goal context without a binding; no project pool reads. |
 | F2/F3: stop/continue via agent | User-triggered lifecycle tests accept pause/resume/clear, reject continuation-initiated lifecycle control, and pause by another session's goal id. |
 | F4: revision conflicts | Two real Node processes perform 120 mutations of one goal; all increments and revisions survive. |
-| F5: tab handoff | Adoption transfers ownership, old owner dispatches nothing and notices once, new owner continues; paused adoption stays paused. |
+| F5: tab handoff | Adoption transfers ownership; the old owner unbinds, clears its todo/context, notices once, and can create a new goal. In-flight non-user writes to transferred/foreign goals are rejected under the lock. New owner continues; paused adoption stays paused. |
 | F6: revived writer | Ownership is read again after the subagent probe, immediately before dispatch. Tests change ownership during that probe. Active runs hold continuation. Codex prompt adds authoritative-writer guidance. |
 | F7: repetitive checkpoints | Create/settle tests and real Pi smoke continue without ready declarations. |
 | F8: missing indicator | Adapter live/history/replay tests and actual producer snapshots map to the existing todo timeline. |
@@ -67,13 +67,15 @@ These cover 229 tests (27 adapter, 14 host, 21 history mapper, 167 agent). Forma
 
 ## Implementation notes
 
-The package contains 797 lines of non-test TypeScript, including the copied helper modules; the Paseo adapter adds 75 lines.
+The package contains 817 lines of non-test TypeScript, including the copied helper modules; the Paseo adapter adds 75 lines.
 
-Bindings include branch snapshots, and later session custom entries update those snapshots. This makes a historical fork use branch-time objective/usage rather than a later version of the original disk record. The record also tracks goal-turn/blocker counters to enforce the three-turn blocked audit. These are internal metadata extensions to the specified v1 record.
+Bindings include branch snapshots, and later session custom entries update those snapshots. This makes a historical fork use branch-time objective/usage rather than a later version of the original disk record. The semantic three-turn blocked audit follows the ported Codex prompt and tool contract; the tool requires a reason without demanding repeated blocker declarations. The automatic three-empty-continuation guard remains enforced in runtime state. This avoids turning an audited third-turn block into extra checkpoint turns.
 
 The old host-dispatch helper name is retained for RPC compatibility; it now archives matching source goals atomically in the host-local store after source processes stop. It preserves status and does not transfer goal records. Legacy goal files are neither moved nor deleted.
 
 Optional legacy import and child usage roll-up are omitted. Child completion usage is not required for this implementation; owning-session assistant usage is accounted. No required feature was deliberately removed.
+
+The independent review found and rechecked the ownership-transfer fixes and reported no remaining issues. Final regressions also verify budget steering is not delayed by waits/retries and only the process that commits a budget/expiration transition emits its notice.
 
 ## Follow-up, requiring the user's go-ahead
 

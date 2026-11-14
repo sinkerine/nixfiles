@@ -31,8 +31,8 @@ export default function (pi: ExtensionAPI) {
   let aborted = false;
   let generation = 0;
   const store = new Store();
-  const message = (text: string, goal: Goal, triggerTurn = false) => pi.sendMessage({ customType: "pi-goal",
-    content: text, display: false, details: { ...runtime!.details(goal), continuation: triggerTurn } },
+  const message = (text: string, goal: Goal | null, triggerTurn = false) => pi.sendMessage({ customType: "pi-goal",
+    content: text, display: false, details: { ...(goal === null ? { piGoal: 1, goal: null } : runtime!.details(goal)), continuation: triggerTurn } },
     { triggerTurn, deliverAs: "followUp" });
   const schedule = (at: number) => {
     clearTimeout(timer);
@@ -56,9 +56,9 @@ export default function (pi: ExtensionAPI) {
     runtime = new Runtime(store, ctx.sessionManager.getSessionId(), repoRoot, ctx.cwd, {
       entry: (type, data) => pi.appendEntry(type, data),
       notify: (text, goal) => {
-        if (goal.status === "budget_limited" && text === "Token budget reached") {
+        if (goal?.status === "budget_limited" && text === "Token budget reached") {
           queued = true; message(render(budget, goal), goal, true);
-        } else message(text, goal);
+        } else { message(text, goal); current?.ui.notify(text, "info"); }
       },
       dispatch: goal => { queued = true; message(render(continuation, goal), goal, true); },
       activeRuns: () => probe?.activeRuns() ?? Promise.resolve(undefined),
@@ -181,7 +181,10 @@ export default function (pi: ExtensionAPI) {
           try { return r.adopt(arg); } finally { r.userTriggered = previous; }
         })() : name === "goal-clear" ? r.clear(arg || undefined, true) :
           r.update({ goal_id: arg || undefined, status: name === "goal-pause" ? "paused" : "active" }, true);
-        if (goal) { message(`Goal ${goal.id}: ${goal.status}`, goal); ctx.ui.notify(JSON.stringify(r.details(goal).goal), "info"); }
+        if (goal) {
+          if ((name === "goal" && arg) || name === "goal-adopt") message(`Goal ${goal.id}: ${goal.status}`, goal);
+          ctx.ui.notify(JSON.stringify(r.details(goal).goal), "info");
+        }
         else ctx.ui.notify("No goal is bound", "info");
         schedule(Date.now() + 1);
       } catch (error) { ctx.ui.notify(error instanceof Error ? error.message : String(error), "error"); }

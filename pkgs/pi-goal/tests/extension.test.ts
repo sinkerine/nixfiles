@@ -4,6 +4,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import extension from "../extensions/index.ts";
+import { Store } from "../extensions/store.ts";
 
 // This harness exercises the production event and command registrations. The
 // separate CLI smoke drives these same paths through the installed Pi runtime.
@@ -86,5 +87,12 @@ test("production hooks: no unfocused context, create, continuation, user pause/r
   await h.emit("turn_end", { message: { role: "assistant", usage: { totalTokens: 1 }, stopReason: "stop" } });
   const recovered = await h.tools.get("get_goal").execute("id", {});
   assert.equal(JSON.parse(recovered.content[0].text).retry, null);
+  const goalId = JSON.parse(created.content[0].text).id;
+  new Store().mutate(goalId, "other-session", "adopt", goal => { goal.ownerSessionId = "other-session"; });
+  await h.emit("agent_settled", { aborted: false });
+  assert.equal(h.messages.at(-1).details.goal, null, "the previous owner's Paseo todo is cleared");
+  assert.match(h.messages.at(-1).content, /adopted by other-session/);
+  await h.tools.get("create_goal").execute("id", { objective: "new goal after handoff" });
+  assert.equal(new Store().read(goalId)!.status, "active", "old tab must not clear the new owner's goal");
   await h.emit("session_shutdown");
 });

@@ -42,10 +42,10 @@ test("create binds verbatim objective, compact details; exactly one dispatch and
     await r.settle();
     assert.equal(s.dispatches, 1);
     if (status === "blocked") {
-      for (let turn = 0; turn < 2; turn++) {
-        assert.throws(() => r.update({ status, reason: "dependency unavailable" }), /three consecutive/);
-        r.finish(1);
-      }
+      assert.throws(() => r.update({ status }), /requires a reason/);
+      // The model audits the same blocker over three turns before declaring
+      // blocked; the tool must not demand three extra checkpoint declarations.
+      r.finish(1); r.finish(1); r.finish(1);
     }
     r.update({ status, reason: "dependency unavailable" });
     s.idle = true; await r.settle(); assert.equal(s.dispatches, 1);
@@ -85,10 +85,29 @@ test("adopt revokes old continuation, notices once and preserves paused/blocked 
   const b = session("B"); b.r.adopt(goal.id);
   await a.r.settle(); await a.r.settle(); assert.equal(a.s.dispatches, 0);
   assert.equal(a.s.notices.filter(n => n.includes("adopted by B")).length, 1);
+  assert.equal(a.r.bound, undefined);
+  assert.equal(a.r.context(), undefined);
+  assert.throws(() => a.r.clear(), /No goal is bound/);
+  assert.throws(() => a.r.update({ status: "paused" }), /No goal is bound/);
+  assert.equal(b.r.goal()!.status, "active");
+  a.r.create("a different goal after transfer");
   await b.r.settle(); assert.equal(b.s.dispatches, 1);
   b.r.update({ status: "paused" });
   const c = session("C"); c.r.adopt(goal.id); await c.r.settle();
   assert.equal(c.r.goal()!.status, "paused"); assert.equal(c.s.dispatches, 0);
+});
+test("an in-flight non-user turn cannot mutate a transferred or foreign goal", t => {
+  const { session } = setup(t); const a = session("A"), b = session("B");
+  const goal = a.r.create("work"); b.r.adopt(goal.id);
+  a.r.userTriggered = false;
+  assert.throws(() => a.r.update({ goal_id: goal.id, status: "complete" }), /owned by session B/);
+  assert.throws(() => a.r.update({ goal_id: goal.id, continuation: { kind: "wait", reason: "waiting", deadline: new Date(Date.now() + 60000).toISOString() } }), /owned by session B/);
+  const unrelated = session("C"); unrelated.r.userTriggered = false;
+  assert.throws(() => unrelated.r.update({ goal_id: goal.id, status: "complete" }), /user-triggered/);
+  assert.equal(b.r.goal()!.status, "active");
+  const reopened = session("A"); reopened.r.restore(a.s.entries[0]!.data as Binding);
+  assert.equal(reopened.r.bound, undefined);
+  assert.equal(reopened.s.notices.length, 1);
 });
 test("pause/resume/clear need user turn; another session can pause by id", async t => {
   const { session } = setup(t); const a = session("A"), b = session("B");
@@ -115,7 +134,9 @@ test("message wait matches source and complete first token; user consumes, expir
   const { session, store } = setup(t); const { r, s } = session("A"); r.create("work");
   const wait = () => r.update({ continuation: { kind: "wait", reason: "SDK", deadline: new Date(Date.now() + 60000).toISOString(), message: { source_agent_id: "sdk", prefix: "SDK_READY" } } });
   assert.throws(() => r.update({ continuation: { kind: "wait", reason: "SDK", deadline: new Date(Date.now() + 60000).toISOString(), message: { source_agent_id: "sdk", prefix: "TWO TOKENS" } } }), /single-token/);
-  wait(); await r.settle(); assert.equal(s.dispatches, 0); assert.equal(s.scheduled.length, 1);
+  wait(); r.update({ continuation: { kind: "ready" } });
+  assert.ok(r.goal()!.wait, "ready remains a compatibility no-op and cannot consume a wait");
+  await r.settle(); assert.equal(s.dispatches, 0); assert.equal(s.scheduled.length, 1);
   const envelope = (source: string, body: string) => `<paseo-system kind="agent-message" source-agent-id="${source}">${body}</paseo-system>`;
   for (const text of [envelope("wrong", "SDK_READY"), envelope("sdk", "SDK_READYISH"), envelope("sdk", "hi SDK_READY")]) {
     r.input(text, false); assert.ok(r.goal()!.wait);
@@ -144,12 +165,33 @@ test("no-progress blocks on third continuation, any tool resets; abort only paus
 });
 test("budget accounting rolls through completion; budget sends steering once and prevents resume", async t => {
   const { session } = setup(t); const { r, s } = session("A"); r.create("work", 10); r.begin();
+  r.update({ continuation: { kind: "wait", reason: "dependency", deadline: new Date(Date.now() + 60000).toISOString() } });
+  r.store.mutate(r.bound!, "A", "retry", goal => { goal.retry = { at: Date.now() + 60000, reason: "quota" }; });
   r.account(10, 3); await r.settle(); await r.settle();
+  assert.equal(s.scheduled.length, 0, "saved waits and retries must not postpone budget steering");
   assert.equal(r.goal()!.status, "budget_limited"); assert.equal(s.dispatches, 0);
   assert.equal(s.notices.filter(n => n === "Token budget reached").length, 1);
   assert.throws(() => r.update({ status: "active" }), /exhausted/);
   r.update({ status: "complete" }); r.account(2, 1);
   assert.equal(r.store.read((s.entries[0]!.data as Binding).goalId)!.tokensUsed, 12);
+});
+test("a concurrent terminal transition does not duplicate budget or expiration notices", async t => {
+  const { session, store } = setup(t);
+  for (const event of ["budget", "wait-expired"] as const) {
+    const { r, s } = session(event); const goal = r.create("work", event === "budget" ? 1 : undefined);
+    store.mutate(goal.id, event, "setup", g => {
+      if (event === "budget") g.tokensUsed = 1;
+      else g.wait = { reason: "dependency", deadline: new Date(0).toISOString() };
+    });
+    const mutate = store.mutate.bind(store);
+    store.mutate = (id, sessionId, kind, apply) => {
+      if (kind === event) mutate(id, "other-process", "transition", g => { g.status = event === "budget" ? "budget_limited" : "blocked"; g.wait = null; });
+      return mutate(id, sessionId, kind, apply);
+    };
+    await r.settle();
+    assert.equal(s.notices.length, 0, "the process that committed the transition owns its notice");
+    store.mutate = mutate;
+  }
 });
 test("no bound goal injects no context; delegated detector includes nested children", t => {
   const { session } = setup(t); assert.equal(session("A").r.context(), undefined);
@@ -186,6 +228,14 @@ test("background probe returns active count and unavailable fails open", async (
   await Promise.resolve(); assert.equal(await probe.activeRuns(), 3); probe.dispose();
   assert.equal(await probe.activeRuns(), undefined);
   const absent = new BackgroundWorkProbe(undefined, 10); assert.equal(await absent.activeRuns(), undefined); absent.dispose();
+});
+test("listing skips malformed or missing records without hiding valid goals", t => {
+  const { session, store, dir } = setup(t); const { r } = session("A"); const goal = r.create("work");
+  fs.writeFileSync(path.join(store.directory, "broken.json"), "invalid JSON");
+  fs.writeFileSync(path.join(store.directory, "wrong.json"), JSON.stringify({ version: 9, id: "wrong" }));
+  assert.deepEqual(store.list(dir).map(g => g.id), [goal.id]);
+  assert.throws(() => store.read("broken"));
+  assert.equal(store.read("missing"), undefined);
 });
 test("two real processes mutate fresh records without losing updates or revision conflicts", async t => {
   const { session, store } = setup(t); const { r } = session("A"); const goal = r.create("work");

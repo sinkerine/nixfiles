@@ -16,8 +16,7 @@ export interface Goal {
   tokenBudget: number | null; tokensUsed: number; timeUsedSeconds: number;
   deferContinuation: boolean; wait: Wait | null; retry: { at: number; reason: string } | null;
   noProgressTurns: number; revision: number; createdAt: string; updatedAt: string;
-  archivedAt?: string; goalTurns: number;
-  blocker?: { reason: string; turn: number; count: number };
+  archivedAt?: string;
   history: { at: string; event: string; sessionId: string; detail?: string }[];
 }
 export function stateDirectory(env = process.env): string {
@@ -39,8 +38,12 @@ export class Store {
   }
   list(repoRoot: string): Goal[] {
     if (!fs.existsSync(this.directory)) return [];
-    return fs.readdirSync(this.directory).filter(n => n.endsWith(".json"))
-      .map(n => this.read(n.slice(0, -5))!).filter(g => !g.archivedAt && g.repoRoot === repoRoot);
+    return fs.readdirSync(this.directory).filter(n => n.endsWith(".json")).flatMap(name => {
+      // A malformed, inaccessible or concurrently removed record must not hide
+      // the remaining goals. Reading it explicitly still reports its error.
+      try { const goal = this.read(name.slice(0, -5)); return goal && !goal.archivedAt && goal.repoRoot === repoRoot ? [goal] : []; }
+      catch { return []; }
+    });
   }
   private write(goal: Goal): void {
     const file = this.file(goal.id);
@@ -59,7 +62,7 @@ export class Store {
         statusReason: snapshot?.statusReason, ownerSessionId: session, repoRoot, cwd,
         tokenBudget: budget, tokensUsed: snapshot?.tokensUsed ?? 0, timeUsedSeconds: snapshot?.timeUsedSeconds ?? 0,
         deferContinuation: !!snapshot, wait: snapshot?.wait ?? null, retry: snapshot?.retry ?? null,
-        noProgressTurns: 0, goalTurns: 0, revision: 1, createdAt: at, updatedAt: at,
+        noProgressTurns: 0, revision: 1, createdAt: at, updatedAt: at,
         history: [{ at, event: snapshot ? "fork" : "create", sessionId: session, detail: snapshot?.id }] };
       this.write(goal); return goal;
     } finally { lock.release(); }
