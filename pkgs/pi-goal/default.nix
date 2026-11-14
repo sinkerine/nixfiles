@@ -1,8 +1,13 @@
-{ lib, stdenvNoCC, nodejs, pi-coding-agent }:
+{ lib, stdenvNoCC, fetchFromGitHub, nodejs, pi-coding-agent }:
 stdenvNoCC.mkDerivation {
   pname = "pi-goal";
   version = "1.0.0";
-  src = ./.;
+  src = fetchFromGitHub {
+    owner = "sinkerine";
+    repo = "pi-goal";
+    rev = "a29f25cc42fe4868bb351d19b61da074d273ce10";
+    hash = "sha256-GSQDVGB5Gabtra0vaVARoRTUuNgNfXZ1GnDFojR//do=";
+  };
   dontConfigure = true;
   dontBuild = true;
   doCheck = true;
@@ -24,6 +29,7 @@ stdenvNoCC.mkDerivation {
   '';
   meta = {
     description = "Session-bound goals and automatic continuation for Pi";
+    homepage = "https://github.com/sinkerine/pi-goal";
     license = with lib.licenses; [ mit asl20 ];
   };
 }

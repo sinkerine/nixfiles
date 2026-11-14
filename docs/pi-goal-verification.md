@@ -1,13 +1,13 @@
 # pi-goal implementation verification
 
-The implementation follows `docs/pi-goal-design.md`: in-tree session goal package, consumer migration, and a separate Paseo adapter. The user subsequently authorized merging both branches into their repositories' `main` and updating nixfiles. The integration is recorded below; legacy `.pi/goals` and the old package remain untouched.
+The implementation follows `docs/pi-goal-design.md`: session goal package, consumer migration, and a separate Paseo adapter. The source was initially implemented in-tree and subsequently extracted at the user's request to `~/dev/pi-goal` and `sinkerine/pi-goal`; nixfiles retains the pinned package definition. The user subsequently authorized merging both branches into their repositories' `main` and updating nixfiles. The integration is recorded below; legacy `.pi/goals` and the old package remain untouched.
 
 ## Checks
 
 From this nixfiles worktree:
 
 ```sh
-node --experimental-strip-types --test pkgs/pi-goal/tests/*.test.ts
+npm --prefix /home/sinkerine/dev/pi-goal test
 python3 -m unittest discover -s home/modules/programs/pi-coding-agent-skills/e2e-feature/tests -p 'test_verify.py'
 python3 -m unittest discover -s pkgs/e2e-dispatch -p 'test*.py'
 nix build --no-link .#pi-goal .#e2e-dispatch
@@ -17,22 +17,22 @@ nixos-rebuild build --flake .#kazuki
 All pass: 20 extension tests (also run in the Nix checkPhase), 15 verification tests, and 21 dispatch tests. Strict TypeScript checking of the extension and its tests also passes:
 
 ```sh
-/home/sinkerine/.paseo/worktrees/28vpgp2p/pi-goal-adapter/node_modules/.bin/tsc \
+/home/sinkerine/dev/paseo/node_modules/.bin/tsc \
   --noEmit --target es2022 --module nodenext --moduleResolution nodenext \
   --allowImportingTsExtensions --skipLibCheck --strict \
-  pkgs/pi-goal/extensions/index.ts pkgs/pi-goal/tests/*.test.ts
+  /home/sinkerine/dev/pi-goal/extensions/index.ts /home/sinkerine/dev/pi-goal/tests/*.test.ts
 ```
 
 Real Pi lifecycle smoke and producer/adapter compatibility:
 
 ```sh
-python3 pkgs/pi-goal/tests/smoke.py --adapter \
-  /home/sinkerine/.paseo/worktrees/28vpgp2p/pi-goal-adapter/packages/server/src/server/agent/providers/pi/extensions/pi-goal/index.ts
+python3 /home/sinkerine/dev/pi-goal/tests/smoke.py --adapter \
+  /home/sinkerine/dev/paseo/packages/server/src/server/agent/providers/pi/extensions/pi-goal/index.ts
 ```
 
-This passes using the installed Pi executable, a temporary Git repository, isolated configuration/session/state directories, and a deterministic local OpenAI-compatible endpoint. It executes `/goal`, observes two automatic goal turns, pauses out of band during streaming, restarts the session while paused, resumes, and pauses again. Actual emitted custom messages map through the real Paseo adapter to active/paused todos, suppress default prompt rendering, and replay the latest paused state. The same smoke also passes with `--extension /nix/store/02vr5wi5v4jbwjxzyw8y92ig5dvp8y6b-pi-goal-1.0.0/lib/node_modules/pi-goal/extensions/index.ts`, exercising the Nix-installed runtime without development peer symlinks. This is a real Pi RPC smoke, not a GUI screenshot or a remote-model quality evaluation.
+This passes using the installed Pi executable, a temporary Git repository, isolated configuration/session/state directories, and a deterministic local OpenAI-compatible endpoint. It executes `/goal`, observes two automatic goal turns, pauses out of band during streaming, restarts the session while paused, resumes, and pauses again. Actual emitted custom messages map through the real Paseo adapter to active/paused todos, suppress default prompt rendering, and replay the latest paused state. The same smoke also passes with `--extension /nix/store/bmacf78fqp3lvw6ryqlgsafmg8mjnv11-pi-goal-1.0.0/lib/node_modules/pi-goal/extensions/index.ts`, exercising the Nix-installed runtime without development peer symlinks. This is a real Pi RPC smoke, not a GUI screenshot or a remote-model quality evaluation.
 
-In the Paseo adapter worktree, the adapter worker ran these commands successfully:
+In the Paseo adapter worktree (now integrated into `/home/sinkerine/dev/paseo`), the adapter worker ran these commands successfully:
 
 ```sh
 cd packages/server
@@ -78,6 +78,8 @@ Optional legacy import and child usage roll-up are omitted. Child completion usa
 The independent review found and rechecked the ownership-transfer fixes and reported no remaining issues. Final regressions also verify budget steering is not delayed by waits/retries and only the process that commits a budget/expiration transition emits its notice.
 
 ## Repository integration
+
+The source is maintained in `sinkerine/pi-goal`, with extracted package history and standalone publication commit `a29f25cc42fe4868bb351d19b61da074d273ce10`. Nixfiles fetches that exact revision and hash instead of keeping a second source copy. The extracted checkout passes all 20 unit tests and the real Pi smoke; the fetched package runs the same tests in its Nix check phase.
 
 Paseo `main` includes the adapter at `2e9d69649f39770d3ced777900d6be8bcfba269e`, published to `sinkerine/paseo`. The feature branch was integrated with the existing local main changes before main was advanced. The merged adapter/agent checks pass (194 tests), as do server typecheck, full workspace typecheck, lint and formatting. Both Nix daemon and desktop packages build successfully from the merged input.
 

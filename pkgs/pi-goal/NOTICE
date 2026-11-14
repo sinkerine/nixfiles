@@ -1,3 +1,0 @@
-pi-goal: session-bound goals for Pi. New implementation copyright 2026 sinkerine, MIT.
-Storage locking/atomic replacement, quota retry, network backoff, background-work probe, delegated-session check and Paseo wait matcher adapted from pi-goal-x, copyright its contributors (MIT; LICENSE.pi-goal-x).
-Continuation and budget-limit prompts adapted from OpenAI Codex, commit 7924f95, copyright OpenAI (Apache-2.0; LICENSE.codex).

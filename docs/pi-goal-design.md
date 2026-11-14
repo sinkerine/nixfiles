@@ -2,6 +2,8 @@
 
 Status: approved for implementation (2026-11-14). Owner decisions: build a new package that
 replaces `pi-goal-x` in `home/modules/programs/pi-coding-agent.nix`; drop the goal task tree.
+Subsequent owner decision: extract the source to `~/dev/pi-goal` and `sinkerine/pi-goal`;
+nixfiles retains the pinned Nix package definition.
 
 ## 1. Why
 
@@ -51,8 +53,9 @@ What we copy:
 
 ## 3. Package layout
 
-- New in-tree package `pkgs/pi-goal/` (no new GitHub repo): `default.nix`, `package.json`
-  (pi package manifest, same shape as `pi-goal-x`'s), `extensions/*.ts`, `prompts/*.md`, `tests/`.
+- Canonical source: `sinkerine/pi-goal`, checked out at `~/dev/pi-goal`: `package.json`
+  (Pi package manifest), `extensions/*.ts`, `prompts/*.md`, `tests/`, README and licenses.
+  `pkgs/pi-goal/default.nix` fetches a pinned GitHub commit and owns the Nix packaging.
   Register in `pkgs/default.nix`; install path `lib/node_modules/pi-goal`.
 - Unit tests run in the Nix `checkPhase` the same way `pkgs/pi-goal-x/default.nix` does (link
   `typebox` and `@earendil-works/{pi-coding-agent,pi-ai,pi-tui}` from `pi-coding-agent`).
@@ -196,7 +199,7 @@ only if pi-subagents completion events already carry usage; otherwise skip.
 
 ## 9. Integration changes in this repo
 
-1. `pkgs/pi-goal/` new; `pkgs/default.nix` adds `pi-goal`. Keep `pkgs/pi-goal-x/` in place for now
+1. `pkgs/pi-goal/default.nix` fetches `sinkerine/pi-goal`; `pkgs/default.nix` adds `pi-goal`. Keep `pkgs/pi-goal-x/` in place for now
    (unreferenced) unless removal is trivial; note it in `forked-projects.md` as superseded.
 2. `home/modules/programs/pi-coding-agent.nix`: replace the `piGoalX` package path with
    `pi-goal`; keep `PI_GOAL_QUOTA_URL` wrapper (comment now refers to pi-goal).
@@ -216,7 +219,7 @@ only if pi-subagents completion events already carry usage; otherwise skip.
    `<worktree>/.pi/goals`) and `dispatch-workspaces/SKILL.md`: switch paused-goal detection to the
    new store (goals whose `repoRoot`/`cwd` is the worktree), update tests in
    `test_workspace_dispatch.py`.
-5. `forked-projects.md`: mark pi-goal-x superseded by in-tree `pkgs/pi-goal`.
+5. `forked-projects.md`: record the standalone pi-goal repository and mark pi-goal-x superseded.
 
 Legacy goals: the new extension ignores `<cwd>/.pi/goals`. Provide `/goal-import <path>` only if
 cheap (objective + usage → new goal, status `paused`, owner = importing session); otherwise skip.
