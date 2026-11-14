@@ -98,6 +98,44 @@ class LocalHost:
         raise AssertionError(args)
 
 
+class SessionGoalTests(unittest.TestCase):
+    def test_new_store_detection_and_archive_leave_legacy_untouched(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            worktree = root / "worktree"
+            legacy = worktree / ".pi" / "goals"
+            legacy.mkdir(parents=True)
+            (legacy / "old.md").write_text('"status": "paused"')
+            directory = root / "state" / "pi-goal" / "goals"
+            directory.mkdir(parents=True)
+            def save(goal_id, **values):
+                goal = {"version": 1, "id": goal_id, "status": "active", "repoRoot": str(worktree),
+                        "cwd": str(worktree / "subdir"), "ownerSessionId": "A", "revision": 1, "history": []}
+                goal.update(values)
+                (directory / (goal_id + ".json")).write_text(json.dumps(goal))
+            save("paused", status="paused", statusReason="user pause")
+            save("cwdmatch", repoRoot=str(root / "other"), cwd=str(worktree))
+            save("other", repoRoot=str(root / "other"), cwd=str(root / "other"))
+            save("archived", archivedAt="yesterday")
+            save("complete", status="complete")
+            (directory / "invalid.json").write_text("broken")
+            with patch.dict(os.environ, {"XDG_STATE_HOME": str(root / "state")}):
+                states = dispatch.h_goal_states(str(worktree))
+                self.assertEqual({g["id"] for g in states}, {"paused", "cwdmatch"})
+                paused = next(g for g in states if g["id"] == "paused")
+                self.assertEqual((paused["status"], paused["stopReason"], paused["ownerSessionId"]), ("paused", "user pause", "A"))
+                self.assertEqual(set(dispatch.h_move_goals_aside(str(worktree), str(root / "unused"))), {"paused", "cwdmatch"})
+                self.assertEqual(dispatch.h_goal_states(str(worktree)), [])
+            archived = json.loads((directory / "paused.json").read_text())
+            self.assertEqual(archived["status"], "paused")
+            self.assertEqual((directory / "paused.json").stat().st_mode & 0o777, 0o600)
+            self.assertEqual(archived["revision"], 2)
+            self.assertIn("archivedAt", archived)
+            self.assertNotIn("archivedAt", json.loads((directory / "other.json").read_text()))
+            self.assertTrue((legacy / "old.md").exists())
+            self.assertFalse((root / "unused").exists(), "goal records must not enter transferred files")
+
+
 class RemoteHelperTests(unittest.TestCase):
     def test_large_transcript_streamed_over_stdin(self):
         host = dispatch.Host("sachi")

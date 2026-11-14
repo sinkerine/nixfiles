@@ -381,12 +381,61 @@ def h_rewrite_paths(run_dir, mapping):
 
 
 def h_move_goals_aside(worktree, destination):
-    source = os.path.join(worktree, ".pi", "goals")
-    if not os.path.isdir(source):
-        return None
-    os.makedirs(os.path.dirname(destination), exist_ok=True)
-    shutil.move(source, destination)
-    return destination
+    """Archive source-session goals in place after source processes stop.
+
+    Never move the host-local store into transferred files or touch legacy goals.
+    The historical helper name and destination argument remain RPC-compatible.
+    """
+    archived = []
+    directory = goal_store()
+    for state in h_goal_states(worktree):
+        path = os.path.join(directory, state["file"])
+        lock = os.path.join(directory, ".locks", state["id"] + ".lock")
+        os.makedirs(os.path.dirname(lock), mode=0o700, exist_ok=True)
+        for attempt in range(5000):
+            try:
+                fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                break
+            except FileExistsError:
+                try:
+                    with open(lock, encoding="utf-8") as handle:
+                        pid = json.load(handle).get("pid")
+                    if isinstance(pid, int) and pid > 0:
+                        try:
+                            os.kill(pid, 0)
+                        except ProcessLookupError:
+                            os.unlink(lock)
+                except (OSError, ValueError):
+                    pass
+                time.sleep(0.002)
+        else:
+            raise Failure("Goal lock is held by a live writer: " + state["id"])
+        try:
+            with os.fdopen(fd, "w") as handle:
+                json.dump({"pid": os.getpid()}, handle)
+            with open(path, encoding="utf-8") as handle:
+                goal = json.load(handle)
+            if goal.get("archivedAt"):
+                continue
+            goal["archivedAt"] = goal["updatedAt"] = now_iso()
+            goal["revision"] = goal.get("revision", 0) + 1
+            goal["history"] = (goal.get("history", []) + [{"at": goal["updatedAt"],
+                "event": "host-dispatch-archive", "sessionId": goal.get("ownerSessionId", "")}])[-50:]
+            # Keep objectives private while atomically replacing the record.
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(mode="w", dir=directory, prefix=".archive-", delete=False) as handle:
+                    temporary = handle.name
+                    json.dump(goal, handle, indent=2)
+                    handle.write("\n")
+                os.replace(temporary, path)
+            finally:
+                if temporary and os.path.exists(temporary):
+                    os.unlink(temporary)
+            archived.append(state["id"])
+        finally:
+            os.unlink(lock)
+    return archived
 
 
 def h_ensure_repo(path, origin=None):
@@ -412,17 +461,29 @@ def h_branch_worktrees(repo, branch):
     return paths
 
 
+def goal_store():
+    return os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "pi-goal", "goals")
+
+
 def h_goal_states(worktree):
-    """Status of each active pi goal in the worktree, as pi-goal-x saved it."""
+    """Session goals whose creation cwd or repository root is this worktree."""
     states = []
-    for path in sorted(glob.glob(os.path.join(worktree, PI_STATE_DIR, "goals", "active_goal_*.md"))):
+    target = os.path.realpath(worktree)
+    for path in sorted(glob.glob(os.path.join(goal_store(), "*.json"))):
         try:
             with open(path, encoding="utf-8") as handle:
-                text = handle.read()
-        except OSError:
+                goal = json.load(handle)
+            if goal.get("version") != 1 or goal.get("archivedAt") or goal.get("status") == "complete":
+                continue
+            if not any(isinstance(goal.get(key), str) and os.path.realpath(goal[key]) == target for key in ("repoRoot", "cwd")):
+                continue
+            goal_id = goal.get("id", "")
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", goal_id) or os.path.basename(path) != goal_id + ".json":
+                continue
+            states.append({"file": os.path.basename(path), "id": goal_id, "status": goal.get("status"),
+                           "stopReason": goal.get("statusReason"), "ownerSessionId": goal.get("ownerSessionId")})
+        except (OSError, ValueError, AttributeError, TypeError):
             continue
-        found = {key: re.search(rf'"{key}"\s*:\s*"([^"]*)"', text) for key in ("status", "stopReason")}
-        states.append({"file": os.path.basename(path), **{key: (match.group(1) if match else None) for key, match in found.items()}})
     return states
 
 

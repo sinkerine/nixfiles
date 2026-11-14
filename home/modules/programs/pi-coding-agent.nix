@@ -7,7 +7,7 @@ let
     postWrapper = (old.postWrapper or "") + ''
       export PI_CODING_AGENT_PACKAGE_ROOT="${placeholder "out"}/lib/node_modules/pi-monorepo"
     '';
-    # pi-goal-x waits for the soonest magpie quota reset after a usage limit.
+    # pi-goal waits for the soonest magpie quota reset after a usage limit.
     postFixup = (old.postFixup or "") + ''
       wrapProgram $out/bin/pi \
         --set-default PI_GOAL_QUOTA_URL https://magpie.sachi.m.mado.moe/api/usage/quotas
@@ -19,7 +19,7 @@ let
   piCollapseTools = pkgs.pi-collapse-tools;
   piSubagents = pkgs.pi-subagents;
   piBtw = pkgs.pi-btw;
-  piGoalX = pkgs.pi-goal-x;
+  piGoal = pkgs.pi-goal;
   e2eFeatureRun = pkgs.writeShellApplication {
     name = "e2e-feature-run";
     runtimeInputs = [ pkgs.python3 pkgs.git pkgs.bash ];
@@ -182,7 +182,7 @@ in
           "${piFooter}/lib/node_modules/@smoose/pi-footer"
           "${piAstGrep}/lib/node_modules/pi-ast-grep"
           "${piCollapseTools}/lib/node_modules/pi-collapse-tools"
-          "${piGoalX}/lib/node_modules/pi-goal-x"
+          "${piGoal}/lib/node_modules/pi-goal"
           "${piHindsight}/lib/node_modules/pi-hindsight-memory"
           "${piSubagents}/lib/node_modules/pi-subagents"
           "${piWebAccess}/lib/node_modules/pi-web-access"

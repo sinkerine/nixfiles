@@ -118,6 +118,10 @@ class VerificationTests(unittest.TestCase):
         self.assertEqual(result["status"], "timed-out")
         self.assertFalse((self.root / "output").exists())
 
+    def test_init_does_not_create_goal_settings(self):
+        subprocess.check_output(["python3", str(SCRIPT), "init", "--feature", "test"], cwd=self.root)
+        self.assertFalse((self.root / ".pi" / "pi-goal-x-settings.json").exists())
+
     def test_init_preserves_settings_and_handoff_copies_report(self):
         (self.root / ".gitignore").write_text("generated\noutput\n")
         self.git("add", ".gitignore")
@@ -126,7 +130,7 @@ class VerificationTests(unittest.TestCase):
         settings.parent.mkdir()
         settings.write_text(json.dumps({"auditorEnabled": False}))
         subprocess.check_output(["python3", str(SCRIPT), "init", "--feature", "test"], cwd=self.root)
-        self.assertEqual(json.loads(settings.read_text()), {"auditorEnabled": False, "strictExecutionContract": True, "idleContinuationBackoff": True})
+        self.assertEqual(json.loads(settings.read_text()), {"auditorEnabled": False})
         self.assertEqual(self.git("status", "--porcelain"), b"", "initialization must not leave generated metadata in the feature diff")
         report = Path(self.temp.name) / "producer-report.md"
         report.write_text("proof of compatibility")

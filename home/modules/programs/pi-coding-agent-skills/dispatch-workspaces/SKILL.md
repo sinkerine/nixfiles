@@ -49,7 +49,7 @@ On return, changed home files or Git HEAD/branch block overwriting the retained 
 
 ## Skips and recovery
 
-- **Paused goal:** outgoing workspaces skip by default. Use `--include-paused` only when the user explicitly includes them. The handoff still preserves the pause; moving does not authorize continuing paused work.
+- **Paused goal:** detect session goals in `${XDG_STATE_HOME:-~/.local/state}/pi-goal/goals/*.json` whose `repoRoot` or `cwd` equals the worktree. Legacy `.pi/goals` is ignored and left intact. Source goals are archived in place after their agents stop; the store never transfers. Outgoing workspaces with paused goals skip by default. Use `--include-paused` only when the user explicitly includes them. The handoff still preserves the pause; moving does not authorize continuing paused work.
 - **Git operation in progress:** let the owning workflow resolve it; do not abort automatically.
 - **Home changed while away or a home tab is using it:** preserve both versions and resolve the conflict before returning. Do not reset, clean, or stop unrelated agents just to bypass the check.
 - **Partial destination workspace:** inspect the reported path and tabs before retrying. Do not archive unrelated workspaces. Another dispatch in progress is protected by a host-local transfer lock.

@@ -25,6 +25,7 @@ with pkgs; {
   pi-footer = callPackage ./pi-footer { };
   pi-ast-grep = callPackage ./pi-ast-grep { };
   pi-collapse-tools = callPackage ./pi-collapse-tools { };
+  pi-goal = callPackage ./pi-goal { };
   pi-goal-x = callPackage ./pi-goal-x { };
   pi-hindsight = callPackage ./pi-hindsight { };
   workspace-dispatch = callPackage ./e2e-dispatch { };

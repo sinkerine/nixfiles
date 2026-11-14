@@ -342,20 +342,16 @@ def main(stop=None):
                           "e2e": "automated spec selected" if args.e2e_spec else "requires the approved independent journey"}))
         return 0
     if args.action == "init":
-        # Invoking the e2e-feature skill opts this isolated workspace into explicit waits.
-        settings = root / ".pi" / "pi-goal-x-settings.json"
-        if not settings.parent.resolve().is_relative_to(root.resolve()):
-            raise ValueError("Project goal settings must stay inside the worktree")
-        value = json.loads(settings.read_text()) if settings.exists() else {}
-        if not isinstance(value, dict):
-            raise ValueError("Existing project goal settings must be a JSON object")
-        value["strictExecutionContract"] = True
-        value["idleContinuationBackoff"] = True
-        atomic_json(settings, value)
-        ignores = settings.parent / ".gitignore"
+        # Goals are session-bound and stored outside the worktree. Keep legacy
+        # runtime paths ignored without creating or changing goal settings.
+        runtime = root / ".pi"
+        if not runtime.resolve().is_relative_to(root.resolve()):
+            raise ValueError("Runtime metadata must stay inside the worktree")
+        runtime.mkdir(exist_ok=True)
+        ignores = runtime / ".gitignore"
         if not ignores.exists():
             ignores.write_text("# Worktree-local e2e runtime state\n/.gitignore\n/goals/\n/subagents/\n/pi-goal-x-settings.json\n/.goals-pool-snapshot.json\n")
-        print(json.dumps({"run_dir": str(run_dir), "settings": str(settings)}))
+        print(json.dumps({"run_dir": str(run_dir)}))
         return 0
     if args.action == "handoff":
         if not args.report or not args.sha:
