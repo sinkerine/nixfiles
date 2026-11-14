@@ -1,4 +1,9 @@
-{ buildNpmPackage, fetchFromGitHub, lib, jq }:
+{
+  buildNpmPackage,
+  fetchFromGitHub,
+  lib,
+  jq,
+}:
 
 buildNpmPackage {
   pname = "better-paseo";
@@ -7,16 +12,18 @@ buildNpmPackage {
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "better-paseo";
-    rev = "f38e5e360fda6a3a8f62c1e90094f15d5dfac807";
-    hash = "sha256-qp+/ngdvcP51ZwV60QA5dp4kF+o7f9olZa6fiLrm0Lk=";
+    rev = "5d26670c2d15d2c4cd36b5424308c411f94e24e0";
+    hash = "sha256-Zk/NfHN2ynesrVLEfZu3J1Ae1Rv/wxKBt8xy1/z7mnQ=";
   };
-
-  patches = [ ./better-paseo-math.patch ];
 
   npmDepsHash = "sha256-DHIyXm7ntgz/SfKYZ+wvp+DNsiq4YuMUwKS0lL5V5XA=";
   npmFlags = [ "--ignore-scripts" ];
   npmBuildScript = "build:client";
-  npmBuildFlags = [ "--" "--install" "--force" ];
+  npmBuildFlags = [
+    "--"
+    "--install"
+    "--force"
+  ];
   nativeBuildInputs = [ jq ];
 
   installPhase = ''
