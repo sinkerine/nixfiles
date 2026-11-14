@@ -285,8 +285,16 @@ in
       source = ./pi-coding-agent-skills/merge-and-archive/SKILL.md;
       force = true;
     };
+    home.file.".pi/agent/skills/merge-push-and-archive/SKILL.md" = {
+      source = ./pi-coding-agent-skills/merge-push-and-archive/SKILL.md;
+      force = true;
+    };
     home.file.".pi/agent/skills/dispatch-workspaces/SKILL.md" = {
       source = ./pi-coding-agent-skills/dispatch-workspaces/SKILL.md;
+      force = true;
+    };
+    home.file.".pi/agent/skills/return-workspaces/SKILL.md" = {
+      source = ./pi-coding-agent-skills/return-workspaces/SKILL.md;
       force = true;
     };
     # Runs through pi-subagents' claude-code adapter, which needs the claude CLI.

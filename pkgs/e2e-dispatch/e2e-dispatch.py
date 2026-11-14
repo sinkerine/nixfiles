@@ -40,6 +40,8 @@ HOSTS = {
 HOME = os.environ.get("WORKSPACE_DISPATCH_HOME", os.environ.get("E2E_DISPATCH_HOME", "kazuki"))
 AWAY = os.environ.get("WORKSPACE_DISPATCH_AWAY", os.environ.get("E2E_DISPATCH_AWAY", "sachi"))
 ACTIVE = ("running", "idle")
+# Outgoing dispatch only; existing away copies can still be recovered with back.
+DISPATCH_PROJECT_DENYLIST = frozenset({"tiny-llm"})
 REF_NS = "refs/e2e-dispatch"
 # Pi's goal files and subagent state are per host and per session; they never move.
 PI_STATE_DIR = ".pi"
@@ -727,6 +729,10 @@ def select(runs, features):
 
 def out_blockers(home, entry, include_paused=False):
     """Apply workspace safety checks without requiring an e2e registration or plan."""
+    project_names = {entry.get("projectName"), os.path.basename((entry.get("repoRoot") or "").rstrip("/"))}
+    denied = project_names & DISPATCH_PROJECT_DENYLIST
+    if denied:
+        return [f"project {', '.join(sorted(denied))} is on the dispatch denylist"]
     reasons = []
     if not include_paused:
         for goal in home.call("goal_states", worktree=entry["worktree"]):

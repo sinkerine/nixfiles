@@ -9,6 +9,8 @@ Use the Nix-installed `workspace-dispatch` command. Its source is `/nixfiles/pkg
 
 The scope is all **running and idle agent tabs**, including background workspaces and any provider exposed by Paseo, **always excluding the current tab invoking this skill**. Tabs sharing a Git checkout or directory move together so their files are transferred once; skip the entire workspace containing the current tab to preserve that rule. This exclusion applies to outgoing moves, returns, previews, and explicit workspace or feature selections. Closed and archived tabs are excluded. Terminal tabs stay on their original host and appear separately in `status`.
 
+The outgoing dispatch project denylist includes `tiny-llm`. Always leave its workspaces on kazuki, including when explicitly selected; do not move them manually to bypass the denylist. Existing dispatched copies can still be returned with `back` for recovery.
+
 This starts replacement agents with transferred files and per-tab transcript handoffs. Live provider sessions, terminal processes, Pi goals, and subagent runtime IDs do not transfer. Registered e2e-feature agents with committed plans use `/skill:e2e-feature resume`; design-phase and ordinary tabs continue from their transcript without inventing feature registration or bypassing approval.
 
 ## Choose the command

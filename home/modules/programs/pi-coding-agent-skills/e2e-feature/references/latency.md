@@ -4,7 +4,7 @@ Read this when preparing `<run dir>/verification.md`. Keep the run's concrete co
 
 ## Environment recipe
 
-Use a versioned recipe already in the project when available. Record its path and revision. Otherwise derive a run-local recipe from the repository's scripts, configuration, and AGENTS.md; do not silently change project-wide verification policy.
+Use a versioned recipe already in the project when available. Record its path and revision. Otherwise derive a run-local recipe from the repository's scripts, configuration, and AGENTS.md; do not silently change project-wide verification policy. Use maintained project environment/measurement tooling, promoting proven run-local helpers only within authorized ownership. Apply [capability-and-repairs.md](capability-and-repairs.md): a cheap host check during design followed by the representative executable capability experiment before substantial implementation. Record unknowns rather than equating tool availability with testability.
 
 Record:
 
@@ -58,7 +58,7 @@ return Promise.all(items.map(runTask));
 
 Release newly ready tasks only when ownership and source/build-input conflicts allow them. Do not mutate files still read by another task or its test. Implemented tasks may remain uncommitted until consolidated review acceptance; update `tasks.md` with interfaces and receipts so dependents can consume them. A later relevant edit invalidates earlier evidence. Preserve explicitly approved early review gates and barriers.
 
-After all implementation and gates finish, use the skill's consolidated Review phase against stable feature inputs. Delaying the same per-task reviewer fanout saves little context and loses overlap; consolidate shared context and review integration explicitly. Default to one reviewer, splitting only large features into a few nonoverlapping scopes with assigned integration coverage. Group confirmed fixes by ownership, resume the original workers, and review affected deltas after repairs settle. Do not rerun a full review for each repair. Acceptance still requires no confirmed Critical/Important findings and matching independent gates; commit only at a safe idle point and recheck any hook changes.
+After all implementation and gates finish, run the skill's host-only Test gate, then its consolidated Review phase against stable feature inputs. Delaying the same per-task reviewer fanout saves little context and loses overlap; consolidate shared context and review integration explicitly. Default to one reviewer, splitting only large features into a few nonoverlapping scopes with assigned integration coverage. Group confirmed fixes by ownership, resume the original workers, and give each a coherent diagnosis/repair/regression/affected-journey loop with explicit protected boundaries. Do not split that loop into parent-approved techniques. Workers reassess repeated failures using `diagnosis.md` without waking the parent for each attempt. Verify local fixes with red-then-green regression tests and host receipts; review affected deltas only for state/lifecycle, cross-boundary contract, or security fixes after repairs settle, preserving the entire run's three-round scope counters; after exhaustion, the parent uses code inspection and independent host evidence. Do not rerun a full review for each repair. Acceptance still requires no confirmed Critical/Important findings and matching independent gates; commit only at a safe idle point and recheck any hook changes.
 
 ## Final verification and E2E
 
@@ -74,6 +74,25 @@ Continue approved local tasks that do not need that dependency. Do not use timed
 
 ## Measure the next run
 
-Use existing trace/receipt timestamps for task ready, launch, model/command start, lock acquisition, finish, and acceptance. A normal command duration includes lock wait unless acquisition is logged separately; never label it pure test execution. Mark missing timestamps unknown. Track human approval and external dependencies separately from active execution.
+Use existing trace/receipt timestamps for task ready, launch, model/command start, lock acquisition, finish, and acceptance. A normal command duration includes lock wait unless acquisition is logged separately; never label it pure test execution. Mark missing timestamps unknown. Attribute elapsed intervals to execution (model/commands), environment repair, human decisions, external dependencies/transfers, resource-lock wait, and coordination/verification bookkeeping. Worker lifetime can include several of these; do not label all of it productive execution or all parent time waste. Track overlapping intervals and their union instead of double-counting.
 
 Compare task-ready-to-launch and gate-to-dependent-launch delays, all-implementation-finished-to-review-start delay, consolidated review/repair duration, lock wait, environment repairs, and repeated checks with unchanged identities. Track reviewer launches, repeated context, and input/output/cache token usage alongside total elapsed time; delayed discovery can add downstream rework. Distinguish explicitly planned early reviews from consolidated scopes. For overlapping intervals, compute their union rather than summing durations. Final verification plus E2E has serial cost `V + E` and a theoretical overlap cost `max(V, E)` only when resources and inputs are independent; contention can erase the benefit. Do not report aggregate model minutes or no-child time as end-to-end latency savings.
+
+## Acceptance progress and prolonged blockage
+
+Maintain `<run dir>/status.md` from existing transitions and receipts. Keep it short enough for a user or replacement orchestrator to identify the actual distance to delivery:
+
+```text
+Capability: Android real cold route + authoritative readiness + native acquisition proven; evidence <path>
+Implementation: committed <sha>; Review: feature 3/3, confirmed findings resolved
+Android: 1/22 current measurement windows passed; 1 failed, 20 unrun, 0 invalidated
+Other required evidence: Electron/browser journeys and final performance checks pending
+Active: native layout repair; owner <run id>; source/artifact <identities>
+Waiting: <exact dependency or none>; since <timestamp>; elapsed <known duration>
+Next: <action, responsible owner, expected native event/deadline>
+Time: execution / environment / human / external / lock / coordination <observed intervals or unknown>
+```
+
+The example is a schema illustration, not an assertion about the current run. For each platform count every discovered required window exactly once as passed, failed, unrun or invalidated; display criterion coverage separately where one criterion spans several windows. Invalidate previously passing coverage when its relevant inputs change. Keep historical passes as history rather than presenting them as current. A focused probe, capability result, completed implementation or reviewer verdict cannot stand in for final full-platform acceptance.
+
+Update and surface status at meaningful boundaries, user status requests, native attention events and dependency deadlines. When a blockage exceeds its expected deadline, or lasts 30 minutes with no recorded expectation, surface its exact dependency, age and next action at the next native event or through an already-supported attention mechanism. This is an attention threshold, not an approval gate or a reason to stop productive work. Do not launch a timer loop, add a polling heartbeat or spend model turns just to collect elapsed time. Truly automatic timed attention requires runtime support; if absent, record that limitation and preserve event-driven waiting. Never describe an external wait as continuous active work or claim an unverified completion time.

@@ -1,9 +1,9 @@
 {
   "version": 1,
   "variants": [
-    {"id": "gemini-high", "model": "magpie/group/gemini-4:high"},
-    {"id": "gemini-medium", "model": "magpie/group/gemini-4:medium"},
-    {"id": "gemini-low", "model": "magpie/group/gemini-4:low"},
+    {"id": "gemini-high", "model": "magpie/group/gemini:high"},
+    {"id": "gemini-medium", "model": "magpie/group/gemini:medium"},
+    {"id": "gemini-low", "model": "magpie/group/gemini:low"},
     {"id": "sol-medium", "model": "magpie/gpt-6.1-sol:medium"}
   ],
   "packets": {

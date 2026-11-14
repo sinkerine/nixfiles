@@ -218,6 +218,24 @@ class WorkspaceTransferTests(unittest.TestCase):
                     self.assertIn("current tab original-0", output.call_args.args[0])
                     self.assertFalse(self.home.agents["original-1"]["Archived"])
 
+    def test_denied_project_blocks_outgoing_before_contacting_workspace(self):
+        for identity in ({"projectName": "tiny-llm"},
+                         {"projectName": "Renamed tutorial", "repoRoot": "/home/test/dev/tiny-llm"}):
+            with self.subTest(identity=identity):
+                entry = {**self.entry, **identity}
+                before = list(self.events)
+                reasons = dispatch.out_blockers(self.home, entry, include_paused=True)
+                self.assertEqual(reasons, ["project tiny-llm is on the dispatch denylist"])
+                self.assertEqual(self.events, before)
+
+    def test_denylist_does_not_block_returning_existing_away_copy(self):
+        self.outgoing()
+        home_record = dispatch.h_read_json(self.entry["runJson"])
+        away_entry = dispatch.h_read_json(home_record["away"]["runJson"])
+        away_entry["projectName"] = "tiny-llm"
+        self.args.home_entry = home_record
+        self.assertEqual(len(dispatch.move(away_entry, self.away, self.home, self.args)), 2)
+
     def test_other_workspace_still_moves_with_current_tab_excluded(self):
         with patch.dict(os.environ, {"PASEO_AGENT_ID": "caller-in-another-workspace"}):
             self.assertEqual(len(self.outgoing()), 2)
