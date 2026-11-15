@@ -18,6 +18,7 @@ with pkgs; {
   webos-dev-manager = (callPackage ./webos-dev-manager { });
   xurl = (callPackage ./xurl { });
   strata = callPackage ./strata { };
+  qex = callPackage ./qex { };
   pi-coding-agent = callPackage ./pi-coding-agent { };
   paseo-session-recovery = callPackage ./paseo/session-recovery.nix { };
   better-paseo = callPackage ./paseo/better-paseo.nix { };

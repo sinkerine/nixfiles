@@ -1,0 +1,12 @@
+diff --git a/tests/e2e.rs b/tests/e2e.rs
+--- a/tests/e2e.rs
++++ b/tests/e2e.rs
+@@ -10810,7 +10810,7 @@ fn a_tag_a_lock_a_command_and_the_environment_are_safe_on_the_page() {
+         "--env-capture",
+         "none",
+         "--",
+-        "true",
++        "@coreutils@/bin/true",
+         "a\u{1b}[2Jb",
+     ]);
+     h.until("the job stops", Duration::from_secs(45), || {

@@ -31,6 +31,7 @@
     ./crush.nix
     ./codex.nix
     ./ai-agent-common
+    ./qex
     ./claude-code.nix
     ./pi-coding-agent.nix
     ./vm-test

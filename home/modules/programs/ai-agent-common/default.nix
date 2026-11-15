@@ -4,15 +4,20 @@
   pkgs,
   ...
 }:
-with lib; let
+with lib;
+let
   cfg = config.my.programs.ai-agent-common;
-  agentsTemplate = builtins.readFile ./agents-template.md;
-in {
+  agentsTemplate =
+    builtins.readFile ./agents-template.md
+    + lib.optionalString config.my.programs.qex.enable (builtins.readFile ./qex-instructions.md);
+in
+{
   options.my.programs.ai-agent-common = {
     enable = mkEnableOption "AI agent common configuration";
   };
 
   config = mkIf cfg.enable {
+    my.programs.qex.enable = mkDefault true;
     home.file.".codex/AGENTS.md".text = agentsTemplate;
     home.file.".claude/CLAUDE.md".text = agentsTemplate;
     home.file.".pi/agent/AGENTS.md" = mkIf config.my.programs.pi-coding-agent.enable {
