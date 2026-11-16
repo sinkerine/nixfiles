@@ -2,6 +2,8 @@
 
 Generate a run-local recipe from the current feature checkout. The generator refuses to overwrite an existing recipe, preserves complete check discovery, and does not modify either project's source or install dependencies. Review the resulting inventory against the approved plan and current AGENTS.md. A custom required check still needs to be added explicitly.
 
+Generated recipes contain the real project commands and do not infer resource claims or add qex wrappers. Before execution, classify every selected check and its transitive prerequisites using [verification.md](verification.md). Route any Gradle-build/E2E selection to the independent verifier with [verifier.md](verifier.md); only it reads `~/.config/qex/AGENT.md` and adds the appropriate leaf admission wrappers to the run-local recipe, records launcher/profile/declaration identities, and validates the resulting recipe. Other leaves remain direct. Keep the helper itself outside qex and preserve receipt/resource ownership. Direct host/native selections must contain only non-qex checks and prerequisites.
+
 ## Element Web
 
 From the feature worktree, after entering its existing supported tool/browser environment:
@@ -30,7 +32,7 @@ The recipe includes:
 
 To allow coverage and the journey to overlap, provide a separate `E2E_PW_TEST_CONNECT_WS_ENDPOINT` and its `E2E_JOURNEY_BROWSER_IMAGE_DIGEST`. Both endpoints must belong to the approved test environment. If the endpoints are shared, the generated recipe assigns the same browser resource and serializes those checks. A host-wide two-slot `host-cpu` resource bounds expensive work across these recipes. Adjust resource assumptions only after measuring the host and proving independent output/state ownership.
 
-Run the full graph with `e2e-verify` and the generated recipe. Omit `phase` to include all checks, including an explicitly selected automated journey; or run full verification and the journey separately with `phase: "full"` and `phase: "e2e"`. Dependencies are included automatically and matching independent receipts are reused. The final result must satisfy both inventories. If no automated journey was selected, the independent journey worker is still required by the feature workflow.
+Have the verifier run the full graph with `e2e-verify` and the prepared recipe when it includes the automated E2E journey. Without that journey, direct host/native execution is allowed after confirming that all selected commands and prerequisites are outside the qex allowlist. Omit `phase` to include all checks, including an explicitly selected automated journey; or run full verification and the journey separately with `phase: "full"` and `phase: "e2e"`. Dependencies are included automatically and matching independent receipts are reused. The final result must satisfy both inventories. If no automated journey was selected, the independent verifier journey is still required by the feature workflow.
 
 Smoke phase contains only the bounded environment check. The existing-test smoke check is in task phase because it depends on preparation that may take longer than the design-stage 60-second budget. Preparation failures remain setup blockers, never a test exemption.
 
@@ -49,4 +51,6 @@ The first check validates those functions against the exact Git snapshot, pins t
 
 The full recipe runs existing unit tests and lint through `tools/gradle-local.sh`, then builds the matching Gplay debug APK and pins a copy. It deliberately uses one execution slot and the repository Gradle resource. Android's E2E skill prohibits overlapping Gradle work with emulator testing due to memory peaks; keep this ordering even though the generic runner supports concurrency.
 
-After all build/verification work finishes, give the independent emulator journey worker the pinned APK and manifest. Continue following the project's emulator selection, ABI matching, in-place installation, fixture, evidence and cleanup rules. This recipe does not install an APK, select a device, create accounts, or replace the required user journey.
+The Android `app-build` assembles an APK and must run through the verifier with Gradle build admission. Classify wrapped `test`/`lint` tasks by their actual work: if they invoke build/compile tasks they also need verifier admission; unrelated checks stay direct. A full graph containing `app-build`, including a `pin-build` selection with that prerequisite, therefore runs through the verifier. Keep Gradle and emulator phases serialized.
+
+After all build/verification work finishes, give the independent verifier for the emulator journey the pinned APK and manifest. Continue following the project's emulator selection, ABI matching, in-place installation, fixture, evidence and cleanup rules. This recipe does not install an APK, select a device, create accounts, or replace the required user journey.

@@ -39,9 +39,6 @@ let
   screenshotDir = "${config.home.homeDirectory}/Screenshots";
   noctalia = lib.getExe config.programs.noctalia.package;
   screenshot = command: "mkdir -p ${escapeShellArg screenshotDir}; ${command} ${screenshotDir}/$(date +%Y-%m-%d-%H%M%S.png)";
-  delayedScreenshotAnnotate = pkgs.writeShellScript "niri-delayed-screenshot-annotate" ''
-    ${pkgs.systemd}/bin/systemd-run --user --collect --on-active=3s --no-block ${pkgs.runtimeShell} -c ${escapeShellArg "screenshot-annotate"}
-  '';
   playerCommand = action: [ "playerctl" "-p" cfg.musicPlayer action ];
   nameDynamicWorkspace = pkgs.writeShellScript "niri-name-dynamic-workspace" ''
     set -eu
@@ -129,7 +126,8 @@ in
           "Mod+W" = { spawn = [ noctalia "msg" "panel-toggle" "launcher" "/win " ]; };
           "Mod+C" = { spawn = [ noctalia "msg" "panel-toggle" "clipboard" ]; };
           "Super+Alt+L" = { spawn = [ noctalia "msg" "session" "lock" ]; };
-          "Mod+S" = { toggle-overview = {}; };
+          "Mod+V" = { spawn = [ "screenshot-annotate" ]; };
+          "Mod+Shift+V" = { spawn = [ "screenshot-annotate" "--screen" ]; };
           "Mod+X" = { toggle-column-tabbed-display = {}; };
           "Mod+R" = { switch-preset-column-width = {}; };
           "Mod+Minus" = { set-column-width = "-10%"; };
@@ -143,7 +141,8 @@ in
           "Mod+M" = { focus-monitor-right = {}; };
           "Mod+Shift+N" = { move-window-to-monitor-left = {}; };
           "Mod+Shift+M" = { move-window-to-monitor-right = {}; };
-          "Mod+V" = { toggle-window-floating = {}; };
+          "Mod+S" = { toggle-overview = {}; };
+          "Mod+Shift+S" = { toggle-window-floating = {}; };
           "Mod+Shift+B" = { switch-focus-between-floating-and-tiling = {}; };
           "Mod+Q" = { close-window = {}; };
           "Mod+H" = { focus-column-left = {}; };
@@ -218,8 +217,7 @@ in
         - { key: f, desc: Firefox, cmd: firefox }
         - { key: c, desc: Chrome, cmd: google-chrome-stable }
         - { key: d, desc: Nemo, cmd: nemo }
-        - { key: s, desc: Screenshot and annotate, cmd: screenshot-annotate }
-        - { key: S, desc: Screenshot and annotate in 3 seconds, cmd: ${toString delayedScreenshotAnnotate} }
+        - { key: e, desc: Emoji picker, cmd: emote }
         - { key: m, desc: Music, cmd: dex "$HOME/.nix-profile/share/applications/feishin.desktop" }
         - { key: n, desc: Dismiss notifications, cmd: ${noctalia} msg notification-clear-active }
         - { key: h, desc: Notification history, cmd: ${noctalia} msg panel-toggle control-center notifications }

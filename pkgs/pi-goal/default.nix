@@ -5,8 +5,8 @@ stdenvNoCC.mkDerivation {
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "pi-goal";
-    rev = "a29f25cc42fe4868bb351d19b61da074d273ce10";
-    hash = "sha256-GSQDVGB5Gabtra0vaVARoRTUuNgNfXZ1GnDFojR//do=";
+    rev = "293d5387513a41b50bd68b8a2e27b3b0b0add846";
+    hash = "sha256-0wJFejAyYV1xjvdIS0qKKPhWinHF/cYdasgivkNlqgA=";
   };
   dontConfigure = true;
   dontBuild = true;

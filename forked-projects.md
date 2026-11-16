@@ -104,7 +104,7 @@ Miniflux's [Makefile](/home/sinkerine/dev/miniflux/Makefile) declares `make test
 | tiny-llm | Excluded tutorial fork of [skyzh/tiny-llm](https://github.com/skyzh/tiny-llm); local branch `week1` had user edits. | `/home/sinkerine/dev/tiny-llm` | `prj_15ebb5c01d32a1de` |
 | nixfiles | Excluded from upstream sync: user-owned configuration and this maintenance registry. It remains the deployment source for Nix packages. | `/nixfiles` | `prj_1590dc3766194223` |
 
-The previous Orca inventory included [sinkerine/TREK](https://github.com/sinkerine/TREK). TREK is running on sachi but is absent from the current Paseo project registry. It is outside this maintenance set until the user chooses to add it. Other sachi containers are not automatically maintenance projects.
+The previous project inventory included [sinkerine/TREK](https://github.com/sinkerine/TREK). TREK is running on sachi but is absent from the current Paseo project registry. It is outside this maintenance set until the user chooses to add it. Other sachi containers are not automatically maintenance projects.
 
 ## Managing this registry
 

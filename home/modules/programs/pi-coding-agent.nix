@@ -42,6 +42,18 @@ let
       [ "${piSubagents}/lib/node_modules/pi-subagents" "${e2eFeatureRun}" ]
       (builtins.readFile ./pi-coding-agent-extensions/e2e-verification.ts)
   );
+  qexWaitExtension = pkgs.writeTextFile {
+    name = "qex-wait.ts";
+    text = builtins.replaceStrings
+      [ "@SUBAGENTS@" "@QEX@" ]
+      [ "${piSubagents}/lib/node_modules/pi-subagents" "${pkgs.qex}" ]
+      (builtins.readFile ./pi-coding-agent-extensions/qex-wait.ts);
+    checkPhase = ''
+      PI_TEST_PACKAGE=${piSubagents}/lib/node_modules/pi-subagents \
+        QEX_WAIT_EXTENSION=$out \
+        ${pkgs.nodejs}/bin/node --test ${./pi-coding-agent-extensions/qex-wait.test.mjs}
+    '';
+  };
   piHindsight = pkgs.pi-hindsight;
   piWebAccess = pkgs.pi-web-access;
   piWebAccessConfig = builtins.toJSON {
@@ -261,6 +273,9 @@ in
       };
     };
 
+    # Replace links left by older generations that pointed directly into the store.
+    home.file."${config.programs.pi-coding-agent.configDir}/models.json".force = true;
+
     home.sessionVariables.PI_CODING_AGENT_PACKAGE_ROOT = "${piCodingAgent}/lib/node_modules/pi-monorepo";
 
     home.file.".pi/agent/extensions/bash-timeout.ts" = {
@@ -270,6 +285,10 @@ in
 
     home.file.".pi/agent/extensions/e2e-verification.ts" = {
       source = e2eVerificationExtension;
+      force = true;
+    };
+    home.file.".pi/agent/extensions/qex-wait.ts" = {
+      source = qexWaitExtension;
       force = true;
     };
     home.file.".pi/agent/skills/e2e-feature" = {

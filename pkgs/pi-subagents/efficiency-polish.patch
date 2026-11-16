@@ -1,0 +1,13 @@
+--- a/src/extension/subagent-options.ts
++++ b/src/extension/subagent-options.ts
+@@ -30 +30 @@
+-		if (topLevel.workflow !== undefined) throw new Error("subagent: options.script replaces workflow; pass only one of them.");
++		if (topLevel.workflow !== undefined) throw new Error('subagent: remove the top-level workflow field when using options.script. Use { options: { script: "return {ok: true};" } } for inline source, or { workflow: true } with one ```js workflow block in this reply. Do not combine them.');
+--- a/src/intercom/native-supervisor-channel.ts
++++ b/src/intercom/native-supervisor-channel.ts
+@@ -287 +287 @@
+-	description: "Contact the parent/supervisor session for a blocking decision, structured interview, or progress update.",
++	description: "Child sessions only: contact the parent/supervisor for a blocking decision, structured interview, or progress update. A top-level session must never call this tool; use subagent_supervisor to answer children or ask_user for a user decision.",
+@@ -291 +291 @@
+-export const TOP_LEVEL_SUPERVISOR_REFUSAL = "contact_supervisor works only inside a subagent; this session has no supervisor.";
++export const TOP_LEVEL_SUPERVISOR_REFUSAL = "contact_supervisor works only inside a subagent; this session has no supervisor. Use subagent_supervisor to answer a child, or ask_user for a user decision. Do not retry contact_supervisor here.";

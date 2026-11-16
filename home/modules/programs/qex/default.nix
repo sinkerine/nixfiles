@@ -49,7 +49,12 @@ let
 in
 {
   options.my.programs.qex = {
-    enable = lib.mkEnableOption "shared resource admission for agent builds and tests";
+    enable = lib.mkEnableOption "shared resource admission for Gradle builds and E2E tests";
+    settings = lib.mkOption {
+      type = toml.type;
+      default = { };
+      description = "Additional declarative qex.toml settings, recursively overriding the managed defaults. Change configuration here rather than with qex config set.";
+    };
     cpuBudget = lib.mkOption {
       type = lib.types.either lib.types.ints.positive lib.types.str;
       default = if hostname == "kazuki" then 8 else "25%";
@@ -57,7 +62,7 @@ in
     };
     memoryBudget = lib.mkOption {
       type = lib.types.str;
-      default = if hostname == "kazuki" then "16GiB" else "25%";
+      default = if hostname == "kazuki" then "24GiB" else "25%";
       description = "Shared memory claims, separate from the live available-memory reserve.";
     };
     reserveMemory = lib.mkOption {
@@ -77,7 +82,7 @@ in
       sharedQex
       agentJob
     ];
-    xdg.configFile."qex.toml".source = toml.generate "qex.toml" {
+    xdg.configFile."qex.toml".source = toml.generate "qex.toml" (lib.recursiveUpdate {
       budget = {
         cpu = cfg.cpuBudget;
         mem = cfg.memoryBudget;
@@ -93,7 +98,7 @@ in
       };
       defaults = {
         cpu = 4;
-        mem = "16GiB";
+        mem = "8GiB";
         timeout = "0";
         max_queue_time = "0";
       };
@@ -113,14 +118,10 @@ in
           count = 1;
         }
       ];
-    };
+    } cfg.settings);
     xdg.configFile."qex/profiles.json".source = profilesFile;
     xdg.configFile."qex/AGENT.md".source = ../pi-coding-agent-skills/qex/SKILL.md;
     xdg.configFile."qex/e2e-resources.md".source =
       ../pi-coding-agent-skills/e2e-feature/references/qex-resources.md;
-    home.file.".pi/agent/skills/qex/SKILL.md" = lib.mkIf config.my.programs.pi-coding-agent.enable {
-      source = ../pi-coding-agent-skills/qex/SKILL.md;
-      force = true;
-    };
   };
 }

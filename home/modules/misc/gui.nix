@@ -14,9 +14,13 @@ let
     name = "screenshot-annotate";
     runtimeInputs = with pkgs; [ grim slurp satty ];
     text = ''
-      # Cancelling selection leaves the clipboard untouched.
-      geometry=$(slurp) || exit 0
-      grim -g "$geometry" -t ppm - | satty --filename - --fullscreen
+      if [[ "''${1:-}" == "--screen" ]]; then
+        grim -t ppm - | satty --filename - --fullscreen
+      else
+        # Cancelling selection leaves the clipboard untouched.
+        geometry=$(slurp) || exit 0
+        grim -g "$geometry" -t ppm - | satty --filename - --fullscreen
+      fi
     '';
   };
 in
@@ -103,6 +107,7 @@ in
           krita
           unflac
           wl-clipboard
+          emote
           libnotify
           grim
           slurp

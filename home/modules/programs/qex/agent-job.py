@@ -87,7 +87,7 @@ def resolve(argv, *, qex, profiles, environ):
         options, command = arguments, []
 
     parser = argparse.ArgumentParser(
-        description="Submit builds/tests to the shared host qex scheduler using explicit resource profiles."
+        description="Submit Gradle builds or E2E tests to the shared host qex scheduler using explicit resource estimates."
     )
     actions = parser.add_subparsers(dest="action", required=True)
     listing = actions.add_parser("profiles", help="Show the centrally configured resource estimates")

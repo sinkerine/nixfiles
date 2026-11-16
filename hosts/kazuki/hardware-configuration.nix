@@ -16,6 +16,16 @@
     neededForBoot = true;
   };
 
+  # Legacy datasets must not use zfsutil. /tmp is mounted during normal
+  # system startup, not in the initrd. Provision it before activation;
+  # see zfs-layout.md. rpool/tmp< is excluded from zrepl snapshots.
+  fileSystems."/tmp" = {
+    device = "rpool/tmp/system";
+    fsType = "zfs";
+    options = [ "X-mount.mkdir" ];
+    neededForBoot = false;
+  };
+
   fileSystems."/nix" = {
     device = "rpool/system/nix";
     fsType = "zfs";

@@ -7,9 +7,7 @@
 with lib;
 let
   cfg = config.my.programs.ai-agent-common;
-  agentsTemplate =
-    builtins.readFile ./agents-template.md
-    + lib.optionalString config.my.programs.qex.enable (builtins.readFile ./qex-instructions.md);
+  agentsTemplate = builtins.readFile ./agents-template.md;
 in
 {
   options.my.programs.ai-agent-common = {

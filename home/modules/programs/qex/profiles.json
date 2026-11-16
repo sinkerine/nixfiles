@@ -2,26 +2,16 @@
   "small": {
     "cpu": 1,
     "mem": "2GiB",
-    "description": "One focused unit-test file or modest lint/format check with bounded workers"
+    "description": "Small Gradle build with bounded workers"
   },
   "medium": {
     "cpu": 2,
     "mem": "4GiB",
-    "description": "Typecheck, a bounded unit-test selection, or a modest build"
-  },
-  "browser-e2e": {
-    "cpu": 4,
-    "mem": "16GiB",
-    "description": "Complete headless browser/Electron test stack, including bundler, daemon and test agents; one test worker"
+    "description": "Modest Gradle build with bounded workers"
   },
   "heavy": {
     "cpu": 4,
-    "mem": "16GiB",
-    "description": "Large build, coverage run, or unfamiliar expensive command; conservative fallback"
-  },
-  "native": {
-    "cpu": 8,
-    "mem": "24GiB",
-    "description": "Native/Gradle build, build plus emulator, or large VM journey; requires a host budget that fits"
+    "mem": "8GiB",
+    "description": "Larger Gradle build within a 4-core/8-GiB estimate"
   }
 }

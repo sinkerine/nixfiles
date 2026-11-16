@@ -11,6 +11,9 @@
 
   imports = [ ../../../common/baseline.nix ];
 
+  home.sessionVariables.GRADLE_USER_HOME = "${config.xdg.cacheHome}/gradle";
+  systemd.user.sessionVariables.GRADLE_USER_HOME = config.home.sessionVariables.GRADLE_USER_HOME;
+
   # One agent shared by terminals, GUI apps, and user services. Home Manager
   # exports $XDG_RUNTIME_DIR/ssh-agent while preserving forwarded SSH agents.
   services.ssh-agent.enable = true;

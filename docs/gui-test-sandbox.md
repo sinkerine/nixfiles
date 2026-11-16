@@ -138,7 +138,7 @@ The UID-map replacement temp file is created inside /etc/pve/lxc. This is requir
 Create each task from a canonical Git worktree:
 
 ~~~sh
-gui-sandbox create --task demo --repo /home/sinkerine/orca/workspaces/my-worktree --json
+gui-sandbox create --task demo --repo /home/sinkerine/dev/worktrees/my-worktree --json
 ~~~
 
 The CLI accepts only slugs matching [a-z0-9][a-z0-9-]{0,47}. The repository may be any absolute path, but must resolve to a real directory owned by UID/GID 1000 and be the exact Git worktree root. Missing paths, non-worktrees, and wrong ownership are rejected. Multiple active or creating tasks are allowed up to the configured VMID range; each task has its own VMID, SSH material, rootfs mount target, metadata, and `/workspace` mount.
@@ -189,7 +189,7 @@ Native Wayland applications use the Sway/Wayland environment. GTK/X11 applicatio
 
 ### Live launch findings
 
-The first live Orca launch on 2026-08-26 exposed CUA 0.21.0 limitations that
+The first live Electron application launch on 2026-08-26 exposed CUA 0.21.0 limitations that
 are separate from application failures:
 
 - A native Wayland Electron window was visible in Sway while the initial
@@ -201,12 +201,12 @@ are separate from application failures:
 - Runtime `get_desktop_state` against the long-lived native-Wayland CUA daemon
   reproduced `range end index 6220804 out of range for slice of length 6220800`.
   This is CUA's four-byte pixel assumption against the NVIDIA headless
-  session's three-byte Bgr888 frame, not an Orca renderer or window-close
+  session's three-byte Bgr888 frame, not an application renderer or window-close
   failure. The provisioning health check's XWayland/grim capture fallback does
   not currently wrap ad-hoc runtime `gui-sandbox cua` screenshot calls.
 - CUA background `hotkey` delivery returned `background_unavailable` for the
   Wayland Electron surface; foreground synthetic delivery was unverifiable.
-  The compositor close request removed the window and all Orca processes, and
+  The compositor close request removed the window and all application processes, and
   the close log contained no destroyed-`webContents` exception.
 - `gui-sandbox exec` deliberately supplies the guest's system-only PATH. The
   dev launcher therefore needed an explicit runtime Node path; this does not
@@ -257,7 +257,7 @@ The reaper runs every 15 minutes after boot. It evaluates every active or creati
 
 ~~~sh
 gui-sandbox status --json
-gui-sandbox create --task demo --repo /home/sinkerine/orca/workspaces/my-worktree --json
+gui-sandbox create --task demo --repo /home/sinkerine/dev/worktrees/my-worktree --json
 gui-sandbox exec demo -- bash -lc 'make test'
 gui-sandbox launch demo -- ./run-native-wayland-test
 gui-sandbox cua demo get_accessibility_tree '{}'
@@ -304,7 +304,7 @@ Baseline checks below ran in this worktree on kazuki on 2026-08-23. The multi-in
 | CUA archive SHA-256 | b269df39141bf873a583913cf59c18b867f8ac880ba43d781ca276b2632a6f55. |
 | Ubuntu template SHA-512 | Verified with nix store prefetch-file; store path /nix/store/chgin4k0yc1vn2ar7v3an2ld3g30bdah-ubuntu-24.04-standard_24.04-2_amd64.tar.zst. |
 | CUA archive execution | manifest, describe, doctor --json, native-Wayland opt-in, and get_desktop_state --screenshot-out-file syntax verified for 0.21.0. |
-| Live Orca GUI close (2026-08-26) | Task `multi-window-close` reached `health: healthy` on VMID 9100 with the NVIDIA GeForce RTX 5070 Ti; the inspected Electron window was closed through Sway, its window/process disappeared, and no close-time exception was logged. CUA 0.21.0's runtime desktop capture reproduced the documented three-byte Bgr888 panic; health capture remained separate. |
+| Live Electron GUI close (2026-08-26) | Task `multi-window-close` reached `health: healthy` on VMID 9100 with the NVIDIA GeForce RTX 5070 Ti; the inspected Electron window was closed through Sway, its window/process disappeared, and no close-time exception was logged. CUA 0.21.0's runtime desktop capture reproduced the documented three-byte Bgr888 panic; health capture remained separate. |
 | Native CUA protocol probe | With CUA_DRIVER_RS_ENABLE_WAYLAND=1, health_report reported wayland_backend pass; get_accessibility_tree returned an object and get_desktop_state wrote a 1,236,303-byte PNG. Host AT-SPI remained unavailable, so overall was degraded. |
 | Host GPU | nvidia-smi reported NVIDIA GeForce RTX 5070 Ti, 595.91.07; GLX/EGL reported NVIDIA RTX 5070 Ti, not software rendering; renderD128 resolves to the NVIDIA driver. |
 | Host identity | Hostname kazuki; sinkerine UID/GID 1000:1000; subordinate range 100000:65536 present for sinkerine. |
@@ -344,7 +344,7 @@ Once authorization is available, the remaining commands are:
 sudo nixos-rebuild switch --flake .#kazuki
 sudo systemctl start gui-test-sandbox-storage.service
 gui-sandbox template build
-gui-sandbox create --task e2e --repo /home/sinkerine/orca/workspaces/disposable-worktree --json
+gui-sandbox create --task e2e --repo /home/sinkerine/dev/worktrees/disposable-worktree --json
 gui-sandbox cua e2e health_report '{}'
 gui-sandbox cua e2e get_desktop_state '{}'
 gui-sandbox collect e2e

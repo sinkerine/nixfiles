@@ -22,6 +22,7 @@ buildNpmPackage {
     ./task-boundary-wake.patch
     ./host-verification-activity.patch
     ./workflow-reuse-launch-metadata.patch
+    ./efficiency-polish.patch
   ];
 
   npmDepsHash = "sha256-4iHfVe/7y5xTT3tu8hhbrjOMr8OpkvgpCiDdWqMGVoQ=";
@@ -67,6 +68,9 @@ buildNpmPackage {
     PI_TEST_HOST=${pi-coding-agent}/lib/node_modules/pi-monorepo \
       PI_TEST_PACKAGE=$out/lib/node_modules/pi-subagents \
       node ${./host-verification-activity.test.mjs}
+    PI_TEST_HOST=${pi-coding-agent}/lib/node_modules/pi-monorepo \
+      PI_TEST_PACKAGE=$out/lib/node_modules/pi-subagents \
+      node ${./efficiency-polish.test.mjs}
     runHook postInstallCheck
   '';
 

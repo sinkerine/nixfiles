@@ -223,9 +223,10 @@ class QueueIntegrationTests(unittest.TestCase):
                                                   env=env, capture_output=True, text=True, timeout=10)
                     self.assertNotEqual(invalid_pool.returncode, 0)
                     self.assertIn("pool", invalid_pool.stderr)
-                    rejected = subprocess.run([sys.executable, str(ROOT / "agent-job.py"), "submit", "native", "--", "true"],
+                    rejected = subprocess.run([sys.executable, str(ROOT / "agent-job.py"), "submit", "heavy", "--", "true"],
                                               env=env, capture_output=True, text=True, timeout=10)
                     self.assertNotEqual(rejected.returncode, 0, "oversized profile bypassed the host budget")
+                    self.assertNotIn("invalid choice", rejected.stderr, "test must reach qex admission")
                     failed = subprocess.run([sys.executable, str(ROOT / "agent-job.py"), "run", "small", "--", sys.executable, "-c", "raise SystemExit(7)"],
                                             env=env, capture_output=True, text=True, timeout=15)
                     self.assertEqual(failed.returncode, 7, failed.stderr)
