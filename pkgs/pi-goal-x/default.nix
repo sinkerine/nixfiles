@@ -18,6 +18,20 @@ stdenvNoCC.mkDerivation {
   # Compact tool receipts and durable source-specific Paseo handoff waits.
   patches = [ ./workflow-efficiency.patch ];
 
+  # Pi 1.5 no longer re-exports TypeBox types and builders from pi-ai.
+  postPatch = ''
+    substituteInPlace extensions/goal-auditor.ts extensions/goal-drafting.ts \
+      extensions/goal-oracle.ts \
+      --replace-fail 'import { Type } from "@earendil-works/pi-ai";' \
+                     'import { Type } from "typebox";'
+    substituteInPlace extensions/goal-auditor.ts \
+      --replace-fail 'import type { Static } from "@earendil-works/pi-ai";' \
+                     'import type { Static } from "typebox";'
+    substituteInPlace extensions/goal-core-tools.ts extensions/goal-task-tools.ts \
+      --replace-fail 'import { StringEnum, Type } from "@earendil-works/pi-ai";' \
+                     'import { StringEnum } from "@earendil-works/pi-ai"; import { Type } from "typebox";'
+  '';
+
   dontConfigure = true;
   dontBuild = true;
 

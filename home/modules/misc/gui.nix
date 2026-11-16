@@ -114,7 +114,6 @@ in
           satty
           screenshotAnnotate
           xdg-utils
-          khinsider
           imagemagick
           cloc
           antimicrox

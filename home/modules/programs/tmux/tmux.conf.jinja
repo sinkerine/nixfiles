@@ -72,8 +72,8 @@ bind , send-keys -R \; run "sleep 0.1" \; clear-history
 bind-key -T copy-mode-vi v   send -X begin-selection
 bind-key -T copy-mode-vi V   send -X select-line
 bind-key -T copy-mode-vi C-v send -X rectangle-toggle
-bind-key -T copy-mode-vi 'y' send-keys -X copy-pipe-and-cancel "{{copyCommand}}"
-bind-key -T copy-mode-vi 'Y' send-keys -X copy-pipe "{{copyCommand}}"
+bind-key -T copy-mode-vi 'y' send-keys -X copy-selection-and-cancel
+bind-key -T copy-mode-vi 'Y' send-keys -X copy-selection
 
 # Press C-q to disable/enable prefix for outer session
 bind -T root C-q  \
@@ -93,4 +93,3 @@ set -g @extrakto_key o
 set -g @extrakto_split_size 20
 set -g @extrakto_fzf_options "{{sessionVariables.FZF_DEFAULT_OPTS}}"
 set -g @extrakto_opts "path/url word lines"
-set -g @extrakto_clip_tool "{{copyCommand}}"

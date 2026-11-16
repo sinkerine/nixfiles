@@ -10,8 +10,8 @@ let
   source = pkgs.fetchFromGitHub {
     owner = "amzxyz";
     repo = "rime-wanxiang";
-    rev = "6a676cfdc5718c1da08cbaecf8f4e33a26a15129";
-    hash = "sha256-opdntK+7IHc9l6gigOJZNi6FbDKBO2GtdzFNO56J8tw=";
+    rev = "6ab77371f1ba72154e74645965e53a287ce3cb39";
+    hash = "sha256-9IviNV0PxGxtM59AINU0cQv55WBBGlLAvyVMHVU3mg8=";
   };
   model = pkgs.fetchurl {
     url = "https://github.com/amzxyz/rime-wanxiang-data/releases/download/LTS/wanxiang-lts-zh-hans.gram";
@@ -37,7 +37,7 @@ let
         - { when: has_menu, accept: semicolon, send: Page_Up }
         - { when: has_menu, accept: apostrophe, send: Page_Down }
   '';
-  data = pkgs.runCommand "rime-wanxiang-xiaohe-6a676cf" { } ''
+  data = pkgs.runCommand "rime-wanxiang-xiaohe-6ab7737" { } ''
     mkdir -p "$out"
     cp ${source}/wanxiang*.yaml ${source}/default.yaml "$out/"
     cp -r ${source}/dicts ${source}/lua ${source}/opencc "$out/"

@@ -5,16 +5,16 @@
 
 buildNpmPackage {
   pname = "pi-web-access";
-  version = "0.46.0";
+  version = "0.48.0";
 
   src = fetchFromGitHub {
     owner = "nicobailon";
     repo = "pi-web-access";
-    rev = "4af1a7f7757d450ba0afefe2d98737384dc9a9b4";
-    hash = "sha256-i/C22ovZYwUu3a7gzBeFVaMqvhIB+N/Z63wOCPdhwLs=";
+    rev = "v0.48.0";
+    hash = "sha256-kvxwqQzvUEvBU8URxTCe4hGbWiUa41TbsdtdiM6+GqE=";
   };
 
-  npmDepsHash = "sha256-g+/xF1ciVUYveV8Czz4eOcKZtu52pWhOYS8+qpgcmJQ=";
+  npmDepsHash = "sha256-kmyoh7lvHssAhSBU2qKqk9ElGgm6Z5BZUtBjy1+hri4=";
   npmFlags = [ "--omit=dev" ];
   dontNpmBuild = true;
 

@@ -22,11 +22,12 @@ diff --git a/src/capture/screenshot_service.cpp b/src/capture/screenshot_service
 diff --git a/src/notification/notification_manager.cpp b/src/notification/notification_manager.cpp
 --- a/src/notification/notification_manager.cpp
 +++ b/src/notification/notification_manager.cpp
-@@ -2,6 +2,7 @@
+@@ -2,7 +2,8 @@
 
  #include "core/deferred_call.h"
  #include "core/log.h"
 +#include "net/url_open.h"
+ #include "notification/notification_display_name.h"
  #include "notification/notification_filter.h"
  #include "notification/notification_history_store.h"
  #include "pipewire/sound_player.h"

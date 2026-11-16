@@ -1,8 +1,0 @@
-{
-    "term": "nixGL alacritty -t {title} -e {expanded}",
-    "ratio": 0.6,
-    "pos": "top",
-    "shells": {
-      "shell": "zsh"
-    }
-}

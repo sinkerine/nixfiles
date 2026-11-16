@@ -15,58 +15,7 @@ let
 
   hostIp = "192.168.88.29/24";
   gateway = "192.168.88.1";
-  strataEnabled = false;
-  strataData = "/home/sinkerine/Strata-data";
-  strataModelName = "Qwen3.8-Flash-Next-abliterated-GSQ-RCO-IQ2_XS";
-  strataModelDir = "/home/sinkerine/.cache/Strata-data/models/Qwen3.8-Flash-Next/IQ2_XS";
-  strataPack = "${strataData}/packs/qwen3.8_iq2_xs";
-  strataModelFirst = "${strataModelDir}/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf";
-  strataModelSecond = "${strataModelDir}/Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf";
-  strataRefusalVector = "${strataModelDir}/Huihui-Qwen3.8-Flash-Next-refusal-direction-r.gguf";
-  strataVisionProjector = "${strataModelDir}/mmproj-Qwen3.8-Flash-Next-BF16.gguf";
-  strataConfig = pkgs.writeText "strata-qwen3.8-iq2-xs.json" (builtins.toJSON {
-    exe = "${pkgs.strata}/bin/strata";
-    args = [
-      "--pack" "${strataPack}"
-      "--native" "${strataModelFirst}"
-      "--ple-gguf" "${strataModelSecond}"
-      "--expert-profile" "${pkgs.strata}/share/strata/data/expert-profile.bin"
-      "--expert-cache" "auto"
-      "--prefill" "auto"
-      "--spec" "4"
-      "--spec-min-p" "0.5"
-      "--mtp" "${strataData}/mtp/rt"
-      "--max-context" "131072"
-      "--kv" "int8"
-      "--mmap-experts"
-      # Pin the hottest experts; Strata clamps this budget to available RAM minus 4 GiB.
-      "--resident-budget-gib" "30"
-      "--kv-resident" "32768"
-      "--vram-reserve-mib" "1800"
-      "--vision"
-      "--control-vector-scaled" "${strataRefusalVector}:1.0"
-      "--control-vector-layer-range" "4" "44"
-      "--cvec-mode" "project"
-      "--cvec-dir" "per-layer"
-    ];
-    cwd = "${pkgs.strata}/share/strata";
-    tokenizer = "${strataPack}/tokenizer";
-    model_name = strataModelName;
-    vision = {
-      exe = "${pkgs.strata}/bin/strata-vision";
-      mmproj = "${strataVisionProjector}";
-      model = "${strataModelFirst}";
-      gpu = true;
-      max_tokens = 1024;
-    };
-    api_key = "lan-only";
-    log = "/var/log/strata/server.log";
-    lib_dirs = [ "${pkgs.cudaPackages_13_0.cudatoolkit}/lib" ];
-    allowed_hosts = [ "kazuki.m.mado.moe" ];
-    port = 8081;
-    gpu = 0;
-    gpus_asked = true;
-  });
+
 in
 {
   system.stateVersion = "22.05";
@@ -337,51 +286,9 @@ in
     ];
   };
 
-  # Disable the previous inference server while testing Strata.
+  # Keep the previous inference server disabled.
   systemd.services.llama-qwen35.enable = false;
 
-  # Local OpenAI-compatible Strata endpoint for Hermes and other agents.
-  systemd.services.strata = mkIf strataEnabled {
-    description = "Strata API: Qwen3.8 Flash-Next IQ2_XS";
-    wantedBy = [ "multi-user.target" ];
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
-    environment.LD_LIBRARY_PATH = lib.makeLibraryPath [
-      "/run/opengl-driver"
-      pkgs.gcc.cc.lib
-      pkgs.zlib
-      pkgs.cudaPackages_13_0.cudatoolkit
-    ];
-    preStart = ''
-      if [ ! -f "${strataPack}/native_experts.txt" ] || [ ! -f "${strataPack}/tokenizer/vocab.json" ]; then
-        mkdir -p "${strataPack}"
-        ${pkgs.strata}/bin/strata-iq-pack --gguf "${strataModelFirst}" --out "${strataPack}"
-      fi
-    '';
-    serviceConfig = {
-      User = "sinkerine";
-      Group = "users";
-      WorkingDirectory = "${pkgs.strata}/share/strata";
-      ExecStart = "${pkgs.strata}/bin/strata-server --engine strata --config ${strataConfig} --port 8081";
-      LogsDirectory = "strata";
-      LogsDirectoryMode = "0750";
-      Restart = "on-failure";
-      RestartSec = 5;
-      TimeoutStartSec = "infinity";
-      SupplementaryGroups = [ "video" "render" ];
-      LimitMEMLOCK = "infinity";
-    };
-  };
-  services.traefik.dynamicConfigOptions.http.routers.strata = mkIf strataEnabled {
-      rule = "Host(`${hostname}.m.mado.moe`)";
-      middlewares = [ "lan-only@file" ];
-      service = "strata";
-  };
-  services.traefik.dynamicConfigOptions.http.services.strata = mkIf strataEnabled {
-    loadBalancer.servers = [
-      { url = "http://127.0.0.1:8081"; }
-    ];
-  };
   services.traefik.dynamicConfigOptions.http = {
     routers.pi-artifacts = {
       rule = "Host(`artifacts.${hostname}.m.mado.moe`)";

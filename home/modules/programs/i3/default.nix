@@ -40,13 +40,12 @@ in {
       writeShellScriptFile "i3-scripts-i3exit.sh" ./scripts/i3exit.sh;
 
     # Other i3 related packages.
-    home.packages = [ pkgs.i3status-rust pkgs.i3-quickterm ];
+    home.packages = [ pkgs.i3status-rust ];
     my.programs.set-theme.files = {
       "i3/config" = genAttrs [ "dark" "light" ] (mode:
         templateFile "i3-config-${mode}" (templateData mode) ./config.jinja);
       "i3status-rust/config.toml" = genAttrs [ "dark" "light" ] (mode:
         templateFile "i3status-rust-${mode}" (templateData mode) ./status.toml.jinja);
     };
-    xdg.configFile."i3/i3-quickterm.json".source = ./i3-quickterm.json;
   };
 }

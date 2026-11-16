@@ -9,13 +9,13 @@
 
 buildNpmPackage {
   pname = "pi-subagents";
-  version = "0.84.0";
+  version = "0.88.1";
 
   src = fetchFromGitHub {
     owner = "nicobailon";
     repo = "pi-subagents";
-    rev = "0398b9e8d6f03dc6054dbf13dfe851c7a20bff3a";
-    hash = "sha256-yJHclk8TqJX0OGDteZYAbcW9qGDY9a8BSVy0kxcRpEU=";
+    rev = "v0.88.1";
+    hash = "sha256-t/IAZHTbIG1iFF+jq9tBm2jptfIYO2mLvn7WPb1I2Qc=";
   };
 
   patches = [
@@ -25,7 +25,7 @@ buildNpmPackage {
     ./efficiency-polish.patch
   ];
 
-  npmDepsHash = "sha256-4iHfVe/7y5xTT3tu8hhbrjOMr8OpkvgpCiDdWqMGVoQ=";
+  npmDepsHash = "sha256-pZQPUGZnAfMRvexq7y26RamFFdzUhYo/T/vye8Fdwsc=";
   npmFlags = [ "--omit=dev" ];
   dontNpmBuild = true;
   dontStrip = true;

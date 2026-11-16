@@ -1,1 +1,1 @@
-{ imports = [ ./clipper.nix ]; }
+{ imports = [ ]; }

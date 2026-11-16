@@ -49,10 +49,16 @@ in
         version = "${old.version}-${paseo.shortRev}";
         __intentionallyOverridingVersion = true;
       });
-      paseo-desktop = (paseoPkgs.desktop.override { paseo = paseoPackage; }).overrideAttrs (old: {
-        version = "${old.version}-${paseo.shortRev}";
-        __intentionallyOverridingVersion = true;
-      });
+      paseo-desktop =
+        (paseoPkgs.desktop.override {
+          paseo = paseoPackage;
+          # Electron 45 rejects xterm's leading-space canvas font strings and
+          # renders terminal glyphs at the canvas default of 10px instead.
+          electron = final.electron_44;
+        }).overrideAttrs (old: {
+          version = "${old.version}-${paseo.shortRev}";
+          __intentionallyOverridingVersion = true;
+        });
       inherit (llmAgentsPkgs) codex;
       "claude-code" = llmAgentsPkgs.claude-code;
       inherit (fcitx5VinputFor final.stdenv.hostPlatform.system) fcitx5-vinput;

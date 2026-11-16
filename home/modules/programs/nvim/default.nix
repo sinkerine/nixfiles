@@ -14,7 +14,6 @@ in
 {
   imports = [
     ./nix.nix
-    ./clipper.nix
     ./text-edit.nix
     ./completion.nix
     ./ide.nix
@@ -45,6 +44,18 @@ in
         };
         globals.mapleader = " ";
         keymaps = [
+          {
+            mode = "n";
+            key = "<C-y>";
+            action = ''"+yy'';
+            options.desc = "Copy line to system clipboard";
+          }
+          {
+            mode = "x";
+            key = "<C-y>";
+            action = ''"+y'';
+            options.desc = "Copy selection to system clipboard";
+          }
           {
             mode = "n";
             options.silent = true;
@@ -383,6 +394,8 @@ in
         ];
         extraPackages = with pkgs; [
           difftastic
+          wl-clipboard
+          xclip
         ];
         extraConfigLuaPre = ''
           get_selection = function()

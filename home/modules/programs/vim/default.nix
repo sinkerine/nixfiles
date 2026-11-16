@@ -4,9 +4,7 @@ with lib;
 let
   cfg = config.my.programs.vim;
   inherit (mylib) templateFile;
-  templateData = {
-    inherit (config.my.services.clipper) copyCommand;
-  };
+  templateData = { };
 in {
 
   options.my.programs.vim = {

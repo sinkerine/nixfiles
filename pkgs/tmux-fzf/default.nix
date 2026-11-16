@@ -10,13 +10,13 @@
 tmuxPlugins.mkTmuxPlugin {
   pluginName = "tmux-fzf";
   rtpFilePath = "main.tmux";
-  version = "unstable-2025-09-24";
+  version = "unstable-2026-10-17";
 
   src = fetchFromGitHub {
     owner = "sainnhe";
     repo = "tmux-fzf";
-    rev = "05af76daa2487575b93a4f604693b00969f19c2f";
-    hash = "sha256-ay7z0MkeDCpxdwNTKFrkxi/hUE7a5K7P7oFhfn94aLA=";
+    rev = "2839d6bd0e13b7c5e385e131e4c217917fa73555";
+    hash = "sha256-UmeqY6qzGpyU64VcSfTIGJLw/l1MrAzWo0G/Lnqy1Ks=";
   };
 
   postInstall = ''

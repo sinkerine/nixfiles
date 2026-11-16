@@ -7,7 +7,6 @@ let
   templateData = {
     tmuxFzfScriptsDir = "${pkgs.tmux-fzf}/share/tmux-plugins/tmux-fzf/scripts";
     inherit (config.home) sessionVariables;
-    inherit (config.my.services.clipper) copyCommand;
   };
 in {
 

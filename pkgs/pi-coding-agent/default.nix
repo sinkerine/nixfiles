@@ -13,22 +13,22 @@
 }:
 buildNpmPackage (finalAttrs: {
   pname = "pi-coding-agent";
-  version = "1.4.0";
+  version = "1.5.2";
 
   src = fetchFromGitHub {
     owner = "earendil-works";
     repo = "pi";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-N9NOpiiZTbOMDMV+CxvJAgtLjJJ1/8NJBGS0cFHkhsc=";
+    hash = "sha256-0dKtABQqfvCLF0WOydu5rpycMqC+N8Pc9Ex4BWKElyw=";
   };
 
-  npmDepsHash = "sha256-aBzVz78IxZQlzPYC72Ufa2YFtkow6nZR24YBYZrv9W0=";
+  npmDepsHash = "sha256-uHehffbEB2uU9U9uSpfWojzxvQyqeicbh/esCwk4neQ=";
 
   # Remove Pi branding from the default prompt's opening sentence.
   postPatch = ''
     substituteInPlace packages/coding-agent/src/core/system-prompt.ts \
       --replace-fail \
-      'You are an expert coding assistant operating inside pi, a coding agent harness.' \
+      'You are a coding assistant running inside pi, a coding agent harness. Help users inspect files, run commands, and modify code.' \
       'You are an expert coding assistant.'
   '';
 
@@ -39,7 +39,7 @@ buildNpmPackage (finalAttrs: {
   # under dist/providers/data/. Bump this hash alongside version.
   modelData = fetchurl {
     url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${finalAttrs.version}.tgz";
-    hash = "sha256-tA4rqLtvwzKQj4uW6DfcLR/ftF65zTgvWu0RFGKYHjw=";
+    hash = "sha256-1XFe+oNMI7/fEKBCtJ307hacyZAAvxbXmY+rLVM7Rfg=";
   };
 
   preConfigure = ''
@@ -89,6 +89,7 @@ buildNpmPackage (finalAttrs: {
               @earendil-works/pi-durable:packages/durable \
               @earendil-works/pi-env:packages/env \
               @earendil-works/pi-mcp:packages/mcp \
+              @earendil-works/pi-schema:packages/schema \
               @earendil-works/pi-telemetry:packages/telemetry \
               @earendil-works/pi-tui:packages/tui; do
       IFS=: read -r pkg src <<< "$ws"
@@ -96,8 +97,8 @@ buildNpmPackage (finalAttrs: {
       cp -r "$src" "$nm/$pkg"
     done
 
-    # Delete remaining workspace symlinks
-    find "$nm" -type l -lname '*/packages/*' -delete
+    # Delete remaining package and app workspace symlinks.
+    find "$nm" -type l \( -lname '*/packages/*' -o -lname '*/apps/*' \) -delete
 
     # Clean up now-dangling .bin symlinks
     find "$nm/.bin" -xtype l -delete

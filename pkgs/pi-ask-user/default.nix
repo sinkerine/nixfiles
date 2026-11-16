@@ -2,13 +2,13 @@
 
 stdenvNoCC.mkDerivation {
   pname = "pi-ask-user";
-  version = "0.17.1-unstable-20261030";
+  version = "0.17.2";
 
   src = fetchFromGitHub {
     owner = "edlsh";
     repo = "pi-ask-user";
-    rev = "df1df70acf1f7521d24f9518a702064930340df2";
-    hash = "sha256-iAnr33DpE0mTjPlzxDZM2zzi6ncbrCHt0O3ahtlkW5o=";
+    rev = "v0.17.2";
+    hash = "sha256-0I7CyxRgadLPLZYPnTbe1jzE3ElwpBj0Cs54gAH0K7w=";
   };
 
   dontConfigure = true;

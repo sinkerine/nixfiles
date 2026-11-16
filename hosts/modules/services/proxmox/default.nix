@@ -76,8 +76,8 @@ let
   pveFakeSubscriptionSrc = pkgs.fetchFromGitHub {
     owner = "Jamesits";
     repo = "pve-fake-subscription";
-    rev = "v0.0.11";
-    hash = "sha256-HP+4Njk0nmEcjfZlNhLQD91+3B54Y3Yc85yWVukpZZI=";
+    rev = "v0.0.12";
+    hash = "sha256-1RZI7pnczwU8BbD5jWcF3L7VDoTYtHqNw/PVLDcM/Do=";
   };
   pveFakeSubscriptionPkg = pkgs.writeShellApplication {
     name = "pve-fake-subscription";

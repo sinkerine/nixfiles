@@ -2,7 +2,7 @@
 
 let
   pname = "iosevka-nerdfont";
-  version = "3.0.1";
+  version = "3.5.1";
 in pkgs.stdenv.mkDerivation {
   inherit pname version;
   srcs = [
@@ -10,7 +10,7 @@ in pkgs.stdenv.mkDerivation {
       url =
         "https://github.com/ryanoasis/nerd-fonts/releases/download/v${version}/Iosevka.zip";
       stripRoot = false;
-      hash = "sha256-yAWtn3bl9ww4/FyINszasyKXiRqjMgUsXif4/25JoVg=";
+      hash = "sha256-o+gu/ILu+gOza2zCtDWL+TS4ayPGO18tMkm8kjfUNcI=";
     })
   ];
   sourceRoot = ".";

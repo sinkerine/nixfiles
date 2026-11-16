@@ -118,7 +118,6 @@ in {
         ew = "$EDITOR";
         # Misc
         op = (if isLinux then "xdg-open" else "open");
-        cpy = config.my.services.clipper.copyCommand;
         pst = (if isLinux then
           (if cfg.isXorg then "xclip -o" else "wl-paste")
         else

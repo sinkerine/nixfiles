@@ -36,7 +36,7 @@ index 42f07d6..73e8720 100644
  }): Promise<AcceptanceLedger> {
  	const acceptance = input.acceptance;
  	const initialStatus = acceptance.level === "none" ? "not-required" : "claimed";
-@@ -1577,12 +1579,13 @@ export async function evaluateAcceptance(input: {
+@@ -1625,11 +1627,12 @@ export async function evaluateAcceptance(input: {
  		} else {
  			ledger.verifyRuns = [];
  			for (const command of acceptance.verify) {
@@ -48,7 +48,6 @@ index 42f07d6..73e8720 100644
  					runId: input.runId,
 -				});
 +				}).finally(() => input.onVerifyActivity?.(undefined));
- 				if (command.output === "json") await applyTypedVerifyOutput(command, run);
  				ledger.verifyRuns.push(run);
  				if (input.signal?.aborted) break;
 diff --git a/src/runs/shared/subagent-control.ts b/src/runs/shared/subagent-control.ts

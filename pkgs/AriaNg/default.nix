@@ -6,14 +6,14 @@
 
 let
   pname = "AriaNg";
-  version = "1.3.13";
+  version = "1.3.15";
 in stdenvNoCC.mkDerivation {
   inherit pname version;
   src = fetchzip {
     url =
       "https://github.com/mayswind/AriaNg/releases/download/${version}/AriaNg-${version}-AllInOne.zip";
     stripRoot = false;
-    hash = "sha256-wOlcogJOBCFEj+b89DWfnpwaSfA/N8pM/WaGQqhrrMQ=";
+    hash = "sha256-K1w/8ALqQ9Z0L1Pj15XA/RxnbEnbol4rz8ANDKsORKM=";
   };
   phases = [ "installPhase" ];
   installPhase = ''

@@ -62,24 +62,7 @@ with lib; let
       plan_mode_reasoning_effort = "ultra";
     } // magpieProfileSettings;
   };
-  strataProvider = {
-    name = "Strata on kazuki";
-    base_url = "https://kazuki.m.mado.moe/v1";
-    wire_api = "responses";
-    stream_idle_timeout_ms = 600000;
-    experimental_bearer_token = "lan-only";
-  };
-  strataProfiles = builtins.listToAttrs (map (effort:
-    nameValuePair "strata-${effort}" {
-      model = "Qwen3.8-Flash-Next-abliterated-GSQ-RCO-IQ2_XS";
-      model_provider = "strata";
-      model_context_window = 131072;
-      show_raw_agent_reasoning = true;
-      model_reasoning_effort = effort;
-      plan_mode_reasoning_effort = effort;
-      model_providers.strata = strataProvider;
-    }) [ "low" "medium" "high" ]);
-  codexVariants = defaultReasoningProfiles // defaultUltraProfile // reasoningProfiles // ultraProfiles // strataProfiles;
+  codexVariants = defaultReasoningProfiles // defaultUltraProfile // reasoningProfiles // ultraProfiles;
   # Pass native config overrides so these commands also work with alternate
   # CODEX_HOME directories and app-server, without installing profile files.
   configArgs = prefix: settings: concatLists (mapAttrsToList (key: value:
