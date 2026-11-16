@@ -28,14 +28,16 @@ jobs:
     snapshotting:
       type: periodic
       prefix: zrepl_
-      interval: 24h
+      interval: 1h
     send:
       compressed: true
     pruning:
       keep_sender:
         - type: not_replicated
+        - type: last_n
+          count: 10
         - type: grid
-          grid: 3x1d
+          grid: 24x1h | 3x1d
           regex: "^zrepl_.*"
         - type: regex
           regex: "^manual_.*"
