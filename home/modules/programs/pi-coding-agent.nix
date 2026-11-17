@@ -163,7 +163,7 @@ in
               thinking = "medium";
             };
             worker = {
-              model = "gpt-6.1-sol";
+              model = "group/sol-fast";
               thinking = "medium";
             };
             reviewer = {
@@ -180,11 +180,11 @@ in
               thinking = "high";
             };
             "evidence-auditor" = {
-              model = "gpt-6.1-sol";
+              model = "group/sol-fast";
               thinking = "high";
             };
             delegate = {
-              model = "gpt-6.1-sol";
+              model = "group/sol-fast";
               thinking = "medium";
             };
           };
@@ -265,6 +265,13 @@ in
           {
             id = "group/sol-fast";
             name = "Sol Fast";
+            reasoning = true;
+            input = [ "text" "image" ];
+            contextWindow = 1050000;
+          }
+          {
+            id = "group/sol-ultrafast";
+            name = "Sol UltraFast";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1050000;

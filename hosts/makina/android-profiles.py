@@ -185,7 +185,7 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
     return result
 
 
-def hk_profile(config, tailnet_auth_key=None):
+def hk_profile(config, tailnet_auth_key=None, *, always_proxy=False):
     required = ("host", "port", "direct_uuid", "us_uuid", "public_key", "short_id")
     missing = [key for key in required if key not in config]
     if missing:
@@ -241,7 +241,7 @@ def hk_profile(config, tailnet_auth_key=None):
     }
     if tailnet_auth_key:
         endpoint["auth_key"] = tailnet_auth_key
-    return {
+    result = {
         "log": {"level": "warn"},
         "dns": {"servers": [
             {"type": "local", "tag": "local-dns"},
@@ -263,7 +263,18 @@ def hk_profile(config, tailnet_auth_key=None):
         "route": {"final": "hk-direct", "auto_detect_interface": True,
                   "default_domain_resolver": "bootstrap", "rules": rules, "rule_set": sets},
     }
-
+    if always_proxy:
+        # Keep LAN and tailnet access, but never bypass Michiru for China.
+        china_sets = {"geosite-cn", "geoip-cn"}
+        result["route"]["rules"] = [
+            rule for rule in rules if not china_sets.intersection(rule.get("rule_set", []))
+        ]
+        result["route"]["rule_set"] = [item for item in sets if item["tag"] not in china_sets]
+        result["dns"]["servers"] = [server for server in result["dns"]["servers"]
+                                    if server["tag"] == "managed-dns"]
+        result["dns"]["rules"] = []
+        result["route"]["default_domain_resolver"] = "managed-dns"
+    return result
 
 
 def generate(secret_path, output_dir, tailnet_auth_keys=None):
@@ -276,7 +287,7 @@ def generate(secret_path, output_dir, tailnet_auth_keys=None):
     if not hk_config_path:
         raise ValueError("MICHIRU_PROFILE_CONFIG_FILE is required")
     with open(hk_config_path, encoding="utf-8") as source:
-        hk_config = hk_profile(json.load(source), (tailnet_auth_keys or {}).get("michiru-cn-direct-tailscale"))
+        hk_source = json.load(source)
 
     os.makedirs(output_dir, mode=0o700, exist_ok=True)
     paths = []
@@ -297,17 +308,21 @@ def generate(secret_path, output_dir, tailnet_auth_keys=None):
                 if os.path.exists(temporary):
                     os.unlink(temporary)
             paths.append(path)
-    path = os.path.join(output_dir, "michiru-cn-direct-tailscale.json")
-    fd, temporary = tempfile.mkstemp(dir=output_dir, prefix=".michiru-cn.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as output:
-            json.dump(hk_config, output, indent=2)
-            output.write("\n")
-        os.replace(temporary, path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
-    paths.append(path)
+    for name, always_proxy in (("michiru-cn-direct-tailscale", False),
+                               ("michiru-always-proxy-tailscale", True)):
+        hk_config = hk_profile(hk_source, keys.get(name) or keys.get("michiru-cn-direct-tailscale")
+                               or keys.get("sachi-tailscale"), always_proxy=always_proxy)
+        path = os.path.join(output_dir, f"{name}.json")
+        fd, temporary = tempfile.mkstemp(dir=output_dir, prefix=f".{name}.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as output:
+                json.dump(hk_config, output, indent=2)
+                output.write("\n")
+            os.replace(temporary, path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+        paths.append(path)
 
     # Remove only the exact legacy profile files this generator used to emit.
     obsolete = {

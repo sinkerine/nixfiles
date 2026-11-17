@@ -1,6 +1,6 @@
 # Latency and verification reference
 
-Read this when preparing `<run dir>/verification.md`. Keep the run's concrete commands and receipts there, rather than repeatedly exploring the environment in workers or rereading this reference.
+Read this when preparing `<run dir>/verification.md`. Keep the run's concrete commands and receipts there, rather than repeatedly exploring the environment in the main session and verifier or rereading this reference.
 
 ## Environment recipe
 
@@ -26,39 +26,19 @@ Include all relevant tracked and untracked source, tests, configuration, depende
 
 For source snapshots, `<run dir>/snap.sh <paths>` captures tracked and non-ignored untracked inputs without touching the real index. Record generated/ignored input digests separately. Use a repository-wide source scope when a smaller dependency closure cannot be justified. If relevant inputs changed while a command was running, its result cannot prove the resulting checkout; rerun on stable inputs.
 
-A passing receipt can satisfy task acceptance or final verification after a read-only review when all relevant inputs, environment, command, and discovered scope still match. A commit without changed content need not invalidate it, but hooks, generators, dependency changes, repairs, merges, host moves, and environment changes require checking identities again. Reuse only the checks whose full identity is still proven; uncertainty means rerun. Keep final full-feature requirements and a full inventory of evidence. Worker prose never substitutes for independent execution.
+A passing receipt can satisfy task acceptance or final verification after a read-only review when all relevant inputs, environment, command, and discovered scope still match. A commit without changed content need not invalidate it, but hooks, generators, dependency changes, repairs, merges, host moves, and environment changes require checking identities again. Reuse only the checks whose full identity is still proven; uncertainty means rerun. Keep final full-feature requirements and a full inventory of evidence. Implementation claims never substitute for independent execution.
 
-## Implementation dependencies and consolidated review
+## Main-session implementation and consolidated review
 
-Within one launch, use plain functions returning promise chains. Nested `async` functions are rejected by the installed Node/Bun-portable workflow sandbox. Launch compatible ready implementations together; each completes its independent host gate and notifies the parent without launching a reviewer. Fill `items` with the task ids and exact commands from the approved plan. The helper claims each task's complete resource set; do not wrap it in another flock. The attached-gate example below applies only when each selected check and its entire prerequisite closure is non-qex. For a Gradle-build/E2E selection, omit the implementation gate, then launch the independent verifier using [verifier.md](verifier.md) and inspect its receipts before releasing dependents.
+The main agent implements and repairs the approved feature. Do not launch implementation, setup or repair children. Keep sequential milestones only when dependencies or useful checkpoints justify them; keep the criterion/test map, interfaces and receipt identities in `tasks.md` and `verification.md`. A milestone becomes implemented after its independent gates pass and produced interfaces match the plan; acceptance still waits for consolidated review.
 
-```js workflow
-const items = [
-  { id: "T2", key: "t2", gate: "e2e-feature-run verify --feature <feature> --recipe <run dir>/verification.json --check T2" },
-  { id: "T3", key: "t3", gate: "e2e-feature-run verify --feature <feature> --recipe <run dir>/verification.json --check T3" },
-];
-function runTask(item) {
-  return runs.run(item.key + "-implement", {
-    label: item.id + " · implement", phase: item.id,
-    agent: "worker", model: "magpie/gpt-6.1-sol:medium",
-    task: "Implement " + item.id + ". Read <run dir>/" + item.key + "-brief.md.",
-    gate: item.gate, notifyOnComplete: true,
-    output: "<run dir>/" + item.key + "-implement-result.md", outputMode: "file-only",
-  }).then(function (impl) {
-    return { task: item.id, ok: impl.ok, stage: "implement", writerRunId: impl.runId, report: impl.outputReference, artifacts: impl.artifactPaths };
-  }).catch(function (error) {
-    // Preserve siblings while the parent handles the native failed-child notification.
-    return { task: item.id, ok: false, stage: "failed", error: String(error) };
-  });
-}
-return Promise.all(items.map(runTask));
-```
+Use compaction at stable phase boundaries when useful, especially after approved design handoff or before a repair cycle. First checkpoint unresolved findings, review counters, failed experiments, the next hypothesis, protected boundaries, exact input identities and active child/job handles. Read those records on recovery instead of whole transcripts. Large context alone is not a reason to delegate implementation, and repeated compaction in the middle of a debugging experiment can lose useful evidence and add reconstruction cost.
 
-`notifyOnComplete` is provided by this repository's pi-subagents patch. Apply the matching Nix package before using this skill revision. Each gated implementation wakes the parent while siblings continue. `emit()` alone persists progress without a wake. The parent reads the worker report, validates the independent gate and produced interface, and marks the task implemented before releasing compatible dependencies. Do not relaunch the running script or duplicate a workflow key to refresh a result.
+Once edits settle, use direct deterministic non-qex gates or the native `e2e-verify` workflow. Send any selection with Gradle-build/E2E prerequisites to the independent verifier using [verifier.md](verifier.md). Preserve resource ownership and avoid nested locks. Do not edit inputs still being read by a child or command; overlap only truly independent work or checks against isolated snapshots.
 
-Release newly ready tasks only when ownership and source/build-input conflicts allow them. Do not mutate files still read by another task or its test. Implemented tasks may remain uncommitted until consolidated review acceptance; update `tasks.md` with interfaces and receipts so dependents can consume them. A later relevant edit invalidates earlier evidence. Preserve explicitly approved early review gates and barriers.
+After all implementation and gates finish, run the host-only Test gate, then consolidated Review against stable feature inputs. Default to one reviewer; split only a large review into nonoverlapping scopes with assigned integration coverage. Use `notifyOnComplete: true` on review/verifier children, inspect their saved findings/receipts at completion and continue in the main session. Keep compact receipts and file-only reports; no implementation child or worker-result handoff is needed.
 
-After all implementation and gates finish, run the skill's host-only Test gate, then its consolidated Review phase against stable feature inputs. Delaying the same per-task reviewer fanout saves little context and loses overlap; consolidate shared context and review integration explicitly. Default to one reviewer, splitting only large features into a few nonoverlapping scopes with assigned integration coverage. Group confirmed fixes by ownership, resume the original workers, and give each a coherent diagnosis/repair/development-regression/journey-preparation loop with explicit protected boundaries. Assign journey execution to the independent verifier. Do not split that loop into parent-approved techniques. Workers reassess repeated failures using `diagnosis.md` without waking the parent for each attempt. Verify local fixes with red-then-green regression tests and host receipts; review affected deltas only for state/lifecycle, cross-boundary contract, or security fixes after repairs settle, preserving the entire run's three-round scope counters; after exhaustion, the parent uses code inspection and independent host evidence. Do not rerun a full review for each repair. Acceptance still requires no confirmed Critical/Important findings and matching independent gates; commit only at a safe idle point and recheck any hook changes.
+Judge review findings against the code, then perform the coherent diagnosis/repair/development-regression/journey-preparation loop yourself. The verifier executes the journey and reports evidence without product/harness edits. Reassess repeated failures using `diagnosis.md`. Establish red-then-green regressions and independent gate receipts; request focused review only for state/lifecycle, cross-boundary contract or security repairs after edits settle. Preserve the entire run's three-round scope counters; after exhaustion, use main-session inspection and independent host evidence. Do not repeat a full review for each repair. Acceptance requires no confirmed Critical/Important findings and matching gates; commit only after relevant readers finish and recheck hook changes.
 
 ## Final verification and E2E
 
@@ -74,9 +54,9 @@ Continue approved local tasks that do not need that dependency. Do not use timed
 
 ## Measure the next run
 
-Use existing trace/receipt timestamps for task ready, launch, model/command start, lock acquisition, finish, and acceptance. A normal command duration includes lock wait unless acquisition is logged separately; never label it pure test execution. Mark missing timestamps unknown. Attribute elapsed intervals to execution (model/commands), environment repair, human decisions, external dependencies/transfers, resource-lock wait, and coordination/verification bookkeeping. Worker lifetime can include several of these; do not label all of it productive execution or all parent time waste. Track overlapping intervals and their union instead of double-counting.
+Use existing trace/receipt timestamps for task ready, launch, model/command start, lock acquisition, finish, and acceptance. A normal command duration includes lock wait unless acquisition is logged separately; never label it pure test execution. Mark missing timestamps unknown. Attribute elapsed intervals to execution (model/commands), environment repair, human decisions, external dependencies/transfers, resource-lock wait, and coordination/verification bookkeeping. Main-session and child lifetimes can include several of these; do not label all of it productive execution or all parent time waste. Track overlapping intervals and their union instead of double-counting.
 
-Compare task-ready-to-launch and gate-to-dependent-launch delays, all-implementation-finished-to-review-start delay, consolidated review/repair duration, lock wait, environment repairs, and repeated checks with unchanged identities. Track reviewer launches, repeated context, and input/output/cache token usage alongside total elapsed time; delayed discovery can add downstream rework. Distinguish explicitly planned early reviews from consolidated scopes. For overlapping intervals, compute their union rather than summing durations. Final verification plus E2E has serial cost `V + E` and a theoretical overlap cost `max(V, E)` only when resources and inputs are independent; contention can erase the benefit. Do not report aggregate model minutes or no-child time as end-to-end latency savings.
+Compare milestone-ready-to-work delays, implementation-finished-to-review-start delay, consolidated review/repair duration, compaction and context reconstruction, verifier handoffs, lock wait, environment repairs, and repeated checks with unchanged identities. Track reviewer launches, repeated context, and input/output/cache token usage alongside total elapsed time; delayed discovery can add downstream rework. Distinguish explicitly planned early reviews from consolidated scopes. For overlapping intervals, compute their union rather than summing durations. Final verification plus E2E has serial cost `V + E` and a theoretical overlap cost `max(V, E)` only when resources and inputs are independent; contention can erase the benefit. Do not report aggregate model minutes or no-child time as end-to-end latency savings.
 
 ## Acceptance progress and prolonged blockage
 
@@ -87,7 +67,7 @@ Capability: Android real cold route + authoritative readiness + native acquisiti
 Implementation: committed <sha>; Review: feature 3/3, confirmed findings resolved
 Android: 1/22 current measurement windows passed; 1 failed, 20 unrun, 0 invalidated
 Other required evidence: Electron/browser journeys and final performance checks pending
-Active: native layout repair; owner <run id>; source/artifact <identities>
+Active: native layout repair; owner main session <session id>; source/artifact <identities>
 Waiting: <exact dependency or none>; since <timestamp>; elapsed <known duration>
 Next: <action, responsible owner, expected native event/deadline>
 Time: execution / environment / human / external / lock / coordination <observed intervals or unknown>

@@ -11,7 +11,7 @@ e2e-review-benchmark \
   --repeats 1 --timeout 300
 ```
 
-The bundled manifest has one archived gallery defect and its fixed control. It compares the Gemini high benchmark baseline with Gemini medium, Gemini low and Sol medium. Supply `--manifest <file>` for a broader corpus (up to eight cases, four variants and three repeats). Packet paths are read with `git show`; no checkout or product files are edited. The benchmark rotates model order between cases. Each process has a deadline, reports partial failures, and stops the experiment on a failed or malformed model result rather than switching providers as recovery.
+The bundled manifest has one archived gallery defect and its fixed control. It compares the Gemini high benchmark baseline with Gemini medium, Gemini low and Sol Fast medium. Supply `--manifest <file>` for a broader corpus (up to eight cases, four variants and three repeats). Packet paths are read with `git show`; no checkout or product files are edited. The benchmark rotates model order between cases. Each process has a deadline, reports partial failures, and stops the experiment on a failed or malformed model result rather than switching providers as recovery.
 
 A packet contains a contract and explicitly selected files/context. Missing context is a limitation to record, not permission to invent repository behavior. The benchmark caps packet size and keeps raw events outside the source tree. Existing model credentials are used without printing or copying them.
 

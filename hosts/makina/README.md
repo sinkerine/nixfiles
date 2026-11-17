@@ -3,7 +3,7 @@
 Makina is the Android mobile host. Its sing-box Android profile generator lives in this directory.
 
 The exporter writes `amane-tailscale`, `sachi-tailscale`,
-`michiru-cn-direct-tailscale`, and one `<server>-<target>-tailscale` profile for
+`michiru-cn-direct-tailscale`, `michiru-always-proxy-tailscale`, and one `<server>-<target>-tailscale` profile for
 both Amane and Sachi for every entry in
 [`../common/reality-sni-targets.json`](../common/reality-sni-targets.json).
 All profiles have a Tailscale endpoint enabled.
@@ -69,3 +69,10 @@ through its Tailscale endpoint, and sends other destinations through Michiru.
 It reuses Makina's Sachi Tailscale identity because SFA runs only one profile at a
 time. Its outbound uses relay address `103.117.101.12`; encrypted config still
 supplies its port and credentials.
+
+`michiru-always-proxy-tailscale` removes the China-direct routing and DNS
+exceptions. Public Internet traffic and DNS go through Michiru, retaining the
+US exit rules for US IPs and configured US domains. Private LAN access and the
+embedded Tailscale endpoint remain available, sharing the same Sachi identity.
+It uses the same enrollment key as `michiru-cn-direct-tailscale` (or
+`sachi-tailscale`) unless a profile-specific key is supplied.

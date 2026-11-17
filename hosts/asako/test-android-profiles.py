@@ -41,7 +41,7 @@ class AndroidProfileTests(unittest.TestCase):
                     os.environ.pop("MICHIRU_PROFILE_CONFIG_FILE", None)
                 else:
                     os.environ["MICHIRU_PROFILE_CONFIG_FILE"] = old
-            self.assertEqual(len(paths), 1 + len(android_profiles.SERVERS) * (1 + len(android_profiles.SNI_TARGETS)))
+            self.assertEqual(len(paths), 2 + len(android_profiles.SERVERS) * (1 + len(android_profiles.SNI_TARGETS)))
             config = json.loads((output / "michiru-cn-direct-tailscale.json").read_text())
             self.assertEqual(config["dns"]["strategy"], "ipv4_only")
             self.assertEqual(config["dns"]["final"], "managed-dns")
@@ -77,6 +77,18 @@ class AndroidProfileTests(unittest.TestCase):
             self.assertEqual(rules[7], {"rule_set": ["geoip-us"], "action": "route", "outbound": "hk-us"})
             self.assertEqual(config["route"]["final"], "hk-direct")
             self.assertTrue(all(item["http_client"] == "rule-set-via-hk-direct" for item in config["route"]["rule_set"]))
+            always = json.loads((output / "michiru-always-proxy-tailscale.json").read_text())
+            self.assertEqual(always["endpoints"], config["endpoints"])
+            self.assertEqual(always["route"]["final"], "hk-direct")
+            self.assertEqual(always["route"]["default_domain_resolver"], "managed-dns")
+            self.assertEqual(always["dns"]["servers"], [dns_servers["managed-dns"]])
+            self.assertEqual(always["dns"]["rules"], [])
+            self.assertEqual(always["route"]["rules"], [
+                rule for rule in rules if rule.get("rule_set") not in (["geosite-cn"], ["geoip-cn"])
+            ])
+            self.assertEqual([item["tag"] for item in always["route"]["rule_set"]], ["geoip-us"])
+            enrolled = android_profiles.hk_profile(profile_config, "test-key", always_proxy=True)
+            self.assertEqual(enrolled["endpoints"][0]["auth_key"], "test-key")
 
     def test_json_exports_preserve_routing_modes(self):
         uuid = "00000000-0000-4000-8000-000000000000"
@@ -99,7 +111,7 @@ class AndroidProfileTests(unittest.TestCase):
                 f"{server}{suffix}-tailscale.json"
                 for server in android_profiles.SERVERS
                 for suffix in ("", *(f"-{mode}" for mode in android_profiles.SNI_TARGETS))
-            } | {"michiru-cn-direct-tailscale.json"}
+            } | {"michiru-cn-direct-tailscale.json", "michiru-always-proxy-tailscale.json"}
             self.assertEqual({path.name for path in paths}, expected)
             for path in paths:
                 self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)

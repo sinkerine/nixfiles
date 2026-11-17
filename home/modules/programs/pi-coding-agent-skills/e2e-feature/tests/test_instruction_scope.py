@@ -79,9 +79,11 @@ class InstructionScopeTests(unittest.TestCase):
                     if "://" not in target:
                         self.assertTrue(((FEATURE / relative).parent / target).exists(), target)
         skill = (FEATURE / "SKILL.md").read_text()
-        worker_requirements = skill.split("Require it to:", 1)[1].split("Have an independent gate", 1)[0]
-        self.assertNotIn("agent-job run", worker_requirements)
-        self.assertIn("run normal development checks directly", worker_requirements)
+        implementation = skill.split("## Implement\n", 1)[1].split("## Test gate", 1)[0]
+        self.assertNotIn("agent-job run", implementation)
+        self.assertNotIn("runs.run(", implementation)
+        self.assertIn("Run normal development checks directly", implementation)
+        self.assertIn("directly in the main session", implementation)
         self.assertIn("entire dependency closure", skill)
         verification = (FEATURE / "references/verification.md").read_text()
         self.assertIn("including any transitive prerequisite", verification)
