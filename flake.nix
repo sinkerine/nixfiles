@@ -48,9 +48,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.flake-compat.follows = "flake-compat";
     };
-    hyprland = {
-      url = "git+https://github.com/hyprwm/Hyprland?submodules=1";
-    };
     noctalia = {
       url = "github:noctalia-dev/noctalia";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -103,7 +100,6 @@
       kmonad,
       nixos-hardware,
       deploy-rs,
-      hyprland,
       noctalia,
       nixvim,
       llm-agents,
@@ -266,7 +262,6 @@
           };
           modules = [
             ./hosts/kazuki
-            hyprland.nixosModules.default
           ]
           ++ (with nixos-hardware.nixosModules; [
             common-gpu-nvidia-nonprime
@@ -282,7 +277,6 @@
           pkgs = builtins.getAttr system packages;
           modules = [
             ./hosts/asako
-            hyprland.nixosModules.default
             kmonad.nixosModules.default
           ]
           ++ (with nixos-hardware.nixosModules; [
@@ -299,7 +293,6 @@
           pkgs = builtins.getAttr system packages;
           modules = [
             ./hosts/sachi
-            hyprland.nixosModules.default
           ]
           ++ (with nixos-hardware.nixosModules; [ common-cpu-intel-cpu-only ]);
           specialArgs = {

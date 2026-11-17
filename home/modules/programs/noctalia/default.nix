@@ -58,25 +58,6 @@ in
 
   my.essentials.gui.enablePolkitAgent = false;
 
-  my.programs.hyprland = {
-    enableWaybar = false;
-    enableHyprpaper = false;
-    enableGammastep = lib.mkForce false;
-    appLauncherCommand = "${noctalia} msg panel-toggle launcher";
-    windowSwitcherCommand = "${noctalia} msg window-switcher";
-    clipboardCommand = "${noctalia} msg panel-toggle clipboard";
-    dismissNotificationsCommand = "${noctalia} msg notification-clear-active";
-    restoreNotificationCommand = "${noctalia} msg panel-toggle control-center notifications";
-    networkCommand = "${noctalia} msg panel-toggle control-center network";
-    screenshotCommand = "${noctalia} msg screenshot-region";
-    lockCommand = "${noctalia} msg session lock";
-    brightnessUpCommand = "${noctalia} msg brightness-up";
-    brightnessDownCommand = "${noctalia} msg brightness-down";
-    muteCommand = "${noctalia} msg volume-mute";
-    volumeUpCommand = "${noctalia} msg volume-up 5";
-    volumeDownCommand = "${noctalia} msg volume-down 5";
-  };
-
   programs.noctalia = {
     enable = true;
     package = pkgs.noctalia.overrideAttrs (old: {
@@ -242,6 +223,5 @@ in
   programs.wofi.enable = lib.mkForce false;
   my.programs.networkmanager-dmenu.enable = lib.mkForce false;
   my.services.copyq.enable = lib.mkForce false;
-  my.services.hyprlock.enable = lib.mkForce false;
   my.services.network-manager-applet.enable = lib.mkForce false;
 }

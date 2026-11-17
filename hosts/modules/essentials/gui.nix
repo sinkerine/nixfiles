@@ -16,13 +16,7 @@ in
 
   config = mkIf cfg.enable (mkMerge [
     {
-      programs.hyprland = {
-        enable = true;
-        withUWSM = true;
-        xwayland = {
-          enable = true;
-        };
-      };
+      programs.uwsm.enable = true;
       programs.niri = {
         enable = true;
         package = pkgs.niri;

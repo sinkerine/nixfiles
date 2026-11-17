@@ -2,7 +2,7 @@
   lib,
   jq,
   libnotify,
-  hyprland,
+  niri,
   procps,
   tmux,
   notify-lib,
@@ -14,7 +14,7 @@ writeShellApplication {
   runtimeInputs = [
     jq
     libnotify
-    hyprland
+    niri
     procps
     tmux
   ];

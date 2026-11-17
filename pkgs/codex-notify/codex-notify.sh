@@ -17,5 +17,5 @@ message="$(printf '%s' "$payload" | jq -r '.last_assistant_message // .["last-as
 [ -z "$message" ] && exit 0
 
 capture_tmux_info
-find_hypr_window
+find_niri_window
 send_notify "codex-notify" "Codex" "$message"

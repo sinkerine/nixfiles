@@ -35,14 +35,7 @@ in
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       {
-        my.programs.hyprland = {
-          enable = true;
-          inherit (config.my.display) monitors scale;
-        };
-        my.programs.niri = {
-          enable = true;
-          musicPlayer = config.my.programs.hyprland.musicPlayer;
-        };
+        my.programs.niri.enable = true;
       }
       {
         home.sessionVariables = {
@@ -145,8 +138,6 @@ in
             disable-notifications = true;
           };
         };
-
-        my.programs.hyprland.enableGammastep = true;
 
         qt = {
           enable = true;

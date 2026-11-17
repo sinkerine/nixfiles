@@ -69,15 +69,6 @@
       };
   };
 
-  my.programs.hyprland = {
-    extraSessionVariables = {
-      LIBVA_DRIVER_NAME = "nvidia";
-      NVD_BACKEND = "direct";
-      __GLX_VENDOR_LIBRARY_NAME = "nvidia";
-      ELECTRON_OZONE_PLATFORM_HINT = "auto";
-    };
-  };
-
   home.sessionVariables = {
     __GLX_VENDOR_LIBRARY_NAME = "nvidia";
     LIBVA_DRIVER_NAME = "nvidia";
@@ -87,7 +78,6 @@
 
   my.display.monitors = {
     one = {
-      # https://wiki.hyprland.org/Configuring/Monitors/
       output = "desc:Dell Inc. DELL P2715Q 54KKD77P721L";
       wallpaper = "${config.home.homeDirectory}/Pictures/wallpapers/yande.re_455471_armor_fate_grand_order_heels_landscape_shielder_(fate_grand_order)_thighhighs_thkani@2x.png";
     };

@@ -53,7 +53,6 @@ with lib;
         "https://nix-community.cachix.org"
         "https://cache.nixos.org/"
         "https://cache.numtide.com"
-        "https://hyprland.cachix.org"
         "https://cache.nixos-cuda.org"
         "https://cache.saumon.network/proxmox-nixos"
       ];
@@ -103,11 +102,6 @@ with lib;
       value = "10240";
     }
   ];
-  security.pam.services.hyprlock = {
-    text = ''
-      auth include login
-    '';
-  };
 
   security.polkit = {
     enable = true;
