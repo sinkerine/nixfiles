@@ -1,6 +1,6 @@
 # Repository E2E resource declaration
 
-Within `/skill:e2e-feature`, only the independent verifier child executes E2E stacks and loads the detailed qex reference at `~/.config/qex/AGENT.md`; see [verifier.md](verifier.md). The main implementation session runs normal development checks directly under existing locks, and routes E2E capability probes, journeys and reruns to that verifier. Declaration inspection/validation does not acquire quota and can happen before launching the child.
+Within `/skill:e2e-feature`, only the independent verifier child executes E2E stacks and loads the detailed qex reference at `~/.config/qex/AGENT.md`; see [verifier.md](verifier.md). The executor runs normal development checks directly under existing locks. The orchestrator assigns E2E capability probes, journeys and reruns to the verifier. Declaration inspection/validation does not acquire quota and can happen before launching the child.
 
 Every actual E2E execution needs a resource declaration in the repository root's `AGENTS.md` and admission from the shared host qex scheduler before starting the resource-consuming stack. This includes representative capability experiments, smoke tests, manual journeys, independent acceptance, and repairs/reruns. It does not add E2E requirements to future pushes/deployments or remove a repository's explicit E2E exemption.
 

@@ -2,7 +2,7 @@
 
 stdenvNoCC.mkDerivation {
   pname = "pi-hindsight";
-  version = "0.1.0-unstable-2026-11-13";
+  version = "0.1.0-unstable-2026-11-18";
 
   src = fetchFromGitHub {
     owner = "sinkerine";
@@ -10,6 +10,8 @@ stdenvNoCC.mkDerivation {
     rev = "cb26ab553dfa1536797ecc7901970e03ef16fa1d";
     hash = "sha256-M7jMQEGKX0AZ7yS5cqQGe0GqciBKCNpHjgI1D3/9DgQ=";
   };
+
+  patches = [ ./weekly-audit-fixes.patch ];
 
   dontConfigure = true;
   dontBuild = true;

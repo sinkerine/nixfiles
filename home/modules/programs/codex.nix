@@ -8,7 +8,7 @@
 with lib; let
   cfg = config.my.programs.codex;
   codexModels = {
-    sol = "gpt-6.1-sol";
+    sol = "gpt-6.2-sol";
     luna = "gpt-6-luna";
   };
   defaultCodexModelName = "luna";

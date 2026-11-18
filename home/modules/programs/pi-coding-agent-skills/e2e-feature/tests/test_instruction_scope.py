@@ -67,7 +67,7 @@ class InstructionScopeTests(unittest.TestCase):
 
     def test_workflow_references_preserve_verifier_boundary(self):
         for relative in ["SKILL.md", "references/verification.md", "references/projects.md",
-                         "references/host-move.md", "references/qex-resources.md", "references/capability-and-repairs.md",
+                         "references/executor.md", "references/qex-resources.md", "references/verifier.md",
                          "references/latency.md"]:
             with self.subTest(path=relative):
                 text = (FEATURE / relative).read_text()
@@ -79,15 +79,13 @@ class InstructionScopeTests(unittest.TestCase):
                     if "://" not in target:
                         self.assertTrue(((FEATURE / relative).parent / target).exists(), target)
         skill = (FEATURE / "SKILL.md").read_text()
-        implementation = skill.split("## Implement\n", 1)[1].split("## Test gate", 1)[0]
-        self.assertNotIn("agent-job run", implementation)
-        self.assertNotIn("runs.run(", implementation)
-        self.assertIn("Run normal development checks directly", implementation)
-        self.assertIn("directly in the main session", implementation)
-        self.assertIn("entire dependency closure", skill)
+        implementation = skill.split("## Capability and implementation\n", 1)[1].split("## Independent test gate", 1)[0]
+        self.assertIn("executor uses `magpie/group/gemini-speed:medium` and owns all such edits", implementation)
+        self.assertIn("execute only through the independent verifier", implementation)
+        self.assertIn("including ordinary non-qex commands", implementation)
         verification = (FEATURE / "references/verification.md").read_text()
-        self.assertIn("including any transitive prerequisite", verification)
-        self.assertIn("only non-qex commands and prerequisites", verification)
+        self.assertIn("runs all acceptance checks", verification)
+        self.assertIn("and their transitive prerequisites", verification)
 
 
 if __name__ == "__main__":

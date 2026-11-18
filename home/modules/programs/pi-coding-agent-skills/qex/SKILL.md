@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Shared resource queue
 
-This reference is installed at `~/.config/qex/AGENT.md`, outside the global Pi skill catalog. Only the independent verifier in `/skill:e2e-feature` loads these instructions. Orchestrators and implementation/repair workers run their normal development checks directly under existing locks; they hand checks requiring queued verification to that verifier. The verifier reports evidence and never owns product or harness fixes.
+This reference is installed at `~/.config/qex/AGENT.md`, outside the global Pi skill catalog. Only the independent verifier in `/skill:e2e-feature` loads these instructions. The Gemini Speed executor implements and runs normal development checks directly under existing locks, while the orchestrator coordinates and inspects evidence; all independent acceptance checks belong to the separate Sol Fast verifier. The verifier reports evidence and never owns product or harness fixes.
 
 Use the Nix-installed `agent-job` wrapper and `qex` CLI. All projects for this user on this machine share one coordinator, configuration and budget. Nixfiles owns the profile table and verifier reference; projects do not install their own queue. The wrapper pins the coordinator's XDG configuration and state roots even in project development shells, while `submit` and `run` preserve the caller's XDG roots inside the command's environment. Each physical host has its own coordinator; a job ID belongs to the host that accepted it.
 

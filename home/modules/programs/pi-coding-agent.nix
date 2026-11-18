@@ -18,6 +18,7 @@ let
   piAstGrep = pkgs.pi-ast-grep;
   piCollapseTools = pkgs.pi-collapse-tools;
   piSubagents = pkgs.pi-subagents;
+  piPerModelSystemPrompt = "${pkgs.pi-per-model-system-prompt}/lib/node_modules/@sinkerine/pi-per-model-system-prompt";
   piBtw = pkgs.pi-btw;
   piGoal = pkgs.pi-goal;
   e2eFeatureRun = pkgs.writeShellApplication {
@@ -74,7 +75,7 @@ let
     name = "pi-sol";
     runtimeInputs = [ piCodingAgent ];
     text = ''
-      exec pi --provider magpie --model gpt-6.1-sol "$@"
+      exec pi --provider magpie --model group/sol "$@"
     '';
   };
   piAstra = pkgs.writeShellApplication {
@@ -105,11 +106,25 @@ let
       exec pi --provider magpie --model group/gemini "$@"
     '';
   };
+  piGeminiSpeed = pkgs.writeShellApplication {
+    name = "pi-gemini-speed";
+    runtimeInputs = [ piCodingAgent ];
+    text = ''
+      exec pi --provider magpie --model group/gemini-speed "$@"
+    '';
+  };
   piOpus = pkgs.writeShellApplication {
     name = "pi-opus";
     runtimeInputs = [ piCodingAgent ];
     text = ''
       exec pi --provider magpie --model group/opus "$@"
+    '';
+  };
+  piAgyOpus = pkgs.writeShellApplication {
+    name = "pi-agy-opus";
+    runtimeInputs = [ piCodingAgent ];
+    text = ''
+      exec pi --provider magpie --model group/agy-opus "$@"
     '';
   };
   # pi-subagents' claude-code adapter owns its argv, so the reviewer's model
@@ -132,7 +147,7 @@ in
       package = piCodingAgent;
       settings = {
         defaultProvider = "magpie";
-        defaultModel = "gpt-6.1-sol";
+        defaultModel = "group/sol";
         defaultThinkingLevel = "medium";
         tuiMode = "regular";
         defaultProjectTrust = "always";
@@ -153,6 +168,10 @@ in
         ];
         subagents = {
           defaultProvider = "magpie";
+          # Foreground children do not load ambient Pi extensions.
+          defaultSubagentOnlyExtensions = [
+            "${piPerModelSystemPrompt}/extensions/per-model-system-prompt.ts"
+          ];
           agentOverrides = {
             scout = {
               model = "gpt-6-luna";
@@ -196,6 +215,7 @@ in
           "${piCollapseTools}/lib/node_modules/pi-collapse-tools"
           "${piGoal}/lib/node_modules/pi-goal"
           "${piHindsight}/lib/node_modules/pi-hindsight-memory"
+          piPerModelSystemPrompt
           "${piSubagents}/lib/node_modules/pi-subagents"
           "${piWebAccess}/lib/node_modules/pi-web-access"
           "${piBtw}/lib/node_modules/@sinkerine/pi-btw"
@@ -216,11 +236,11 @@ in
             maxTokens = 128000;
           }
           {
-            id = "gpt-6.1-sol";
-            name = "GPT-6.1 Sol";
+            id = "group/sol";
+            name = "Sol";
             reasoning = true;
             input = [ "text" "image" ];
-            contextWindow = 1050000;
+            contextWindow = 500000;
             maxTokens = 128000;
           }
           {
@@ -233,6 +253,14 @@ in
           }
           {
             id = "group/gemini";
+            name = "Gemini 4 Carbon";
+            reasoning = true;
+            input = [ "text" "image" ];
+            contextWindow = 1048576;
+            maxTokens = 65536;
+          }
+          {
+            id = "group/gemini-speed";
             name = "Gemini 4 Hydrogen";
             reasoning = true;
             input = [ "text" "image" ];
@@ -256,6 +284,14 @@ in
             maxTokens = 128000;
           }
           {
+            id = "group/agy-opus";
+            name = "AGY Opus 5.5";
+            reasoning = true;
+            input = [ "text" "image" ];
+            contextWindow = 1000000;
+            maxTokens = 128000;
+          }
+          {
             id = "group/luna-fast";
             name = "Luna Fast";
             reasoning = true;
@@ -267,14 +303,14 @@ in
             name = "Sol Fast";
             reasoning = true;
             input = [ "text" "image" ];
-            contextWindow = 1050000;
+            contextWindow = 500000;
           }
           {
             id = "group/sol-ultrafast";
             name = "Sol UltraFast";
             reasoning = true;
             input = [ "text" "image" ];
-            contextWindow = 1050000;
+            contextWindow = 500000;
           }
         ];
       };
@@ -282,6 +318,21 @@ in
 
     # Replace links left by older generations that pointed directly into the store.
     home.file."${config.programs.pi-coding-agent.configDir}/models.json".force = true;
+
+    home.file."${config.programs.pi-coding-agent.configDir}/model-prompts.json".text = builtins.toJSON {
+      rules = [
+        {
+          id = "openai-sol";
+          match = [
+            "magpie/group/sol"
+            "magpie/group/sol-fast"
+            "magpie/group/sol-ultrafast"
+            "gpt-6.2-sol"
+          ];
+          file = "${./pi-coding-agent-prompts/sol.md}";
+        }
+      ];
+    };
 
     home.sessionVariables.PI_CODING_AGENT_PACKAGE_ROOT = "${piCodingAgent}/lib/node_modules/pi-monorepo";
 
@@ -301,6 +352,10 @@ in
     home.file.".pi/agent/skills/e2e-feature" = {
       source = ./pi-coding-agent-skills/e2e-feature;
       recursive = true;
+      force = true;
+    };
+    home.file.".pi/agent/extensions/e2e-feature-routing.ts" = {
+      source = ./pi-coding-agent-extensions/e2e-feature-routing.ts;
       force = true;
     };
     home.file.".pi/agent/skills/pi-artifacts/SKILL.md" = {
@@ -341,6 +396,7 @@ in
       subagents = "off";
       digest.maxTokens = 800;
       recall.policy = "smart";
+      recall.timeoutMs = 5000;
       retain.auto = true;
     };
     home.file.".pi/agent/keybindings.json".text = builtins.toJSON {
@@ -354,8 +410,10 @@ in
       piSol
       piAstra
       piGemini
+      piGeminiSpeed
       piSolFast
       piOpus
+      piAgyOpus
       piLunaFast
       # Moves active workspace agent tabs between hosts; also provides the e2e-dispatch alias
       # that the e2e-feature skill uses to register runs.

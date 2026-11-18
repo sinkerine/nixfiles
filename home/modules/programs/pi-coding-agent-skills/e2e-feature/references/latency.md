@@ -1,10 +1,10 @@
 # Latency and verification reference
 
-Read this when preparing `<run dir>/verification.md`. Keep the run's concrete commands and receipts there, rather than repeatedly exploring the environment in the main session and verifier or rereading this reference.
+Read this when preparing `<run dir>/verification.md`. Keep the run's concrete commands and receipts there, rather than repeatedly exploring the environment in the orchestrator, executor and verifier or rereading this reference.
 
 ## Environment recipe
 
-Use a versioned recipe already in the project when available. Record its path and revision. Otherwise derive a run-local recipe from the repository's scripts, configuration, and AGENTS.md; do not silently change project-wide verification policy. Use maintained project environment/measurement tooling, promoting proven run-local helpers only within authorized ownership. Apply [capability-and-repairs.md](capability-and-repairs.md): a cheap host check during design followed by the representative executable capability experiment before substantial implementation. Record unknowns rather than equating tool availability with testability.
+Use a versioned recipe already in the project when available. Record its path and revision. Otherwise derive a run-local recipe from the repository's scripts, configuration, and AGENTS.md; do not silently change project-wide verification policy. Use maintained project environment/measurement tooling, promoting proven run-local helpers only within authorized ownership. Apply [the skill’s capability phase](../SKILL.md#capability-and-implementation): a cheap host check during design followed by the representative executable capability experiment before substantial implementation. Record unknowns rather than equating tool availability with testability.
 
 Record:
 
@@ -28,21 +28,13 @@ For source snapshots, `<run dir>/snap.sh <paths>` captures tracked and non-ignor
 
 A passing receipt can satisfy task acceptance or final verification after a read-only review when all relevant inputs, environment, command, and discovered scope still match. A commit without changed content need not invalidate it, but hooks, generators, dependency changes, repairs, merges, host moves, and environment changes require checking identities again. Reuse only the checks whose full identity is still proven; uncertainty means rerun. Keep final full-feature requirements and a full inventory of evidence. Implementation claims never substitute for independent execution.
 
-## Main-session implementation and consolidated review
+## Stable checkpoints and handoffs
 
-The main agent implements and repairs the approved feature. Do not launch implementation, setup or repair children. Keep sequential milestones only when dependencies or useful checkpoints justify them; keep the criterion/test map, interfaces and receipt identities in `tasks.md` and `verification.md`. A milestone becomes implemented after its independent gates pass and produced interfaces match the plan; acceptance still waits for consolidated review.
-
-Use compaction at stable phase boundaries when useful, especially after approved design handoff or before a repair cycle. First checkpoint unresolved findings, review counters, failed experiments, the next hypothesis, protected boundaries, exact input identities and active child/job handles. Read those records on recovery instead of whole transcripts. Large context alone is not a reason to delegate implementation, and repeated compaction in the middle of a debugging experiment can lose useful evidence and add reconstruction cost.
-
-Once edits settle, use direct deterministic non-qex gates or the native `e2e-verify` workflow. Send any selection with Gradle-build/E2E prerequisites to the independent verifier using [verifier.md](verifier.md). Preserve resource ownership and avoid nested locks. Do not edit inputs still being read by a child or command; overlap only truly independent work or checks against isolated snapshots.
-
-After all implementation and gates finish, run the host-only Test gate, then consolidated Review against stable feature inputs. Default to one reviewer; split only a large review into nonoverlapping scopes with assigned integration coverage. Use `notifyOnComplete: true` on review/verifier children, inspect their saved findings/receipts at completion and continue in the main session. Keep compact receipts and file-only reports; no implementation child or worker-result handoff is needed.
-
-Judge review findings against the code, then perform the coherent diagnosis/repair/development-regression/journey-preparation loop yourself. The verifier executes the journey and reports evidence without product/harness edits. Reassess repeated failures using `diagnosis.md`. Establish red-then-green regressions and independent gate receipts; request focused review only for state/lifecycle, cross-boundary contract or security repairs after edits settle. Preserve the entire run's three-round scope counters; after exhaustion, use main-session inspection and independent host evidence. Do not repeat a full review for each repair. Acceptance requires no confirmed Critical/Important findings and matching gates; commit only after relevant readers finish and recheck hook changes.
+Keep the criterion/test map, produced interfaces and receipt identities in `tasks.md` and `verification.md`. Before compaction, checkpoint unresolved findings, review counters, failed experiments, the next hypothesis, protected boundaries, exact input identities and active child/job handles. Read those records on recovery to avoid reconstructing the run from whole transcripts.
 
 ## Final verification and E2E
 
-Once task edits and commit hooks settle, finish generators and prerequisite builds, then pin/copy the tested feature artifact. Full verification and the isolated E2E journey can overlap when their source inputs remain stable, output/state and resources are separate, and concurrency stays within the recipe's limit. Run deterministic non-qex selections through the installed `e2e-verify` named resource or ordinary host tools with saved logs, following [verification.md](verification.md). Route selections containing Gradle builds/E2E, including transitive prerequisites, through the independent verifier; only that child loads qex instructions, queues allowlisted leaves and reports evidence without product/harness edits. The named resource launches no model child. Raw scripts have no `runs.host` authority, and an LLM preflight worker adds no independent evidence.
+Once task edits and commit hooks settle, finish generators and prerequisite builds, then pin/copy the tested feature artifact. Full verification and the isolated E2E journey can overlap when their source inputs remain stable, output/state and resources are separate, and concurrency stays within the recipe's limit. The verifier runs deterministic non-qex selections through the installed `e2e-verify` named resource or ordinary host tools with saved logs, following [verification.md](verification.md). For Gradle builds and E2E, including transitive prerequisites, the verifier queues the allowlisted leaves and records evidence under [its admission rules](verifier.md). The named resource launches no model child. Raw scripts have no `runs.host` authority, and an LLM preflight worker adds no independent evidence.
 
 Record both branches' input identities. Delivery waits for both. If either branch discovers a defect, preserve the failure, wait for overlapping readers before repair (or use an isolated repair checkout), and invalidate affected checks and E2E evidence. Rerun affected checks on the repaired artifact. Keep the journey environment available after a failure only when instructions allow it and its owning qex job remains active with the full reservation; otherwise preserve evidence and stop the owned stack.
 
@@ -67,7 +59,7 @@ Capability: Android real cold route + authoritative readiness + native acquisiti
 Implementation: committed <sha>; Review: feature 3/3, confirmed findings resolved
 Android: 1/22 current measurement windows passed; 1 failed, 20 unrun, 0 invalidated
 Other required evidence: Electron/browser journeys and final performance checks pending
-Active: native layout repair; owner main session <session id>; source/artifact <identities>
+Active: native layout repair; owner executor <run id>; source/artifact <identities>
 Waiting: <exact dependency or none>; since <timestamp>; elapsed <known duration>
 Next: <action, responsible owner, expected native event/deadline>
 Time: execution / environment / human / external / lock / coordination <observed intervals or unknown>

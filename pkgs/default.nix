@@ -22,6 +22,7 @@ with pkgs; {
   pi-goal = callPackage ./pi-goal { };
   pi-goal-x = callPackage ./pi-goal-x { };
   pi-hindsight = callPackage ./pi-hindsight { };
+  pi-per-model-system-prompt = callPackage ./pi-per-model-system-prompt { };
   workspace-dispatch = callPackage ./e2e-dispatch { };
   e2e-dispatch = pkgs.workspace-dispatch;
   pi-web-access = callPackage ./pi-web-access { };

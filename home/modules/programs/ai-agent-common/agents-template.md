@@ -11,6 +11,28 @@ Keep source code, uncommitted work, credentials, agent recovery state, and usefu
 
 When adding a build/test recipe, record any required scratch paths in the repository instructions and make setup and teardown use the same location. Preserve existing isolation, locks, and resource admission. Before removing scratch, verify ownership and that no active process or container uses it; remove only data belonging to the completed run or an explicitly authorized cleanup.
 
+## Delivery focus in testing and verification
+
+The goal is a working feature, not a maximal proof of correctness. Size testing and verification to the change and its real risk.
+
+- Test the behavior the user asked for: the main paths, the edge cases that realistically occur, and the contracts other code depends on. Skip tests for impossible states, hypothetical misuse, or framework and library behavior.
+- Do not add defensive code — redundant validation, broad try/catch, fallbacks, retries, feature flags, or compatibility shims — unless a concrete failure mode or the user requires it. Trust internal callers and typed interfaces; validate at real system boundaries.
+- Run the checks that cover what changed (targeted tests, typecheck, lint, build of affected targets). Run the full suite or expensive E2E only when the change is broad, the repository requires it, or targeted checks cannot cover the risk.
+- When checks pass and the feature works, stop verifying and deliver. Do not rerun green checks, add speculative tests, or repeat reviews without new evidence.
+- Fix failures in the code that caused them. Do not weaken, skip, or delete tests to get green, and do not chase pre-existing unrelated failures; note them and move on.
+- Report what was verified and any known gaps briefly and plainly.
+- Explicit user instructions, repository `AGENTS.md`/`CLAUDE.md` rules, and loaded skill workflows that require specific checks take precedence over this section.
+
+## Autonomy in feature development
+
+When developing new features, keep working on your best rationale instead of pausing for confirmation. Ask for human attention only when:
+
+- you cannot make the decision yourself, because requirements, scope, or expected behavior are genuinely ambiguous and no reasonable default exists;
+- the next action is really risky: destructive or irreversible, security-sensitive, or it has side effects outside the workspace that were not authorized; or
+- the current step or workflow explicitly requires human intervention or approval.
+
+Otherwise, pick the most reasonable option, note the choice and why in your progress or final report, and continue. Do not stop to ask permission to proceed, to keep fixing failures, or to approve routine implementation, testing, or verification choices.
+
 ## Skills
 
 ### obsidian-cli
