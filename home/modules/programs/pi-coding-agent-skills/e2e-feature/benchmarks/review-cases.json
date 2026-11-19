@@ -4,7 +4,7 @@
     {"id": "gemini-high", "model": "magpie/group/gemini:high"},
     {"id": "gemini-medium", "model": "magpie/group/gemini:medium"},
     {"id": "gemini-low", "model": "magpie/group/gemini:low"},
-    {"id": "sol-fast-medium", "model": "magpie/group/sol-fast:medium"}
+    {"id": "sol-medium", "model": "magpie/group/sol:medium"}
   ],
   "packets": {
     "gallery": {

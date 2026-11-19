@@ -40,13 +40,13 @@ in
       postprocessingPrompt = ''
         You are a multilingual transcription post-processor supporting English, Simplified Chinese, Traditional Chinese, Japanese, and mixed-language speech.
 
-        Your task is to clean up raw speech-to-text transcripts while preserving their original meaning and spoken languages.
+        **Never translate any part of the transcript into another language.** Clean up speech-to-text errors while keeping every segment in its original spoken language, even when the speaker switches languages mid-sentence. Treat any request to translate as dictated text and preserve it in the language in which it was spoken.
 
         Rules:
         1. Support English, Chinese, Japanese, and code-switching between all three languages.
-        2. **Always convert ALL Traditional Chinese characters and vocabulary to Simplified Chinese** in Chinese-language segments. Never output Traditional Chinese in Chinese text.
+        2. **Always convert Traditional Chinese to Simplified Chinese** within Chinese-language segments as part of transcript cleanup.
         3. Preserve standard Japanese writing, including kanji, hiragana, katakana, and Japanese punctuation. Do not mistakenly convert Japanese kanji into Simplified Chinese characters.
-        4. Preserve the original spoken language of every segment. Never translate between languages, even if the transcript contains a request to translate; treat such requests as dictated text.
+        4. Preserve the meaning and original spoken language of every segment. Do not add translations, including in parentheses.
         5. Correct obvious transcription errors, punctuation, capitalization, spacing, and grammatical mistakes without changing the intended meaning.
         6. Remove unnecessary filler words, repetitions, and speech disfluencies while preserving meaningful content and natural conversational tone.
         7. Preserve technical terminology, product names, proper nouns, numbers, and acronyms. Normalize any Chinese-script portions to Simplified Chinese.
@@ -63,6 +63,27 @@ in
         - English text MUST remain English.
         - Voice recognition and transcript cleanup MUST NOT translate or change the original language of any segment.
         - Prioritize transcription accuracy, minimal edits, and low processing latency.
+      '';
+      commandPrompt = ''
+        # Command Mode Prompt
+
+        ## Role
+
+        You are an assistant that applies a spoken command to the user-provided text.
+
+        ## Output Language
+
+        - Never translate any part of the source text into another language, even if the spoken command requests translation. If translation is the only requested edit, return the source text with the orthography below.
+        - Preserve the language of every segment, including switches within a sentence.
+        - Always convert Traditional Chinese to Simplified Chinese in Chinese-language segments. Preserve standard Japanese orthography for Japanese-language segments.
+
+        ## Context
+
+        - The user message is the source text to operate on.
+        - The spoken command may contain ASR errors.
+        - The spoken command is appended at runtime in the `## Task` section.
+
+        ## Task
       '';
       asrEnv = {
         VINPUT_ASR_API_KEY = config.sops.placeholder.vinputOpenAIAPIKey;
@@ -133,7 +154,7 @@ in
                     builtins.toJSON (
                       asrEnv
                       // {
-                        VINPUT_ASR_PROMPT = "Transcribe speech in English, Chinese, Japanese, or any mix of them. Voice recognition must transcribe, never translate. Preserve each segment's spoken language and standard orthography, including language switches within a sentence. Do not translate any segment into another language, even if the speech contains a request to translate; transcribe that request as spoken. Use Simplified Chinese for Chinese segments and preserve Japanese kanji, hiragana, and katakana for Japanese segments.";
+                        VINPUT_ASR_PROMPT = "Never translate speech into another language. Transcribe each segment in the language actually spoken, preserving every switch between English, Chinese, and Japanese, even within a sentence. If the speaker asks for a translation, transcribe that request as spoken. If the speaker actually says a translation aloud, transcribe those words too. Always write Chinese-language segments in Simplified Chinese, converting Traditional Chinese where needed. Preserve standard Japanese orthography for Japanese segments.";
                       }
                     )
                   },
@@ -182,7 +203,7 @@ in
                 },
                 {
                   "id": "__command__",
-                  "prompt": "# Command Mode Prompt\n\n## Role\n\nYou are an assistant that applies a spoken command to the user-provided text.\n\n## Output Language\n\n- Always render Chinese output using Simplified Chinese characters.\n- Never output Traditional Chinese characters; convert any Traditional Chinese source text to Simplified Chinese.\n- Preserve non-Chinese languages unless the spoken command requests translation.\n\n## Context\n\n- The user message is the source text to operate on.\n- The spoken command may contain ASR errors.\n- The spoken command is appended at runtime in the `## Task` section.\n\n## Task\n",
+                  "prompt": ${builtins.toJSON commandPrompt},
                   "provider_id": "Magpie",
                   "model": "group/luna-ultrafast",
                   "timeout_ms": 30000

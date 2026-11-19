@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const provider = "magpie";
-const models = ["group/agy-opus", "group/opus", "group/sol-fast"];
+const models = ["group/agy-opus", "group/opus", "group/sol"];
 const invocation = /^\/skill:e2e-feature(?: |$)/;
 const skillBlock = '<skill name="e2e-feature" location="';
 const quotaError = /\b(?:insufficient_quota|quota_exhausted|usage_limit_reached|out of (?:quota|its allowance)|quota (?:has been )?(?:exhausted|exceeded)|quota will reset|exceeded your (?:current )?quota|usage limit (?:has been )?reached|hit your (?:\w+ )?limit\b[^\n]*\bresets)\b/i;

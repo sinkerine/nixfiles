@@ -39,14 +39,13 @@ class AgentJobTests(unittest.TestCase):
             self.assertEqual(argv[1], action)
             self.assertEqual(argv[argv.index("--timeout") + 1], "3m")
 
-    def test_cwd_id_and_shared_resource_claims(self):
+    def test_cwd_id_and_named_lock(self):
         with tempfile.TemporaryDirectory(prefix="agent-job space ") as directory:
             id_file = str(Path(directory) / "check.id")
             _, argv = self.resolve(["submit", "medium", "--cwd", directory, "--id-file", id_file,
-                                    "--heavy-io", "--lock", "device-1", "--", "true"])
+                                    "--lock", "device-1", "--", "true"])
             self.assertEqual(argv[argv.index("--cwd") + 1], directory)
             self.assertEqual(argv[argv.index("--id-file") + 1], id_file)
-            self.assertEqual(argv[argv.index("--claim") + 1], "heavy-io=1")
             self.assertEqual(argv[argv.index("--lock") + 1], "device-1")
 
     def test_nested_submission_is_rejected_but_profile_inspection_is_allowed(self):
@@ -60,7 +59,8 @@ class AgentJobTests(unittest.TestCase):
     def test_invalid_submissions_do_not_produce_executable_commands(self):
         for args in (["submit", "small"], ["submit", "tiny", "--", "true"],
                      ["submit", "small", "--cwd", "/nonexistent-agent-job", "--", "true"],
-                     ["submit", "small", "--mem", "1MiB", "--", "true"]):
+                     ["submit", "small", "--mem", "1MiB", "--", "true"],
+                     ["submit", "small", "--heavy-io", "--", "true"]):
             with self.subTest(args=args), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 self.resolve(args)
 
@@ -73,7 +73,7 @@ class RepositoryEstimateTests(unittest.TestCase):
         return f"```qex-e2e {name}\n{json.dumps(entry)}\n```\n"
 
     def test_named_variants_and_native_qex_resource_fields(self):
-        browser = {"resources": {"cpu": 3, "mem": "6GiB", "claims": {"heavy-io": 1}}, "locks": ["device-1"], "timeout": "12m"}
+        browser = {"resources": {"cpu": 3, "mem": "6GiB"}, "locks": ["device-1"], "timeout": "12m"}
         native = {"resources": {"cpu": 8, "mem": "24GiB"}}
         entries = agent_job.parse_e2e_estimates(self.block(entry=browser) + self.block("native", native))
         self.assertEqual(entries, {"browser": browser, "native": native})
@@ -87,7 +87,8 @@ class RepositoryEstimateTests(unittest.TestCase):
             {"resources": {"cpu": 2, "mem": "0GiB"}},
             {"resources": {"cpu": 2, "mem": "0.1B"}},
             {"resources": {"cpu": 2, "mem": "999999999999999999999TiB"}},
-            {"resources": {"cpu": 2, "mem": "6GiB", "claims": {"heavy-io": 0}}},
+            {"resources": {"cpu": 2, "mem": "6GiB", "claims": {"heavy-io": True}}},
+            {"resources": {"cpu": 2, "mem": "6GiB", "claims": {"device": 1}}},
             {"resources": {"cpu": 2, "mem": "6GiB"}, "workers": 1},
             {"resources": {"cpu": 2, "mem": "6GiB"}, "timeout": "later"},
             {"resources": {"cpu": 2, "mem": "6GiB"}, "locks": ["x", "x"]},
@@ -104,7 +105,11 @@ class RepositoryEstimateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="agent-job-repo-") as directory:
             root = Path(directory)
             subprocess.run(["git", "init", "-q", str(root)], check=True)
-            (root / "AGENTS.md").write_text(self.block(entry={"resources": {"cpu": 3, "mem": "6GiB", "claims": {"heavy-io": 1}}, "timeout": "12m", "locks": ["device-1"]}))
+            (root / "AGENTS.md").write_text(self.block(entry={
+                "resources": {"cpu": 3, "mem": "6GiB", "claims": {"heavy-io": 1}},
+                "timeout": "12m",
+                "locks": ["device-1"],
+            }))
             child = root / "package"
             child.mkdir()
             # A package-local file must not silently override the repository contract.
@@ -114,13 +119,14 @@ class RepositoryEstimateTests(unittest.TestCase):
             self.assertEqual(argv[argv.index("--cpu") + 1], "3")
             self.assertEqual(argv[argv.index("--mem") + 1], "6GiB")
             self.assertEqual(argv[argv.index("--timeout") + 1], "12m")
-            self.assertIn("heavy-io=1", argv)
-            self.assertIn("device-1", argv)
+            self.assertEqual(argv[argv.index("--lock") + 1], "device-1")
+            self.assertNotIn("--claim", argv[:argv.index("--")])
             self.assertIn("e2e:browser", argv)
             self.assertEqual(argv[-1], "literal ; $(value)")
             args, argv = resolve(["estimates", "--cwd", str(child)])
             self.assertIsNone(argv)
             self.assertEqual(Path(args.agents), root / "AGENTS.md")
+            self.assertEqual(args.estimates["browser"]["resources"], {"cpu": 3, "mem": "6GiB"})
             for command in (["submit", "--e2e", "unknown", "--cwd", str(root), "--", "true"],
                             ["submit", "small", "--e2e", "browser", "--cwd", str(root), "--", "true"]):
                 with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
@@ -210,7 +216,7 @@ class QueueIntegrationTests(unittest.TestCase):
                     # The declaration body is also accepted as a native qex job file.
                     native_file = root / "resources.json"
                     for memory in ("2GiB", "2 gib", "2048 mib", "2G"):
-                        declaration = {"resources": {"cpu": 1, "mem": memory, "claims": {"review-mutex": 1}}, "timeout": "10s"}
+                        declaration = {"resources": {"cpu": 1, "mem": memory}, "locks": ["review-mutex"], "timeout": "10s"}
                         agent_job.parse_e2e_estimates(RepositoryEstimateTests.block(entry=declaration))
                         native_file.write_text(json.dumps(declaration))
                         native_result = subprocess.run([qex, "submit", "--wait", "--job", str(native_file), "--", "true"],

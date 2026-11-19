@@ -1,6 +1,6 @@
 # Gemini Speed executor contract
 
-Launch a direct `worker` subagent on `magpie/group/gemini-speed:medium`. This is the sole implementation role for `/skill:e2e-feature`. Normally resume its latest completed run for sequential milestones, tooling, integration and repairs. Do not subdelegate. The orchestrator coordinates; separate Sol Fast children review and verify.
+Launch a direct `worker` subagent on `magpie/group/gemini-speed:medium`. This is the sole implementation role for `/skill:e2e-feature`. Normally resume its latest completed run for sequential milestones, tooling, integration and repairs. Do not subdelegate. The orchestrator coordinates; separate Sol children review and verify.
 
 The parent writes an assignment brief containing: absolute worktree and branch/source identity; approved plan and approval reference; task/dependencies and acceptance criteria; owned product, harness, regression-test, tooling and documentation paths; protected behavior/state and external side-effect limits; produced/consumed interfaces; environment/setup/teardown authority; exact development commands and locks; pending readers/jobs; report/checkpoint paths; and completion conditions. Repair briefs additionally include the failure, before identity, confirmed findings, evidence, current hypothesis and required regression. Missing scope/authorization decisions go to the parent through `contact_supervisor`; routine implementation decisions do not require user permission.
 

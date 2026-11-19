@@ -1,6 +1,6 @@
 # Independent verifier child brief
 
-Use this brief only for an independent verifier in `/skill:e2e-feature`. Launch the existing `worker` agent on `magpie/group/sol-fast:medium` with this verification-only role; no new global agent or skill is required. Keep its run id for subsequent verification on stable inputs. The Gemini Speed executor owns implementation and repairs; the orchestrator coordinates assignments and acceptance; this verifier must be a separate child that did not author the changes. Its `worker` agent profile is used only for verification, never to implement or repair.
+Use this brief only for an independent verifier in `/skill:e2e-feature`. Launch the existing `worker` agent on `magpie/group/sol:medium` with this verification-only role; no new global agent or skill is required. Keep its run id for subsequent verification on stable inputs. The Gemini Speed executor owns implementation and repairs; the orchestrator coordinates assignments and acceptance; this verifier must be a separate child that did not author the changes. Its `worker` agent profile is used only for verification, never to implement or repair.
 
 The orchestrator writes `<run dir>/verifier-brief.md` containing this role contract and the exact assignment: absolute worktree, branch and source identity; approved plan and acceptance criteria; recipe path, selected check ids and their transitive prerequisites; existing build/device locks and resource groups; environment/artifact identities and pinned manifests; authorized setup/teardown and isolation boundaries; deadlines, evidence/report paths; and any retained owning host/qex job id. For a journey, also include the root `AGENTS.md` instructions, every expected journey step/window/variant, selected `qex-e2e` declaration, explicit CPU/RAM claims and exact command/worker limits. For a first-time declaration or new workload variant, include the user's resource-cost choice/reference from [shared qex resource rules](qex-resources.md); existing applicable declarations remain reusable. If that first-time choice is missing, report it to the orchestrator and wait rather than selecting a cost or launching a probe. Resolve missing journey instructions through the main skill's human gate before execution.
 
@@ -19,7 +19,7 @@ Launch with the assignment file, for example:
 
 ```js workflow
 const verification = await runs.run("verify-t3-r1", {
-  label: "Verify · T3", phase: "verification", agent: "worker", model: "magpie/group/sol-fast:medium",
+  label: "Verify · T3", phase: "verification", agent: "worker", model: "magpie/group/sol:medium",
   task: "Act only as the independent verifier. Read <run dir>/verifier-brief.md and follow it exactly. Execute the assigned checks and report evidence; do not edit product or harness code or fix failures.",
   notifyOnComplete: true,
   output: "<run dir>/verify-t3-r1-result.md", outputMode: "file-only",

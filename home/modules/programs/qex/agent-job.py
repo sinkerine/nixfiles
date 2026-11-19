@@ -44,7 +44,12 @@ def parse_e2e_estimates(text):
             raise ValueError(f"{name}: allowed fields are resources, timeout and locks")
         resources = entry.get("resources")
         if not isinstance(resources, dict) or set(resources) - {"cpu", "mem", "claims"}:
-            raise ValueError(f"{name}: resources must contain cpu, mem and optional claims")
+            raise ValueError(f"{name}: resources must contain only cpu and mem; use locks for exclusive access")
+        if "claims" in resources:
+            # Existing Paseo declarations still carry the retired host I/O token.
+            claims = resources.pop("claims")
+            if not isinstance(claims, dict) or set(claims) != {"heavy-io"} or type(claims["heavy-io"]) is not int or claims["heavy-io"] != 1:
+                raise ValueError(f"{name}: only cpu and mem are budgeted; use locks for exclusive access")
         cpu, mem = resources.get("cpu"), resources.get("mem")
         if type(cpu) is not int or cpu < 1:
             raise ValueError(f"{name}: resources.cpu must be a positive integer")
@@ -54,9 +59,6 @@ def parse_e2e_estimates(text):
             byte_count = Decimal(size[1]) * (1024 ** exponent)
         if size is None or not 1 <= byte_count <= 2 ** 64 - 1:
             raise ValueError(f"{name}: resources.mem must be a positive explicit byte size, e.g. 16GiB")
-        claims = resources.get("claims", {})
-        if not isinstance(claims, dict) or any(not NAME.fullmatch(key) or type(count) is not int or count < 1 for key, count in claims.items()):
-            raise ValueError(f"{name}: resource claims must map safe pool names to positive counts")
         locks = entry.get("locks", [])
         if not isinstance(locks, list) or any(not isinstance(lock, str) or not NAME.fullmatch(lock) for lock in locks) or len(set(locks)) != len(locks):
             raise ValueError(f"{name}: locks must be distinct safe names")
@@ -102,7 +104,6 @@ def resolve(argv, *, qex, profiles, environ):
         sub.add_argument("--timeout", help="Execution timeout, e.g. 10m; queue wait is separate")
         sub.add_argument("--id-file", type=Path, help="Save the job ID for resume and cancellation")
         sub.add_argument("--name")
-        sub.add_argument("--heavy-io", action="store_true", help="Claim the host's single heavy-I/O token")
         sub.add_argument("--lock", action="append", default=[], help="Additional qex lock; repeat as needed")
         sub.add_argument("--dry-run", action="store_true", help="Show resolved argv without submitting")
     args = parser.parse_args(options)
@@ -146,11 +147,6 @@ def resolve(argv, *, qex, profiles, environ):
     for option, value in (("--timeout", args.timeout or declaration.get("timeout")), ("--id-file", args.id_file), ("--name", args.name)):
         if value is not None:
             resolved.extend([option, str(value)])
-    claims = dict(profile.get("claims", {}))
-    if args.heavy_io:
-        claims.setdefault("heavy-io", 1)
-    for name, count in claims.items():
-        resolved.extend(["--claim", f"{name}={count}"])
     for lock in dict.fromkeys([*declaration.get("locks", []), *args.lock]):
         resolved.extend(["--lock", lock])
     resolved.extend(["--", *command])

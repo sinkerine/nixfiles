@@ -53,7 +53,7 @@ in
     settings = lib.mkOption {
       type = toml.type;
       default = { };
-      description = "Additional declarative qex.toml settings, recursively overriding the managed defaults. Change configuration here rather than with qex config set.";
+      description = "Additional declarative qex.toml settings, recursively overriding the managed defaults. The budget supports CPU and RAM only. Change configuration here rather than with qex config set.";
     };
     cpuBudget = lib.mkOption {
       type = lib.types.either lib.types.ints.positive lib.types.str;
@@ -78,6 +78,20 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion =
+          let
+            budget = cfg.settings.budget or { };
+          in
+          lib.isAttrs budget && lib.all (name: lib.elem name [ "cpu" "mem" ]) (lib.attrNames budget);
+        message = "my.programs.qex.settings.budget supports only cpu and mem.";
+      }
+      {
+        assertion = (cfg.settings.pool or [ ]) == [ ];
+        message = "my.programs.qex.settings.pool must be empty. Use named locks for exclusive access to shared resources.";
+      }
+    ];
     home.packages = [
       sharedQex
       agentJob
@@ -112,12 +126,6 @@ in
       update.check = "never";
       logs.max_bytes = "32MiB";
       gc.keep = "7d";
-      pool = [
-        {
-          name = "heavy-io";
-          count = 1;
-        }
-      ];
     } cfg.settings);
     xdg.configFile."qex/profiles.json".source = profilesFile;
     xdg.configFile."qex/AGENT.md".source = ../pi-coding-agent-skills/qex/SKILL.md;

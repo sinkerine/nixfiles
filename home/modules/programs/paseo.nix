@@ -251,11 +251,8 @@ in
             ];
           })
           (lib.mkIf config.my.programs.pi-coding-agent.enable {
-            home.file = skillFiles ".pi/agent/skills" // {
-              ".pi/agent/mcp.json".text = builtins.toJSON {
-                mcpServers.paseo.url = cfg.mcpUrl;
-              };
-            };
+            home.file = skillFiles ".pi/agent/skills";
+            my.programs.pi-coding-agent.mcpServers.paseo.url = cfg.mcpUrl;
           })
           (lib.mkIf config.my.programs.opencode.enable {
             xdg.configFile."opencode/plugins/paseo-terminal-activity.js".source = openCodeHook;

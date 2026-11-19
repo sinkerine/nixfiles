@@ -1,6 +1,6 @@
 ---
 name: e2e-feature
-description: "Opt-in end-to-end feature workflow: AGY Opus orchestrates with Pi Opus and Sol Fast as quota fallbacks, a separate visible Gemini Paseo tab designs, Gemini Speed implements and repairs in a subagent, and separate GPT Sol Fast children review and verify. The orchestrator coordinates without implementing."
+description: "Opt-in end-to-end feature workflow: AGY Opus orchestrates with Pi Opus and Sol as quota fallbacks, a separate visible Gemini Paseo tab designs, Gemini Speed implements and repairs in a subagent, and separate Sol children review and verify. The orchestrator coordinates without implementing."
 disable-model-invocation: true
 ---
 
@@ -12,11 +12,11 @@ Use only when the user explicitly invokes `/skill:e2e-feature <request>` or `/sk
 
 | Role | Session/profile | Exact model | Thinking | Authority |
 | --- | --- | --- | --- | --- |
-| Orchestrator | Main session | `magpie/group/agy-opus` → `magpie/group/opus` → `magpie/group/sol-fast` on quota exhaustion | medium | Coordinate, inspect evidence, decide acceptance, track goals and deliver |
+| Orchestrator | Main session | `magpie/group/agy-opus` → `magpie/group/opus` → `magpie/group/sol` on quota exhaustion | medium | Coordinate, inspect evidence, decide acceptance, track goals and deliver |
 | Design | Independent visible Paseo tab | `magpie/group/gemini` | high | Explore, write the plan and obtain human approval; no implementation |
 | Executor | Direct `worker` subagent | `magpie/group/gemini-speed` | medium | Implement, prepare tooling, write tests, diagnose and repair |
-| Reviewer | Direct `reviewer` subagent | `magpie/group/sol-fast` | medium | Independent read-only code review |
-| Verifier | Direct `worker` subagent | `magpie/group/sol-fast` | medium | Independent checks, capability probes and E2E; no code repairs |
+| Reviewer | Direct `reviewer` subagent | `magpie/group/sol` | medium | Independent read-only code review |
+| Verifier | Direct `worker` subagent | `magpie/group/sol` | medium | Independent checks, capability probes and E2E; no code repairs |
 
 Design runs as an independent top-level Paseo agent opened in a visible Desktop tab, following [references/design.md](references/design.md). Do not launch design through `subagent`, agent-scoped creation or create-then-detach. Executor, reviewer and verifier run through `subagent` as direct children of this session. Reviewer and verifier are separate fresh-context children, never the executor or each other resumed under another role. Neither the design agent nor children may subdelegate. Explicitly pass the model on every initial launch; agent defaults do not select these roles. Resume children only within the same role using the latest returned run id, preserving model and tools. Keep the listed models for design and the three child roles.
 
@@ -96,7 +96,7 @@ Reuse the existing runner and [shared verification recipe/receipt format](refere
 
 After implementation settles, have the verifier independently check the approved inventory and criterion → test map: each `AC`, `D` and documentation requirement has an existing check, each real entry path and state transition is asserted, baseline-failure evidence exists or its limitation is justified, consumer/interface checks pass, and required checks have passing receipts on current inputs. Read test assertions, not just implementation claims. Inspect its report before review. Gaps return to the executor, followed by fresh independent affected checks. The test gate consumes no code-review round.
 
-Launch a fresh `reviewer` on `magpie/group/sol-fast:medium` only after the integrated feature and test gate are ready and all relevant inputs/HEAD are frozen. Normally review the entire diff against the recorded base, including uncommitted/untracked additions. A large feature may use nonoverlapping scopes with an explicit integration owner, without redundant full review. An early focused review requires the approved plan and does not replace integrated review.
+Launch a fresh `reviewer` on `magpie/group/sol:medium` only after the integrated feature and test gate are ready and all relevant inputs/HEAD are frozen. Normally review the entire diff against the recorded base, including uncommitted/untracked additions. A large feature may use nonoverlapping scopes with an explicit integration owner, without redundant full review. An early focused review requires the approved plan and does not replace integrated review.
 
 The review packet contains the approved plan and approval reference, exact scope, base/source identities, complete saved diff, executor checkpoint, criterion/test map, independent gate receipts and relevant caller/interface context. The reviewer is read-only and cannot run commands; save evidence before launch. Require:
 
@@ -112,7 +112,7 @@ Accept only when all required evidence matches final relevant inputs and no conf
 
 ## Final verification and E2E
 
-The independent Sol Fast verifier owns final required checks and, when initial-feature E2E applies, the complete root-`AGENTS.md` journey on pinned final inputs. Require per-step expected/actual results and passed/failed/unrun/invalidated windows; a focused diagnostic probe is not a full journey pass. Missing journey instructions require the user's concrete instructions or explicit exemption; ordinary environment/setup failures return to the executor, without weakening acceptance. Reuse existing resource choices and valid receipts. After any repair, revalidate artifacts, affected gates and the complete required final journey; preserve review counters.
+The independent Sol verifier owns final required checks and, when initial-feature E2E applies, the complete root-`AGENTS.md` journey on pinned final inputs. Require per-step expected/actual results and passed/failed/unrun/invalidated windows; a focused diagnostic probe is not a full journey pass. Missing journey instructions require the user's concrete instructions or explicit exemption; ordinary environment/setup failures return to the executor, without weakening acceptance. Reuse existing resource choices and valid receipts. After any repair, revalidate artifacts, affected gates and the complete required final journey; preserve review counters.
 
 Only the verifier loads `~/.config/qex/AGENT.md`. Qex covers Gradle builds and complete E2E stacks; other checks run directly under their locks. The verifier owns admission, test-stack lifecycle and teardown, with retained host/job identities. No parent reservation around queued leaves, no nested admission, no unqueued fallback after rejection. Failure evidence returns to the orchestrator for an executor repair assignment.
 

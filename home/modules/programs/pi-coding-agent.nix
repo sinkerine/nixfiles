@@ -139,9 +139,21 @@ in
 {
   options.my.programs.pi-coding-agent = {
     enable = mkEnableOption "Pi coding agent";
+    mcpServers = mkOption {
+      type = types.attrsOf (pkgs.formats.json { }).type;
+      default = { };
+      description = "MCP servers configured for Pi.";
+    };
   };
 
   config = mkIf cfg.enable {
+    my.programs.pi-coding-agent.mcpServers.octoprint.url =
+      "https://octoprint-mcp.sachi.m.mado.moe/mcp";
+
+    home.file."${config.programs.pi-coding-agent.configDir}/mcp.json".text = builtins.toJSON {
+      inherit (cfg) mcpServers;
+    };
+
     programs.pi-coding-agent = {
       enable = true;
       package = piCodingAgent;
@@ -182,7 +194,7 @@ in
               thinking = "medium";
             };
             worker = {
-              model = "group/sol-fast";
+              model = "group/sol";
               thinking = "medium";
             };
             reviewer = {
@@ -199,11 +211,11 @@ in
               thinking = "high";
             };
             "evidence-auditor" = {
-              model = "group/sol-fast";
+              model = "group/sol";
               thinking = "high";
             };
             delegate = {
-              model = "group/sol-fast";
+              model = "group/sol";
               thinking = "medium";
             };
           };

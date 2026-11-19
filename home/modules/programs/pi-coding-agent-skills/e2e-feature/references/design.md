@@ -6,7 +6,7 @@ Design uses `pi/magpie/group/gemini` with high thinking in its own top-level Pas
 
 Capture the orchestrator's `$PASEO_AGENT_ID` for the explicit handoff before launching design. If it is empty, omit the automatic handoff command from the brief and wait for the user to report that the approved plan is ready. Keep the independent visible design-tab requirement.
 
-Write `<run dir>/design-brief.md` with the original request, preflight findings, exact worktree/branch/workspace, plan path, v2 plan requirements, known constraints, E2E classification, resource choices or unresolved proposals, and the approval/handoff contract below. Include that the Gemini Speed executor owns implementation and repairs, with separate Sol Fast review/verification; the design agent must not implement, run tests, commit or subdelegate.
+Write `<run dir>/design-brief.md` with the original request, preflight findings, exact worktree/branch/workspace, plan path, v2 plan requirements, known constraints, E2E classification, resource choices or unresolved proposals, and the approval/handoff contract below. Include that the Gemini Speed executor owns implementation and repairs, with separate Sol review/verification; the design agent must not implement, run tests, commit or subdelegate.
 
 Launch into the orchestrator's existing feature workspace. Unset parentage only for this command, retaining the orchestrator's environment and daemon connection settings:
 

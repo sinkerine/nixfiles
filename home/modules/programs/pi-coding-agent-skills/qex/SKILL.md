@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Shared resource queue
 
-This reference is installed at `~/.config/qex/AGENT.md`, outside the global Pi skill catalog. Only the independent verifier in `/skill:e2e-feature` loads these instructions. The Gemini Speed executor implements and runs normal development checks directly under existing locks, while the orchestrator coordinates and inspects evidence; all independent acceptance checks belong to the separate Sol Fast verifier. The verifier reports evidence and never owns product or harness fixes.
+This reference is installed at `~/.config/qex/AGENT.md`, outside the global Pi skill catalog. Only the independent verifier in `/skill:e2e-feature` loads these instructions. The Gemini Speed executor implements and runs normal development checks directly under existing locks, while the orchestrator coordinates and inspects evidence; all independent acceptance checks belong to the separate Sol verifier. The verifier reports evidence and never owns product or harness fixes.
 
 Use the Nix-installed `agent-job` wrapper and `qex` CLI. All projects for this user on this machine share one coordinator, configuration and budget. Nixfiles owns the profile table and verifier reference; projects do not install their own queue. The wrapper pins the coordinator's XDG configuration and state roots even in project development shells, while `submit` and `run` preserve the caller's XDG roots inside the command's environment. Each physical host has its own coordinator; a job ID belongs to the host that accepted it.
 
@@ -14,7 +14,7 @@ Use the Nix-installed `agent-job` wrapper and `qex` CLI. All projects for this u
 
 Within the independent verifier, only Gradle builds and E2E tests require qex admission. Gradle builds include `gradle`/`./gradlew` build, assemble, bundle and compile tasks, including scripts that invoke them. E2E includes its complete setup, execution and teardown stack. Run every other operation directly: Nix builds/checks, non-Gradle builds, unit tests, lint/format, typechecks, coverage, dependency installation and standalone VM work, unless it belongs to an admitted E2E stack. Classify wrapped commands by the work they execute. This is an agent policy; the CLI does not intercept arbitrary shell commands.
 
-Home Manager generates `~/.config/qex.toml` and the profile table as Nix store symlinks. Configure budgets with `my.programs.qex.cpuBudget`, `memoryBudget`, `reserveMemory` and `maxMemoryPressure`; use `my.programs.qex.settings` for other TOML settings or explicit overrides. Edit the Nixfiles module and activate the appropriate Home Manager profile to apply changes. Do not use `qex config set` or edit installed configuration files.
+Home Manager generates `~/.config/qex.toml` and the profile table as Nix store symlinks. Configure the shared budget with `my.programs.qex.cpuBudget` and `memoryBudget`. Set live RAM admission thresholds with `reserveMemory` and `maxMemoryPressure`. Use `my.programs.qex.settings` for other TOML settings or explicit overrides. Edit the Nixfiles module and activate the appropriate Home Manager profile to apply changes. Do not use `qex config set` or edit installed configuration files.
 
 ## Choose an estimate
 
@@ -81,7 +81,7 @@ For `e2e-feature`, keep dependency scheduling, artifact fingerprints and receipt
 
 Keep desktop tests headless or on their own display/VM. Resource admission does not provide display, port, filesystem or application-state isolation.
 
-`--heavy-io` claims the host's one `heavy-io` token for disk-intensive allowlisted workloads. Additional qex locks can be passed with repeated `--lock <name>`; use stable shared names for genuinely shared resources. Do not acquire a lock in both an outer wrapper and an inner command.
+The shared budget accounts for CPU and RAM only. Use repeated `--lock <name>` options with stable names for exclusive access to shared devices, ports, or outputs.
 
 ## Host policy and calibration
 
