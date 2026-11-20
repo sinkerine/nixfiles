@@ -26,12 +26,13 @@ in
           "provider.openai-compatible.streaming"
         else
           "provider.openai-compatible";
-      asrProviderUrl = "https://raw.githubusercontent.com/sinkerine/vinput-registry/main/resources/providers/openai-compatible/${asrProvider}/entry.py";
+      asrProviderRev = "dbd20bda6db45d453e2b68f2f02a349e178cac76";
+      asrProviderUrl = "https://raw.githubusercontent.com/sinkerine/vinput-registry/${asrProviderRev}/resources/providers/openai-compatible/${asrProvider}/entry.py";
       asrProviderHash =
         if cfg.enableStreaming then
-          "sha256-kg8P8Xl/4/Rxhj7UapQx2nFbi8ygo3PM+DowRN0lMrs="
+          "sha256-g37e0o9nGx/9Cf2qf71vFjRaCOX6K3G28YQBYaLYZRE="
         else
-          "sha256-u7XqXkuRb4xL5m8gdS7omOY9zTuexCK1p3YLZToWVaM=";
+          "sha256-YKdhp4b33A9rcRY6eINixZLbShEGcaLUIjwjB/Qqsi0=";
       asrProviderSource = pkgs.fetchurl {
         url = asrProviderUrl;
         hash = asrProviderHash;

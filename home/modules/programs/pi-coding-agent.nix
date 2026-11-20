@@ -265,7 +265,7 @@ in
           }
           {
             id = "group/gemini";
-            name = "Gemini 4 Carbon";
+            name = "Gemini";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1048576;
