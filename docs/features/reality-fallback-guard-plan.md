@@ -266,3 +266,22 @@ No split needed — all P0 + P1 changes are tightly coupled around the same sche
     - `1. Final approval for docs/features/reality-fallback-guard-plan.md (rev 456234fc06ff21bc)? → Approve plan`
     - `2. Confirm E2E verification decision? → Approve VM E2E journey (4 CPU / 4 GiB)`
 - **E2E & resource decision**: Approved — isolated 3-VM NixOS E2E journey (`tests/reality-fallback-guard-vm.nix` → `checks.x86_64-linux.reality-fallback-guard`) with claimed resource budget `4 CPU, 4 GiB RAM, workers = 1, timeout = 600s`, scratch under `${XDG_CACHE_HOME:-$HOME/.cache}/dev-scratch/nixfiles/reality-fallback-guard-vm/`, to be recorded in root `AGENTS.md`.
+
+---
+
+## 9. Amendment 1 — per-connection egress allowance + quota (replaces global egress connection caps)
+
+**Reason:** VM run r3 (qex e9f9d95a) showed that sing-box REALITY dials `handshake.server:443` for every inbound connection, including authenticated ones, before authentication. The global egress connection-count and new-connection-rate caps from §4.2/§4.4, plus the shared bandwidth bucket, therefore also gated legitimate handshakes. An attacker could deny service to all clients, which violates "不得影响已认证的正常代理流量".
+
+**Changed design (supersedes the conflicting parts of §4.2, §4.4, AC6.3, AC6.4):**
+- Remove the egress `strict/relaxed.maxConnections`, `newConnRate` and `newConnBurst` options, and the `*_conn_rate` and `*_conn_limit` limits and counters.
+- Mark each `sing-box`→decoy flow with its tier's ct mark bit as before. In both `output` (skuid sing-box, dport 443, decoy set) and `input` (by ct mark), bytes within the first `perConnAllowance` of a flow pass unconditionally. Bytes beyond the allowance are policed by the tier's shared `bandwidthRate`/`bandwidthBurst` limit. Packets of a flow whose total exceeds `perConnQuota` are dropped (`<tier>_quota_drop` counter). Use conntrack byte accounting (`ct bytes`, both directions). The module must enable `net.netfilter.nf_conntrack_acct = 1` (verify it is not already set conflictingly on the hosts).
+- Defaults: strict `perConnAllowance = 32 KiB`, `perConnQuota = 1 MiB`, bandwidth 256 KiB/s burst 512 KiB. Relaxed `perConnAllowance = 32 KiB`, `perConnQuota = 64 MiB`, bandwidth 5 MiB/s burst 10 MiB. The inbound per-source guard (§4.3) is unchanged and bounds connection floods.
+- Accepted tradeoff: an attacker with many source IPs gets up to 32 KiB free per fallback connection.
+
+**Amended acceptance criteria:**
+- **AC6.3 (strict):** an unauthenticated fallback download larger than the quota (a) is throttled (`strict_bw_drop` delta > 0) and (b) is cut off at the per-connection quota (`strict_quota_drop` delta > 0, received bytes ≤ quota plus slack). (c) While several concurrent fallback downloads are saturating the strict budget, an authenticated proxy request from the legitimate client still succeeds promptly (bound stated in the test), with the strict-tier drops in that window attributable to the attacker flows only.
+- **AC6.4 (relaxed):** relaxed fallback above its test-scaled allowance is throttled by `relaxed_bw_drop`; all strict deltas are 0.
+- AC6.1, AC6.2 and AC6.5 are unchanged. Test-scaled values may shrink the allowance and quota so runtime stays small.
+
+**Approval:** the user selected "Per-connection allowance + quota (recommended)" in the orchestrator's `ask_user` call (recorded in approval.md).

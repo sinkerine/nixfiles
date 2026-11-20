@@ -3,6 +3,7 @@
 let
   cfg = config.my.services.regionalProxy;
   inherit (lib) mkIf;
+  primaryTargets = builtins.fromJSON (builtins.readFile ../../../../common/reality-primary-targets.json);
   credentialDir = "/etc/regional-proxy/credentials";
   configPath = "/run/sing-box-hk-relay/config.json";
   singBoxConfig = builtins.toJSON {
@@ -19,10 +20,10 @@ let
         ];
         tls = {
           enabled = true;
-          server_name = "www.cloudflare.com";
+          server_name = primaryTargets.michiru;
           reality = {
             enabled = true;
-            handshake = { server = "www.cloudflare.com"; server_port = 443; };
+            handshake = { server = primaryTargets.michiru; server_port = 443; };
             private_key = "@REALITY_PRIVATE_KEY@";
             short_id = "@REALITY_SHORT_ID@";
           };

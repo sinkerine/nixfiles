@@ -71,7 +71,7 @@ in
             flow = "xtls-rprx-vision";
             tls = {
               enabled = true;
-              server_name = "www.cloudflare.com";
+              server_name = (builtins.fromJSON (builtins.readFile ../common/reality-primary-targets.json)).amane;
               utls = {
                 enabled = true;
                 fingerprint = "chrome";

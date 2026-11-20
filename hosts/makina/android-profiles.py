@@ -17,6 +17,13 @@ SNI_TARGETS_FILE = Path(os.environ.get(
 with SNI_TARGETS_FILE.open(encoding="utf-8") as source:
     SNI_TARGETS = json.load(source)
 
+PRIMARY_TARGETS_FILE = Path(os.environ.get(
+    "REALITY_PRIMARY_TARGETS_FILE",
+    Path(__file__).resolve().parents[1] / "common" / "reality-primary-targets.json",
+))
+with PRIMARY_TARGETS_FILE.open(encoding="utf-8") as source:
+    PRIMARY_TARGETS = json.load(source)
+
 
 SERVERS = {
     "amane": {
@@ -48,7 +55,7 @@ LAN_DIRECT_CIDRS = [
 def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
     server = SERVERS[server_name]
     spoofed = mode != "normal"
-    sni = SNI_TARGETS[mode]["domain"] if spoofed else "www.cloudflare.com"
+    sni = SNI_TARGETS[mode]["domain"] if spoofed else PRIMARY_TARGETS[server_name]
     # SNI profiles must carry control-plane and peer traffic through the same
     # allowed TLS connection, including when Sachi is the proxy server.
     tailnet_detour = "proxy" if spoofed or server_name != "sachi" else "direct"
@@ -198,7 +205,7 @@ def hk_profile(config, tailnet_auth_key=None, *, always_proxy=False):
         return {
             "type": "vless", "tag": tag, "server": server, "server_port": server_port,
             "uuid": uuid, "flow": "xtls-rprx-vision",
-            "tls": {"enabled": True, "server_name": "www.cloudflare.com",
+            "tls": {"enabled": True, "server_name": config.get("server_name") or PRIMARY_TARGETS["michiru"],
                     "utls": {"enabled": True, "fingerprint": "chrome"},
                     "reality": {"enabled": True, "public_key": config["public_key"],
                                 "short_id": config["short_id"]}},

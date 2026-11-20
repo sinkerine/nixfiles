@@ -9,6 +9,7 @@
     ./monitoring/metrics.nix
     ./monitoring/monitoring.nix
     ./networking/headscale.nix
+    ./networking/reality-guard.nix
     ./networking/tailscale.nix
     ./ups
     ./smartd.nix

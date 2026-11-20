@@ -16,6 +16,9 @@ let
   hostIp = "192.168.88.30/24";
   gateway = "192.168.88.1";
 
+  primaryTargets = builtins.fromJSON (builtins.readFile ../common/reality-primary-targets.json);
+  sniTargets = builtins.fromJSON (builtins.readFile ../common/reality-sni-targets.json);
+
 in
 {
   my.services.regionalProxy.usExit = true;
@@ -83,9 +86,9 @@ in
                 { name = "primary"; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; }
                 { name = "makina"; uuid = config.sops.placeholder.makinaXrayClientId; flow = "xtls-rprx-vision"; }
               ];
-              tls = { enabled = true; server_name = "www.cloudflare.com"; reality = {
+              tls = { enabled = true; server_name = primaryTargets.sachi; reality = {
                 enabled = true;
-                handshake = { server = "www.cloudflare.com"; server_port = 443; };
+                handshake = { server = primaryTargets.sachi; server_port = 443; };
                 private_key = config.sops.placeholder.xrayPrivateKey;
                 short_id = "e5f60718";
               }; };
@@ -299,6 +302,15 @@ in
   };
   users.users.sing-box = { isSystemUser = true; group = "sing-box"; };
   users.groups.sing-box = { };
+  my.services.realityGuard = {
+    enable = true;
+    strictDomains = [ primaryTargets.sachi ];
+    relaxedDomains = lib.unique ([ "www.paypal.com" ] ++ map (t: t.domain) (builtins.attrValues sniTargets));
+    inboundPorts = [
+      config.my.ports.xray.listen
+      config.my.ports.xray.mobileSachi
+    ];
+  };
   systemd.services.sing-box-server = {
     description = "VLESS Reality proxy server";
     wantedBy = [ "multi-user.target" ];

@@ -57,6 +57,13 @@ class RelayRendererTest(unittest.TestCase):
             self.assertEqual(user["password"], credentials["tailnet-socks-password"])
             self.assertEqual(output_path.stat().st_mode & 0o777, 0o600)
 
+    def test_relay_uses_primary_targets_michiru_sni(self):
+        primary_targets = json.loads((ROOT / "hosts/common/reality-primary-targets.json").read_text())
+        self.assertEqual(primary_targets["michiru"], "hkust.edu.hk")
+        relay_nix = (ROOT / "hosts/modules/services/networking/regional-proxy/relay.nix").read_text()
+        self.assertIn("reality-primary-targets.json", relay_nix)
+        self.assertNotIn("www.cloudflare.com", relay_nix)
+
 
 if __name__ == "__main__":
     unittest.main()

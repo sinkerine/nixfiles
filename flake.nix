@@ -386,7 +386,13 @@
           };
         };
       };
-      checks = builtins.mapAttrs (system: deployLib: deployLib.deployChecks self.deploy) deploy-rs.lib;
+      checks = nixpkgs.lib.recursiveUpdate
+        (builtins.mapAttrs (system: deployLib: deployLib.deployChecks self.deploy) deploy-rs.lib)
+        {
+          x86_64-linux.reality-fallback-guard = import ./tests/reality-fallback-guard-vm.nix {
+            pkgs = packages."x86_64-linux";
+          };
+        };
       devShells = forAllSystems (system: {
         default = import ./shell/default.nix {
           pkgs = builtins.getAttr system packages;

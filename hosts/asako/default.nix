@@ -10,9 +10,10 @@
 with lib;
 
 let
-  sachiOutbound = { type = "vless"; server_port = config.my.ports.xray.listen; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; domain_resolver = "local-dns"; tls = { enabled = true; server_name = "www.cloudflare.com"; utls = { enabled = true; fingerprint = "chrome"; }; reality = { enabled = true; public_key = "-6pvY7DzL_M7q-7fNeZZrnxosjIFyNPltVCo4rFu1yo"; short_id = "e5f60718"; }; }; };
+  primaryTargets = builtins.fromJSON (builtins.readFile ../common/reality-primary-targets.json);
+  sachiOutbound = { type = "vless"; server_port = config.my.ports.xray.listen; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; domain_resolver = "local-dns"; tls = { enabled = true; server_name = primaryTargets.sachi; utls = { enabled = true; fingerprint = "chrome"; }; reality = { enabled = true; public_key = "-6pvY7DzL_M7q-7fNeZZrnxosjIFyNPltVCo4rFu1yo"; short_id = "e5f60718"; }; }; };
   outbounds = [
-    { type = "vless"; tag = "amane"; server = "167.148.6.201"; server_port = config.my.ports.xray.listen; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; domain_resolver = "local-dns"; tls = { enabled = true; server_name = "www.cloudflare.com"; utls = { enabled = true; fingerprint = "chrome"; }; reality = { enabled = true; public_key = "IM4pgDQbcql0ZIrzUWeU0HKE8GWbqsAV1t3c-PC20ks"; short_id = "a1b2c3d4"; }; }; }
+    { type = "vless"; tag = "amane"; server = "167.148.6.201"; server_port = config.my.ports.xray.listen; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; domain_resolver = "local-dns"; tls = { enabled = true; server_name = primaryTargets.amane; utls = { enabled = true; fingerprint = "chrome"; }; reality = { enabled = true; public_key = "IM4pgDQbcql0ZIrzUWeU0HKE8GWbqsAV1t3c-PC20ks"; short_id = "a1b2c3d4"; }; }; }
     (sachiOutbound // { tag = "sachi-local"; server = "sachi.m.mado.moe"; })
     (sachiOutbound // { tag = "sachi-public"; server = "mado.moe"; })
     { type = "urltest"; tag = "sachi"; outbounds = [ "sachi-local" "sachi-public" ]; interval = "10s"; }
@@ -97,6 +98,7 @@ in
           exit 1
         fi
         export REALITY_SNI_TARGETS_FILE=${../common/reality-sni-targets.json}
+        export REALITY_PRIMARY_TARGETS_FILE=${../common/reality-primary-targets.json}
         python3 ${../makina/android-profiles.py} "$uuid_file" "$out" "$auth_keys_file"
       '';
     })

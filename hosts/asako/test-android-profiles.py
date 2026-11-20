@@ -3,6 +3,7 @@ import json
 import os
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -184,7 +185,7 @@ class AndroidProfileTests(unittest.TestCase):
                             self.assertFalse(any("cn" in json.dumps(rule).lower() for rule in config["route"]["rules"]))
                         else:
                             self.assertEqual(outbound["server_port"], server["normal_port"])
-                            self.assertEqual(outbound["tls"]["server_name"], "www.cloudflare.com")
+                            self.assertEqual(outbound["tls"]["server_name"], android_profiles.PRIMARY_TARGETS[server_name])
                             self.assertEqual(len(config["route"]["rule_set"]), 2)
                             self.assertTrue(all(item["http_client"] == "rule-set-via-proxy" for item in config["route"]["rule_set"]))
                             self.assertEqual(config["http_clients"], [{"tag": "rule-set-via-proxy", "detour": "proxy"}])
@@ -215,6 +216,35 @@ class AndroidProfileTests(unittest.TestCase):
             self.assertNotIn("auth_key", other["endpoints"][0])
             michiru = json.loads((output_dir / "michiru-cn-direct-tailscale.json").read_text())
             self.assertEqual(michiru["endpoints"][0]["auth_key"], "sachi-test-key")
+            for outbound in michiru["outbounds"]:
+                if outbound.get("type") == "vless":
+                    self.assertEqual(outbound["tls"]["server_name"], android_profiles.PRIMARY_TARGETS["michiru"])
+                    self.assertEqual(outbound["tls"]["server_name"], "hkust.edu.hk")
+
+    def test_primary_targets_env_override_for_store_safe_execution(self):
+        with tempfile.TemporaryDirectory() as temp:
+            override = Path(temp) / "primary.json"
+            override.write_text(json.dumps({
+                "amane": "amane.override.test",
+                "sachi": "sachi.override.test",
+                "michiru": "michiru.override.test",
+            }))
+            env = dict(os.environ, REALITY_PRIMARY_TARGETS_FILE=str(override))
+            proc = subprocess.run(
+                [
+                    sys.executable, "-c",
+                    "import importlib.util, json; "
+                    f"spec = importlib.util.spec_from_file_location('ap', {str(Path(__file__).resolve().parents[1] / 'makina' / 'android-profiles.py')!r}); "
+                    "mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); "
+                    "p = mod.profile('u', 'amane', 'normal'); "
+                    "hk = mod.hk_profile({'host': '1.2.3.4', 'port': 443, 'direct_uuid': 'd', 'us_uuid': 'u', 'public_key': 'k', 'short_id': 's'}); "
+                    "print(json.dumps({'amane': p['outbounds'][0]['tls']['server_name'], 'michiru': hk['outbounds'][0]['tls']['server_name']}))",
+                ],
+                env=env, check=True, capture_output=True, text=True,
+            )
+            rendered = json.loads(proc.stdout)
+            self.assertEqual(rendered["amane"], "amane.override.test")
+            self.assertEqual(rendered["michiru"], "michiru.override.test")
 
 
 class ProxyStateTests(unittest.TestCase):

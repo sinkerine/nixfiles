@@ -1,9 +1,13 @@
 { config, lib, modulesPath, ... }:
 
+let
+  primaryTargets = builtins.fromJSON (builtins.readFile ../common/reality-primary-targets.json);
+in
 {
   imports = [
     (modulesPath + "/profiles/qemu-guest.nix")
     ../modules/services/networking/regional-proxy
+    ../modules/services/networking/reality-guard.nix
     ./disk-config.nix
   ];
 
@@ -132,4 +136,11 @@
   users.users.root.openssh.authorizedKeys.keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIp+lvf7SQBnU+zC/uEwG/uerIdqjDzRtC1LLFsNrvwH sinkerine@id"
   ];
+
+  my.services.realityGuard = {
+    enable = true;
+    strictDomains = [ primaryTargets.michiru ];
+    relaxedDomains = [ ];
+    inboundPorts = [ 10087 ];
+  };
 }

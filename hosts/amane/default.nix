@@ -9,6 +9,10 @@
 
 with lib;
 
+let
+  primaryTargets = builtins.fromJSON (builtins.readFile ../common/reality-primary-targets.json);
+  sniTargets = builtins.fromJSON (builtins.readFile ../common/reality-sni-targets.json);
+in
 {
   system.stateVersion = "22.05";
   imports = [
@@ -58,10 +62,10 @@ with lib;
               ];
               tls = {
                 enabled = true;
-                server_name = "www.cloudflare.com";
+                server_name = primaryTargets.amane;
                 reality = {
                   enabled = true;
-                  handshake = { server = "www.cloudflare.com"; server_port = 443; };
+                  handshake = { server = primaryTargets.amane; server_port = 443; };
                   private_key = config.sops.placeholder.xrayPrivateKey;
                   short_id = "a1b2c3d4";
                 };
@@ -162,6 +166,15 @@ with lib;
   my.services.tailscale = {
     enable = true;
     useRoutingFeatures = "server";
+  };
+  my.services.realityGuard = {
+    enable = true;
+    strictDomains = [ primaryTargets.amane ];
+    relaxedDomains = lib.unique ([ "www.paypal.com" ] ++ map (t: t.domain) (builtins.attrValues sniTargets));
+    inboundPorts = [
+      config.my.ports.xray.listen
+      config.my.ports.xray.mobileAmane
+    ];
   };
   users.users.sing-box = { isSystemUser = true; group = "sing-box"; };
   users.groups.sing-box = { };

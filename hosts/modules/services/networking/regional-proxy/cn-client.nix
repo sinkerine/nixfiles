@@ -12,6 +12,10 @@ in
       Type = "simple";
       RuntimeDirectory = "asako-hk";
       RuntimeDirectoryMode = "0700";
+      Environment = [
+        "REALITY_SNI_TARGETS_FILE=${../../../../common/reality-sni-targets.json}"
+        "REALITY_PRIMARY_TARGETS_FILE=${../../../../common/reality-primary-targets.json}"
+      ];
       ExecStartPre = "${pkgs.python3}/bin/python ${./asako-hk.py} ${config.sops.templates."asako-hk.json".path} /run/asako-hk/config.json ${../../../../makina/android-profiles.py}";
       ExecStart = "${pkgs.sing-box}/bin/sing-box run -c /run/asako-hk/config.json";
       Restart = "on-failure";
