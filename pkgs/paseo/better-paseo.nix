@@ -12,8 +12,8 @@ buildNpmPackage {
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "better-paseo";
-    rev = "5d26670c2d15d2c4cd36b5424308c411f94e24e0";
-    hash = "sha256-Zk/NfHN2ynesrVLEfZu3J1Ae1Rv/wxKBt8xy1/z7mnQ=";
+    rev = "7f1573052f916fe576bd2516449a9b5f25461fca";
+    hash = "sha256-HFRGCboKWELlq5DBtmQq/i20PNK+Od32ADrPcVB6BQ0=";
   };
 
   npmDepsHash = "sha256-DHIyXm7ntgz/SfKYZ+wvp+DNsiq4YuMUwKS0lL5V5XA=";
