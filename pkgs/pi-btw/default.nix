@@ -2,13 +2,13 @@
 
 stdenvNoCC.mkDerivation {
   pname = "pi-btw";
-  version = "0.1.0-unstable-2026-11-12";
+  version = "0.1.0-unstable-2026-11-21";
 
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "pi-btw";
-    rev = "7ea4f106f9b9414a0fdc550efc8165fa33d5ab8f";
-    hash = "sha256-H+s5LAGMhexCCIe4Z8L70ST3XqKTKtfSTJ8lqFT0jJg=";
+    rev = "0f54a31a1fe6bdff6101bb271f3edc2c6d94bb25";
+    hash = "sha256-jo2MtLnUj1T1uXKxjJZWRoiGT9GX1l3tTgy76D5vDsM=";
   };
 
   dontConfigure = true;

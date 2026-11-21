@@ -14,6 +14,11 @@ in {
       plugins = {
         lsp = {
           enable = true;
+          keymaps.lspBuf = {
+            gd = "definition";
+            gD = "declaration";
+            gy = "type_definition";
+          };
           servers.ty = {
             enable = true;
             extraOptions = {

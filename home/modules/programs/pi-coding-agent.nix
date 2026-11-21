@@ -21,6 +21,62 @@ let
   piPerModelSystemPrompt = "${pkgs.pi-per-model-system-prompt}/lib/node_modules/@sinkerine/pi-per-model-system-prompt";
   piBtw = pkgs.pi-btw;
   piGoal = pkgs.pi-goal;
+  magpieCodexResponses = {
+    api = "openai-responses";
+    compat = {
+      supportsMidConvoSystemMessages = true;
+      supportsAdditionalTools = true;
+      supportsMidConvoEffort = true;
+      supportsStrictMode = true;
+      supportsOpenAIGrammarTools = true;
+    };
+  };
+  magpieGeminiResponses = {
+    api = "openai-responses";
+    compat = {
+      supportsMidConvoSystemMessages = true;
+    };
+    thinkingLevelMap = {
+      off = null;
+      minimal = null;
+      low = "low";
+      medium = "medium";
+      high = "high";
+      xhigh = "xhigh";
+      max = null;
+    };
+  };
+  magpieClaudeMessages = {
+    api = "anthropic-messages";
+    baseUrl = "https://magpie-api.sachi.m.mado.moe";
+    compat = {
+      forceAdaptiveThinking = true;
+      supportsTemperature = false;
+      supportsMidConvoSystemMessages = true;
+      supportsMidConvoEffort = true;
+      supportsStrictTools = true;
+    };
+    thinkingLevelMap = {
+      off = null;
+      minimal = null;
+      low = "low";
+      medium = "medium";
+      high = "high";
+      xhigh = "xhigh";
+      max = "max";
+    };
+  };
+  magpieAgyClaudeMessages = magpieClaudeMessages // {
+    thinkingLevelMap = {
+      off = null;
+      minimal = null;
+      low = "low";
+      medium = "medium";
+      high = "high";
+      xhigh = null;
+      max = null;
+    };
+  };
   e2eFeatureRun = pkgs.writeShellApplication {
     name = "e2e-feature-run";
     runtimeInputs = [ pkgs.python3 pkgs.git pkgs.bash ];
@@ -238,92 +294,95 @@ in
         baseUrl = "https://magpie-api.sachi.m.mado.moe/v1";
         api = "openai-completions";
         apiKey = "dummykey";
+        compat = {
+          promptCacheKeyMode = "enabled";
+        };
         models = [
-          {
+          (magpieCodexResponses // {
             id = "gpt-6-luna";
             name = "GPT-6 Luna";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1050000;
             maxTokens = 128000;
-          }
-          {
+          })
+          (magpieCodexResponses // {
             id = "group/sol";
             name = "Sol";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 500000;
             maxTokens = 128000;
-          }
-          {
+          })
+          (magpieCodexResponses // {
             id = "group/astra";
             name = "GPT-6 Astra";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1050000;
             maxTokens = 128000;
-          }
-          {
+          })
+          (magpieGeminiResponses // {
             id = "group/gemini";
             name = "Gemini";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1048576;
             maxTokens = 65536;
-          }
-          {
+          })
+          (magpieGeminiResponses // {
             id = "group/gemini-speed";
             name = "Gemini 4 Hydrogen";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1048576;
             maxTokens = 65536;
-          }
-          {
+          })
+          (magpieClaudeMessages // {
             id = "group/fable";
             name = "Claude Fable 5.2";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1000000;
             maxTokens = 128000;
-          }
-          {
+          })
+          (magpieClaudeMessages // {
             id = "group/opus";
             name = "Opus";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1000000;
             maxTokens = 128000;
-          }
-          {
+          })
+          (magpieAgyClaudeMessages // {
             id = "group/agy-opus";
             name = "AGY Opus 5.5";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1000000;
             maxTokens = 128000;
-          }
-          {
+          })
+          (magpieCodexResponses // {
             id = "group/luna-fast";
             name = "Luna Fast";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 1050000;
-          }
-          {
+          })
+          (magpieCodexResponses // {
             id = "group/sol-fast";
             name = "Sol Fast";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 500000;
-          }
-          {
+          })
+          (magpieCodexResponses // {
             id = "group/sol-ultrafast";
             name = "Sol UltraFast";
             reasoning = true;
             input = [ "text" "image" ];
             contextWindow = 500000;
-          }
+          })
         ];
       };
     };

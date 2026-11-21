@@ -3,6 +3,8 @@
 When the user asks for a VCS commit, generate the commit message yourself and proceed with the commit using that message.
 When detecting version control in a workspace, use Git conventions by default.
 
+When work is complete in a separate Git worktree and the task's changes are still unmerged, proactively ask the user whether to merge them into the repository's local default branch. Wait for their answer before merging. If the user has already authorized the merge or chosen another delivery path, follow that instruction.
+
 ## Development scratch data
 
 Place large rebuildable outputs, downloaded dependencies, test SDKs, disposable emulator disks, and temporary test environments under `${XDG_CACHE_HOME:-$HOME/.cache}/dev-scratch/<project>/<workspace-or-run>/` when the tools support an external location. On kazuki, `~/.cache` is a separate ZFS dataset excluded from snapshots and replication; do not assume the same backup policy on other hosts. Use a stable project/workspace key for reusable caches and a unique run key for isolated test state. Prefer tool-specific output/cache settings; do not globally redirect unrelated tools to one shared build directory.

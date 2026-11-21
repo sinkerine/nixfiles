@@ -1,6 +1,6 @@
 ---
 name: e2e-feature
-description: "Opt-in end-to-end feature workflow: AGY Opus orchestrates with Pi Opus and Sol as quota fallbacks, a separate visible Gemini Paseo tab designs, Gemini Speed implements and repairs in a subagent, and separate Sol children review and verify. The orchestrator coordinates without implementing."
+description: "Opt-in end-to-end feature workflow: Pi Opus orchestrates with Sol as the quota fallback, a separate visible Gemini Paseo tab designs, Gemini Speed implements and repairs in a subagent, and separate Sol children review and verify. The orchestrator coordinates without implementing."
 disable-model-invocation: true
 ---
 
@@ -12,7 +12,7 @@ Use only when the user explicitly invokes `/skill:e2e-feature <request>` or `/sk
 
 | Role | Session/profile | Exact model | Thinking | Authority |
 | --- | --- | --- | --- | --- |
-| Orchestrator | Main session | `magpie/group/agy-opus` → `magpie/group/opus` → `magpie/group/sol` on quota exhaustion | medium | Coordinate, inspect evidence, decide acceptance, track goals and deliver |
+| Orchestrator | Main session | `magpie/group/opus` → `magpie/group/sol` on quota exhaustion | medium | Coordinate, inspect evidence, decide acceptance, track goals and deliver |
 | Design | Independent visible Paseo tab | `magpie/group/gemini` | high | Explore, write the plan and obtain human approval; no implementation |
 | Executor | Direct `worker` subagent | `magpie/group/gemini-speed` | medium | Implement, prepare tooling, write tests, diagnose and repair |
 | Reviewer | Direct `reviewer` subagent | `magpie/group/sol` | medium | Independent read-only code review |
@@ -20,7 +20,7 @@ Use only when the user explicitly invokes `/skill:e2e-feature <request>` or `/sk
 
 Design runs as an independent top-level Paseo agent opened in a visible Desktop tab, following [references/design.md](references/design.md). Do not launch design through `subagent`, agent-scoped creation or create-then-detach. Executor, reviewer and verifier run through `subagent` as direct children of this session. Reviewer and verifier are separate fresh-context children, never the executor or each other resumed under another role. Neither the design agent nor children may subdelegate. Explicitly pass the model on every initial launch; agent defaults do not select these roles. Resume children only within the same role using the latest returned run id, preserving model and tools. Keep the listed models for design and the three child roles.
 
-Start a fresh orchestrator with `pi-agy-opus --thinking medium` or launch it in Paseo on `pi/magpie/group/agy-opus` with medium thinking. The `e2e-feature-routing` Pi extension configures the model and thinking level on skill invocation. When the current orchestrator model runs out of quota, the extension switches to the next model in the table and continues the interrupted turn in the same session. The selection persists on session resume. The final model's error is surfaced if it also runs out of quota.
+Start a fresh orchestrator with `pi-opus --thinking medium` or launch it in Paseo on `pi/magpie/group/opus` with medium thinking. The `e2e-feature-routing` Pi extension configures the model and thinking level on skill invocation. When the current orchestrator model runs out of quota, the extension switches to the next model in the table and continues the interrupted turn in the same session. The selection persists on session resume. The final model's error is surfaced if it also runs out of quota.
 
 Before any design or child launch or goal creation, verify the main session uses a model from the orchestrator row with medium thinking. If the active model or thinking level cannot be confirmed, stop at this routing gate and tell the user what needs to be verified.
 
@@ -35,7 +35,7 @@ Ask only for genuine unresolved requirements or authorization, destructive/irrev
 ## Preflight and isolation
 
 1. Inspect Git status, repository instructions, the current Paseo workspace and worktree metadata. Preserve unrelated staged, unstaged and untracked work. Pick a lowercase `<feature>` slug.
-2. Reuse the current Paseo-owned Git worktree when one exists. Otherwise create a new Paseo worktree workspace for this project, based on the current branch unless specified otherwise: `paseo workspace create --isolation worktree --mode branch-off --new-branch feat/<feature> --base <base> --project <project-id> --title "<feature>" --json`. Discover the project from current workspace/registry metadata; inspect CLI help if flags differ. Verify the returned workspace, path, branch, base and owning project. Launch the fresh AGY Opus orchestrator there with the original request and `/skill:e2e-feature` invocation, then yield. Do not edit the main checkout as a fallback.
+2. Reuse the current Paseo-owned Git worktree when one exists. Otherwise create a new Paseo worktree workspace for this project, based on the current branch unless specified otherwise: `paseo workspace create --isolation worktree --mode branch-off --new-branch feat/<feature> --base <base> --project <project-id> --title "<feature>" --json`. Discover the project from current workspace/registry metadata; inspect CLI help if flags differ. Verify the returned workspace, path, branch, base and owning project. Launch the fresh Pi Opus orchestrator there with the original request and `/skill:e2e-feature` invocation, then yield. Do not edit the main checkout as a fallback.
 3. Record `<worktree>` from `git rev-parse --show-toplevel`, `<git dir>` from `git rev-parse --absolute-git-dir`, the workspace id, current branch, base ref from `paseo/worktree.json` (`baseRef`, otherwise `baseRefName`), and base commit from `git merge-base HEAD <base>`. Read the branch again before delivery because Paseo may rename placeholders. `<repo root>` is the first worktree in `git worktree list --porcelain`. All task edits stay in `<worktree>`.
 4. Use `<run dir> = <git dir>/e2e-feature/<feature>` and `<build lock> = <git dir>/e2e-feature-build.lock` so the existing deterministic runner works. Run `e2e-feature-run init --feature <feature>`. Record `workflow: e2e-feature`, the role/model table and actual session identity in run state.
 5. For an initial feature, classify root `AGENTS.md` as journey instructions, explicit E2E exemption, or missing. A journey must exercise the real user path in isolated state (VM, container, disposable environment or isolated local stack). Report missing instructions during design; they block E2E until the user supplies the journey or explicitly exempts the repository. Non-feature changes skip this classification and E2E. E2E runs when a feature is first added, including its repairs/reruns; future pushes/deployments do not require it. Existing unit tests still run. Any testing policy the executor adds must preserve this scope.
