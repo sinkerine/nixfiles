@@ -132,6 +132,8 @@ in
   };
 
   boot.kernelPackages = mkForce pkgs.linuxPackages_6_18;
+  # The unused MT7922 Wi-Fi adapter has blocked deep suspend.
+  boot.blacklistedKernelModules = [ "mt7921e" ];
   my.essentials.zfs = {
     enable = true;
     enableZed = true;
