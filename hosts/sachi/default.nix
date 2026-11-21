@@ -19,6 +19,10 @@ let
   primaryTargets = builtins.fromJSON (builtins.readFile ../common/reality-primary-targets.json);
   sniTargets = builtins.fromJSON (builtins.readFile ../common/reality-sni-targets.json);
 
+  poolMount = {
+    after = [ "sachi-zfs-unlock.service" ];
+    unitConfig.ConditionPathIsMountPoint = "/pool/main";
+  };
 in
 {
   my.services.regionalProxy.usExit = true;
@@ -176,15 +180,28 @@ in
   boot.kernelPackages = mkForce pkgs.linuxPackages_6_18;
   my.essentials.zfs = {
     enable = true;
-    enableNonRootEncryption = true;
     enableZed = true;
     enableZfsUnstable = true;
     nonRootPools = [
       "main"
       "sub"
     ];
-    encryptedZfsPath = "main";
+    remoteUnlock = {
+      enable = true;
+      dataset = "main";
+      mountPoint = "/pool/main";
+      services = [ "docker" "grafana" "pve-guests" "traefik" "vsftpd" "zrepl" ];
+    };
   };
+  systemd.targets.samba.wantedBy = mkForce [ "sachi-pool.target" ];
+  systemd.sockets.docker.wantedBy = mkForce [ ];
+  systemd.services = {
+    aria2.unitConfig.ConditionPathIsMountPoint = "/pool/sub";
+    samba-nmbd = poolMount;
+    samba-smbd = poolMount;
+    samba-winbindd = poolMount;
+  };
+
   networking.useDHCP = false;
   networking.networkmanager.enable = false;
   networking.firewall.enable = mkForce false;

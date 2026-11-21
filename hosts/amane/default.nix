@@ -126,12 +126,17 @@ in
   boot.kernelPackages = mkForce pkgs.linuxPackages_6_18;
   my.essentials.zfs = {
     enable = true;
-    enableNonRootEncryption = true;
     enableZed = true;
     enableZfsUnstable = true;
     nonRootPools = [ "tank" ];
-    encryptedZfsPath = "tank/encrypted";
+    remoteUnlock = {
+      enable = true;
+      dataset = "tank/encrypted";
+      mountPoint = "/pool/tank";
+      services = [ "docker" "traefik" "zrepl" ];
+    };
   };
+  systemd.sockets.docker.wantedBy = mkForce [ ];
 
   networking = {
     hostName = hostname;

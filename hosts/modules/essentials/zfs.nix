@@ -1,23 +1,39 @@
-{ config, lib, pkgs, mylib, ... }:
+{ config, lib, pkgs, hostname, ... }:
 
 with lib;
 let
   cfg = config.my.essentials.zfs;
-  inherit (mylib) assertNotNull;
+  unlock = cfg.remoteUnlock;
+  pool = head (splitString "/" unlock.dataset);
+  importUnit = "zfs-import-${pool}.service";
+  unlockService = "${hostname}-zfs-unlock";
+  unlockUnit = "${unlockService}.service";
+  poolTarget = "${hostname}-pool";
 in {
   options.my.essentials.zfs = {
     enable = mkEnableOption "zfs";
     enableZfsUnstable = mkEnableOption "zfs unstable";
-    enableNonRootEncryption = mkEnableOption "non root encryption";
     enableZed = mkEnableOption "zed";
     nonRootPools = mkOption {
       type = with types; listOf str;
       default = [ ];
       description = "non root pools to be imported on boot";
     };
-    encryptedZfsPath = mkOption {
-      type = with types; nullOr str;
-      default = null;
+    remoteUnlock = {
+      enable = mkEnableOption "interactive ZFS unlock after SSH starts";
+      dataset = mkOption {
+        type = types.str;
+        description = "Encryption root to unlock.";
+      };
+      mountPoint = mkOption {
+        type = types.str;
+        description = "Mount point of the encryption root.";
+      };
+      services = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Service names to start through the pool target after mount.";
+      };
     };
     arcMaxBytes = mkOption {
       type = with types; nullOr int;
@@ -35,6 +51,45 @@ in {
       boot.zfs.devNodes = "/dev/disk/by-path";
       services.zfs.autoScrub.enable = true;
     }
+    (mkIf unlock.enable {
+      assertions = [ {
+        assertion = elem pool cfg.nonRootPools;
+        message = "The remote ZFS unlock dataset must belong to a configured non-root pool.";
+      } ];
+
+      # Keep the passphrase prompt out of early boot so SSH can start first.
+      boot.zfs.requestEncryptionCredentials = false;
+      systemd.targets.${poolTarget} = {
+        description = "Unlock ${hostname}'s ZFS pool and start its services";
+        requires = [ unlockUnit ];
+        after = [ unlockUnit ];
+      };
+      systemd.services = {
+        ${unlockService} = {
+          description = "Unlock and mount ${unlock.dataset}";
+          requires = [ importUnit ];
+          after = [ "zfs-mount.service" importUnit ];
+          path = [ config.boot.zfs.package pkgs.util-linux ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          script = ''
+            set -o pipefail
+            if [ "$(zfs get -H -o value keystatus ${escapeShellArg unlock.dataset})" != available ]; then
+              systemd-ask-password --timeout=5min ${escapeShellArg "Enter ZFS passphrase for ${unlock.dataset}:"} \
+                | zfs load-key ${escapeShellArg unlock.dataset}
+            fi
+            zfs mount -a
+            mountpoint -q ${escapeShellArg unlock.mountPoint}
+          '';
+        };
+      } // genAttrs unlock.services (_: {
+        wantedBy = mkForce [ "${poolTarget}.target" ];
+        after = [ unlockUnit ];
+        unitConfig.ConditionPathIsMountPoint = unlock.mountPoint;
+      });
+    })
     (mkIf (cfg.arcMaxBytes != null) {
       boot.kernelParams = [ "zfs.zfs_arc_max=${toString cfg.arcMaxBytes}" ];
     })
