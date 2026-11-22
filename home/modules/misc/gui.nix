@@ -10,6 +10,17 @@
 let
   cfg = config.my.essentials.gui;
   inherit (mylib) applyChromeFlagsToDesktopExec;
+  nemoWithTrash = pkgs.symlinkJoin {
+    name = "nemo-with-trash";
+    paths = [ pkgs.nemo pkgs.nemo.man ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    postBuild = ''
+      # Portal launches can inherit GIO_USE_VFS=local, which hides Trash for the entire Nemo instance.
+      rm "$out/bin/nemo"
+      makeWrapper "${pkgs.nemo}/bin/nemo" "$out/bin/nemo" --unset GIO_USE_VFS
+    '';
+    meta.mainProgram = "nemo";
+  };
   screenshotAnnotate = pkgs.writeShellApplication {
     name = "screenshot-annotate";
     runtimeInputs = with pkgs; [ grim slurp satty ];
@@ -83,7 +94,7 @@ in
           google-chrome
           jellyfin-media-player
           clementine
-          nemo
+          nemoWithTrash
           kdePackages.ark
           unrar
           insomnia
