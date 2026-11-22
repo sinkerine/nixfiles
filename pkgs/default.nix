@@ -11,6 +11,7 @@ with pkgs; {
   feishin-appimage = (callPackage ./feishin-appimage { });
   tmux-fzf = (callPackage ./tmux-fzf { });
   webos-dev-manager = (callPackage ./webos-dev-manager { });
+  strata = callPackage ./strata { };
   qex = callPackage ./qex { };
   pi-coding-agent = callPackage ./pi-coding-agent { };
   paseo-session-recovery = callPackage ./paseo/session-recovery.nix { };

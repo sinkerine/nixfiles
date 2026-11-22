@@ -1,0 +1,37 @@
+diff --git a/engine/include/strata/artifact/gguf_reader.hpp b/engine/include/strata/artifact/gguf_reader.hpp
+index 1111111..2222222 100644
+--- a/engine/include/strata/artifact/gguf_reader.hpp
++++ b/engine/include/strata/artifact/gguf_reader.hpp
+@@ -649,7 +649,7 @@ inline std::string check_architecture_qwen35moe(const GgufFile& g) {
+         "qwen35moe.expert_count", "qwen35moe.expert_used_count", "qwen35moe.expert_feed_forward_length",
+         "qwen35moe.expert_shared_feed_forward_length", "qwen35moe.ssm.conv_kernel", "qwen35moe.ssm.state_size",
+         "qwen35moe.ssm.group_count", "qwen35moe.ssm.time_step_rank", "qwen35moe.ssm.inner_size",
+-        "qwen35moe.full_attention_interval", "qwen35moe.nextn_predict_layers",
++        "qwen35moe.full_attention_interval",
+     };
+     for (const char* k : keys) {
+         const MetaValue* v = g.get(k);
+@@ -658,7 +658,10 @@ inline std::string check_architecture_qwen35moe(const GgufFile& g) {
+     }
+     const MetaValue* nl = g.get("qwen35moe.block_count");
+     const MetaValue* mtp = g.get("qwen35moe.nextn_predict_layers");
+-    if (mtp->u >= nl->u) return "qwen35moe.nextn_predict_layers is not smaller than qwen35moe.block_count";
++    if (mtp) {
++        if (!mtp->is_num()) return "qwen35moe.nextn_predict_layers is not a number";
++        if (mtp->u >= nl->u) return "qwen35moe.nextn_predict_layers is not smaller than qwen35moe.block_count";
++    }
+     if (g.get("qwen35moe.full_attention_interval")->u < 2)
+         return "qwen35moe.full_attention_interval must be at least 2 (the GDN / attention pattern)";
+     return {};
+diff --git a/engine/include/strata/core/family_layout.hpp b/engine/include/strata/core/family_layout.hpp
+index 1111111..2222222 100644
+--- a/engine/include/strata/core/family_layout.hpp
++++ b/engine/include/strata/core/family_layout.hpp
+@@ -61,6 +61,7 @@ inline bool read_family_geometry(const strata::GgufFile& meta, strata::ModelFami
+     num("full_attention_interval", g.qsa_interval);
+     g.head_dim = key_length;
+     if (family == strata::ModelFamily::Qwen35Moe) {
++        g.n_mtp_layers = 0;
+         num("nextn_predict_layers", g.n_mtp_layers);
+         g.hc = g.hc_lr = 0;                 // a plain pre-norm residual
+         g.idx_q_heads = g.idx_key_dim = 0;  // dense attention, no sparse indexer

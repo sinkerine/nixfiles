@@ -31,6 +31,7 @@ in
     ../modules/services/networking/ipv6
     ./hardware-configuration.nix
     ./book-example.nix
+    ./bookorbit-sync.nix
     ../modules/services/gateway/paseo.nix
     ../common/baseline.nix
     ../common/reality-sni.nix

@@ -134,6 +134,13 @@ let
       exec pi --provider magpie --model group/sol "$@"
     '';
   };
+  piSolJb = pkgs.writeShellApplication {
+    name = "pi-sol-jb";
+    runtimeInputs = [ piCodingAgent ];
+    text = ''
+      exec pi --provider magpie --model group/sol-6.1 "$@"
+    '';
+  };
   piAstra = pkgs.writeShellApplication {
     name = "pi-astra";
     runtimeInputs = [ piCodingAgent ];
@@ -181,6 +188,13 @@ let
     runtimeInputs = [ piCodingAgent ];
     text = ''
       exec pi --provider magpie --model group/agy-opus "$@"
+    '';
+  };
+  piQwen = pkgs.writeShellApplication {
+    name = "pi-qwen";
+    runtimeInputs = [ piCodingAgent ];
+    text = ''
+      exec pi --no-extensions --provider strata --model qwen3.6-35b-a3b-uncensored-iq4_xs "$@"
     '';
   };
   # pi-subagents' claude-code adapter owns its argv, so the reviewer's model
@@ -315,6 +329,14 @@ in
             maxTokens = 128000;
           })
           (magpieCodexResponses // {
+            id = "group/sol-6.1";
+            name = "sol-jb";
+            reasoning = true;
+            input = [ "text" "image" ];
+            contextWindow = 1050000;
+            maxTokens = 128000;
+          })
+          (magpieCodexResponses // {
             id = "group/astra";
             name = "GPT-6 Astra";
             reasoning = true;
@@ -385,6 +407,59 @@ in
           })
         ];
       };
+
+      models.providers.strata = {
+        baseUrl = "https://strata.kazuki.m.mado.moe/v1";
+        api = "openai-completions";
+        apiKey = "lan-only";
+        compat = {
+          supportsDeveloperRole = false;
+          supportsReasoningEffort = false;
+          supportsStore = false;
+          supportsStrictMode = false;
+          thinkingFormat = "qwen-chat-template";
+        };
+        models = [
+          {
+            id = "qwen3.6-35b-a3b-uncensored-iq4_xs";
+            name = "Qwen3.6 35B-A3B Uncensored IQ4_XS";
+            reasoning = true;
+            input = [ "text" ];
+            contextWindow = 131072;
+            maxTokens = 16384;
+            cost = {
+              input = 0;
+              output = 0;
+              cacheRead = 0;
+              cacheWrite = 0;
+            };
+            thinkingLevelMap = {
+              off = null;
+              minimal = null;
+              low = "low";
+              medium = "medium";
+              high = "high";
+              xhigh = null;
+              max = null;
+            };
+            # Qwen3.6-35B-A3B precise-coding sampling defaults (presence_penalty 0 avoids corrupting tool/code output).
+            samplingParams = {
+              temperature = 0.6;
+              top_p = 0.95;
+              top_k = 20;
+              presence_penalty = 0.0;
+            };
+            samplingParamsByThinkingLevel = {
+              off = {
+                temperature = 0.7;
+                top_p = 0.8;
+                top_k = 20;
+                presence_penalty = 0.0;
+              };
+            };
+          }
+        ];
+      };
     };
 
     # Replace links left by older generations that pointed directly into the store.
@@ -401,6 +476,13 @@ in
             "gpt-6.2-sol"
           ];
           file = "${./pi-coding-agent-prompts/sol.md}";
+        }
+        {
+          id = "sol-jb";
+          match = [ "magpie/group/sol-6.1" ];
+          mode = "replace";
+          override = true;
+          file = "${./pi-coding-agent-prompts/sol-jb.md}";
         }
       ];
     };
@@ -479,6 +561,7 @@ in
     home.packages = [
       piLuna
       piSol
+      piSolJb
       piAstra
       piGemini
       piGeminiSpeed
@@ -486,6 +569,7 @@ in
       piOpus
       piAgyOpus
       piLunaFast
+      piQwen
       # Moves active workspace agent tabs between hosts; also provides the e2e-dispatch alias
       # that the e2e-feature skill uses to register runs.
       pkgs.workspace-dispatch

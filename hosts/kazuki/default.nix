@@ -16,6 +16,39 @@ let
   hostIp = "192.168.88.29/24";
   gateway = "192.168.88.1";
 
+  strataEnabled = false;
+  strataCache = "/home/sinkerine/.cache/strata";
+  strataModelName = "qwen3.6-35b-a3b-uncensored-iq4_xs";
+  strataModelFile = "${strataCache}/models/qwen3.6-35b-a3b-uncensored-hauhaucs/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-IQ4_XS.gguf";
+  strataPack = "${strataCache}/packs/qwen36-uncensored-iq4_xs";
+  strataConfig = pkgs.writeText "strata-qwen36-uncensored-iq4-xs.json" (builtins.toJSON {
+    exe = "${pkgs.strata}/bin/strata";
+    args = [
+      "--native"
+      strataModelFile
+      "--max-context"
+      "131072"
+      "--prefill"
+      "512"
+      "--mtp"
+      "0"
+      "--expert-vram"
+      "1.8"
+    ];
+    cwd = "${pkgs.strata}/share/strata";
+    tokenizer = "${strataPack}/tokenizer";
+    model_name = strataModelName;
+    arch = "qwen35moe";
+    api_key = "lan-only";
+    log = "/var/log/strata/server.log";
+    lib_dirs = [ "${pkgs.cudaPackages_13_0.cudatoolkit}/lib" ];
+    allowed_hosts = [ "strata.${hostname}.m.mado.moe" ];
+    port = 8081;
+    gpu = 0;
+    gpus_asked = true;
+    parallel = 1;
+  });
+
 in
 {
   system.stateVersion = "22.05";
@@ -291,7 +324,59 @@ in
   # Keep the previous inference server disabled.
   systemd.services.llama-qwen35.enable = false;
 
+  systemd.services.strata = mkIf strataEnabled {
+    description = "Strata API: Qwen3.6-35B-A3B Uncensored IQ4_XS";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    environment.LD_LIBRARY_PATH = lib.makeLibraryPath [
+      "/run/opengl-driver"
+      pkgs.gcc.cc.lib
+      pkgs.zlib
+      pkgs.cudaPackages_13_0.cudatoolkit
+    ];
+    preStart = ''
+      if [ ! -f "${strataModelFile}" ]; then
+        echo "Strata model file missing: ${strataModelFile}" >&2
+        exit 1
+      fi
+      if [ ! -f "${strataPack}/tokenizer/vocab.json" ]; then
+        mkdir -p "${strataPack}"
+        ${pkgs.strata}/bin/strata-tokenizer --gguf "${strataModelFile}" --out "${strataPack}"
+      fi
+    '';
+    serviceConfig = {
+      User = "sinkerine";
+      Group = "users";
+      WorkingDirectory = "${pkgs.strata}/share/strata";
+      ExecStart = "${pkgs.strata}/bin/strata-server --engine strata --config ${strataConfig} --port 8081";
+      LogsDirectory = "strata";
+      LogsDirectoryMode = "0750";
+      Restart = "on-failure";
+      RestartSec = 5;
+      TimeoutStartSec = "infinity";
+      SupplementaryGroups = [
+        "video"
+        "render"
+      ];
+      LimitMEMLOCK = "infinity";
+    };
+  };
+
   services.traefik.dynamicConfigOptions.http = {
+    routers.strata = mkIf strataEnabled {
+      rule = "Host(`strata.${hostname}.m.mado.moe`)";
+      entryPoints = [ "websecure" ];
+      tls.certResolver = "default";
+      middlewares = [ "lan-only@file" ];
+      service = "strata";
+    };
+    services.strata = mkIf strataEnabled {
+      loadBalancer = {
+        servers = [ { url = "http://127.0.0.1:8081"; } ];
+        responseForwarding.flushInterval = "-1ms";
+      };
+    };
     routers.pi-artifacts = {
       rule = "Host(`artifacts.${hostname}.m.mado.moe`)";
       entryPoints = [ "websecure" ];
