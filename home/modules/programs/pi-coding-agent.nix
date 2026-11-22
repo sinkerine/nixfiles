@@ -297,6 +297,7 @@ in
           "${piCollapseTools}/lib/node_modules/pi-collapse-tools"
           "${piGoal}/lib/node_modules/pi-goal"
           "${piHindsight}/lib/node_modules/pi-hindsight-memory"
+          # Keep before piBtw so context_with_system substitutions reach BTW snapshots.
           piPerModelSystemPrompt
           "${piSubagents}/lib/node_modules/pi-subagents"
           "${piWebAccess}/lib/node_modules/pi-web-access"

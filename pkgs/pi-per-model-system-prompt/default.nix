@@ -11,8 +11,8 @@ stdenvNoCC.mkDerivation {
   src = fetchFromGitHub {
     owner = "sinkerine";
     repo = "pi-per-model-system-prompt";
-    rev = "5387f11609fcd9f820cb49d6ffddb8880d8380c5";
-    hash = "sha256-bZqXZwpBu9lZAp9+9jM5f6hQMxRNnLq8I+s8RRzqM3Q=";
+    rev = "14e997a740e96ec33f0620ac9957c46461c98300";
+    hash = "sha256-XkKtFqX+QlBHzH70bCdrEZ3mN25exnz6K+Dd27thusg=";
   };
 
   dontConfigure = true;
