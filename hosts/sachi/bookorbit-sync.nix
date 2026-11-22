@@ -32,8 +32,8 @@ let
             "dest": SYNC_ROOT / "book-to-read",
             "layout": "series_or_flat",
         },
-        "book-to-read-manga": {
-            "dest": SYNC_ROOT / "book-to-read-manga",
+        "manga-to-read": {
+            "dest": SYNC_ROOT / "manga-to-read",
             "layout": "mihon",
         },
     }

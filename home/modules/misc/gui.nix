@@ -104,7 +104,6 @@ in
           nodejs
           pandoc
           kdePackages.okular
-          calibre
           libreoffice
           oxipng
           dex

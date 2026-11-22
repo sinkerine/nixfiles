@@ -484,6 +484,17 @@ in
           override = true;
           file = "${./pi-coding-agent-prompts/sol-jb.md}";
         }
+        {
+          # These Antigravity-backed routes have rejected the original wording.
+          id = "antigravity-codemode-wording";
+          match = [
+            "magpie/group/gemini"
+            "magpie/group/agy-opus"
+          ];
+          mode = "substitute";
+          find = "codemode scripts and non-LLM models such as classifiers and image models";
+          replacement = "codemode scripts and non-LLM models including classifiers and image models";
+        }
       ];
     };
 
