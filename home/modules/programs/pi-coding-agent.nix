@@ -14,9 +14,7 @@ let
     '';
   });
   piAskUser = pkgs.pi-ask-user;
-  piFooter = pkgs.pi-footer;
   piAstGrep = pkgs.pi-ast-grep;
-  piCollapseTools = pkgs.pi-collapse-tools;
   piSubagents = pkgs.pi-subagents;
   piPerModelSystemPrompt = "${pkgs.pi-per-model-system-prompt}/lib/node_modules/@sinkerine/pi-per-model-system-prompt";
   piBtw = pkgs.pi-btw;
@@ -109,6 +107,22 @@ let
       PI_TEST_PACKAGE=${piSubagents}/lib/node_modules/pi-subagents \
         QEX_WAIT_EXTENSION=$out \
         ${pkgs.nodejs}/bin/node --test ${./pi-coding-agent-extensions/qex-wait.test.mjs}
+    '';
+  };
+  bashOutputCompactExtension = pkgs.writeTextFile {
+    name = "bash-output-compact.ts";
+    text = builtins.readFile ./pi-coding-agent-extensions/bash-output-compact.ts;
+    checkPhase = ''
+      BASH_OUTPUT_COMPACT_EXTENSION=$out \
+        ${pkgs.nodejs}/bin/node --experimental-strip-types --test ${./pi-coding-agent-extensions/bash-output-compact.test.mjs}
+    '';
+  };
+  staleExtensionsExtension = pkgs.writeTextFile {
+    name = "stale-extensions.ts";
+    text = builtins.readFile ./pi-coding-agent-extensions/stale-extensions.ts;
+    checkPhase = ''
+      STALE_EXTENSIONS_EXTENSION=$out \
+        ${pkgs.nodejs}/bin/node --experimental-strip-types --test ${./pi-coding-agent-extensions/stale-extensions.test.mjs}
     '';
   };
   piHindsight = pkgs.pi-hindsight;
@@ -217,9 +231,6 @@ in
   };
 
   config = mkIf cfg.enable {
-    my.programs.pi-coding-agent.mcpServers.octoprint.url =
-      "https://octoprint-mcp.sachi.m.mado.moe/mcp";
-
     home.file."${config.programs.pi-coding-agent.configDir}/mcp.json".text = builtins.toJSON {
       inherit (cfg) mcpServers;
     };
@@ -253,6 +264,7 @@ in
           # Foreground children do not load ambient Pi extensions.
           defaultSubagentOnlyExtensions = [
             "${piPerModelSystemPrompt}/extensions/per-model-system-prompt.ts"
+            "${bashOutputCompactExtension}"
           ];
           agentOverrides = {
             scout = {
@@ -292,9 +304,7 @@ in
         };
         packages = [
           "${piAskUser}/lib/node_modules/pi-ask-user"
-          "${piFooter}/lib/node_modules/@smoose/pi-footer"
           "${piAstGrep}/lib/node_modules/pi-ast-grep"
-          "${piCollapseTools}/lib/node_modules/pi-collapse-tools"
           "${piGoal}/lib/node_modules/pi-goal"
           "${piHindsight}/lib/node_modules/pi-hindsight-memory"
           # Keep before piBtw so context_with_system substitutions reach BTW snapshots.
@@ -466,6 +476,13 @@ in
     # Replace links left by older generations that pointed directly into the store.
     home.file."${config.programs.pi-coding-agent.configDir}/models.json".force = true;
 
+    home.file."${config.programs.pi-coding-agent.configDir}/ask-user.json" = {
+      force = true;
+      text = builtins.toJSON {
+        allowComment = true;
+      };
+    };
+
     home.file."${config.programs.pi-coding-agent.configDir}/model-prompts.json".text = builtins.toJSON {
       rules = [
         {
@@ -489,7 +506,7 @@ in
           # These Antigravity-backed routes have rejected the original wording.
           id = "antigravity-codemode-wording";
           match = [
-            "magpie/group/gemini"
+            "*gemini*"
             "magpie/group/agy-opus"
           ];
           mode = "substitute";
@@ -503,6 +520,14 @@ in
 
     home.file.".pi/agent/extensions/bash-timeout.ts" = {
       source = ./pi-coding-agent-extensions/bash-timeout.ts;
+      force = true;
+    };
+    home.file.".pi/agent/extensions/bash-output-compact.ts" = {
+      source = bashOutputCompactExtension;
+      force = true;
+    };
+    home.file.".pi/agent/extensions/stale-extensions.ts" = {
+      source = staleExtensionsExtension;
       force = true;
     };
 

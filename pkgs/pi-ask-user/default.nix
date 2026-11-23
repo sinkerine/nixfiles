@@ -2,13 +2,13 @@
 
 stdenvNoCC.mkDerivation {
   pname = "pi-ask-user";
-  version = "0.17.2";
+  version = "0.17.2-unstable-2026-11-23";
 
   src = fetchFromGitHub {
-    owner = "edlsh";
+    owner = "sinkerine";
     repo = "pi-ask-user";
-    rev = "v0.17.2";
-    hash = "sha256-0I7CyxRgadLPLZYPnTbe1jzE3ElwpBj0Cs54gAH0K7w=";
+    rev = "14055c0e02dcc1fb2f2d059e4d2c790169b622b2";
+    hash = "sha256-J72gBMTwZAENL/94tus7V7Y1Utm//3oQ41wQrKbuCtM=";
   };
 
   dontConfigure = true;
@@ -21,7 +21,7 @@ stdenvNoCC.mkDerivation {
 
   meta = {
     description = "Pi extension that adds an interactive ask_user tool";
-    homepage = "https://github.com/edlsh/pi-ask-user";
+    homepage = "https://github.com/sinkerine/pi-ask-user";
     license = lib.licenses.mit;
   };
 }
