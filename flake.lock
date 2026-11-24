@@ -642,11 +642,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795478695,
-        "narHash": "sha256-kPgQfWl01jhLLrmzz4BrS3wNAPENZVYFf5eGE0SOogM=",
+        "lastModified": 1795480374,
+        "narHash": "sha256-pHS0sexsl4FW2j7lJPG9bdT5chlkGa9wPn7s/Yz/izc=",
         "owner": "sinkerine",
         "repo": "pi-artifacts",
-        "rev": "e98e8f6ac7e7c7fb3ec56924e4cf522f21bf69f9",
+        "rev": "5211f89eb5de692f2a344b552b433351c6647037",
         "type": "github"
       },
       "original": {
