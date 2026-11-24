@@ -19,6 +19,13 @@ let
   piPerModelSystemPrompt = "${pkgs.pi-per-model-system-prompt}/lib/node_modules/@sinkerine/pi-per-model-system-prompt";
   piBtw = pkgs.pi-btw;
   piGoal = pkgs.pi-goal;
+  archifySkill = pkgs.fetchFromGitHub {
+    owner = "sinkerine";
+    repo = "archify";
+    rev = "8847388bc62f51265288106c940dd391503bf785";
+    sparseCheckout = [ "archify" ];
+    hash = "sha256-yDsDZ4oU0sKOSXqTy0KmpARXl4nBcMJa4v2sa26R1ew=";
+  };
   magpieCodexResponses = {
     api = "openai-responses";
     compat = {
@@ -566,6 +573,10 @@ in
     };
     home.file.".pi/agent/skills/return-workspaces/SKILL.md" = {
       source = ./pi-coding-agent-skills/return-workspaces/SKILL.md;
+      force = true;
+    };
+    home.file.".pi/agent/skills/archify" = {
+      source = "${archifySkill}/archify";
       force = true;
     };
     # Runs through pi-subagents' claude-code adapter, which needs the claude CLI.

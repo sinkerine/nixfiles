@@ -22,6 +22,8 @@ Example tool arguments (replace the work path with the current session directory
 
 React entrypoints must default-export a component. Available packaged imports are `react`, `react-dom`, `lucide-react`, `recharts`, and their public subpaths. Tailwind utilities are available locally. Include local CSS and asset imports in `files`. Use relative asset URLs. Do not install dependencies or depend on a public CDN for these libraries. HTML and Markdown may also include explicitly listed relative assets.
 
+Archify diagrams, explainers, and code-analysis workbenches produce self-contained standalone HTML; write them under `~/.cache/archify/<project-name>/` and publish them with `kind: "html"` (including any sibling drilldown `.html` files in `files`). Use `kind: "react"` for dashboards, stateful UI mockups, and interactive `recharts` explorers rather than wrapping Archify's viewer in React.
+
 Prefer readable typography, responsive layouts and accessible controls. Use an interactive artifact when interaction helps the explanation; use ordinary text for simple answers. For scientific/publication figures, create a standalone export with appropriate plotting tools.
 
 ## Update, browse and restore
