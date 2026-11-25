@@ -32,6 +32,7 @@ in
     ../common/boot-loader.nix
     ../common/users.nix
     ../common/trusted.nix
+    ../makina/exporter.nix
     ./proxy-options.nix
     ../modules/services/networking/regional-proxy/default.nix
   ];
@@ -65,41 +66,8 @@ in
     })
     (pkgs.writeShellApplication {
       name = "asako-sing-box-android-profiles";
-      runtimeInputs = with pkgs; [ coreutils python3 ];
       text = ''
-        umask 077
-        uuid_file="''${MAKINA_XRAY_CLIENT_ID_FILE:-${config.sops.secrets.makinaXrayClientId.path}}"
-        auth_keys_file="$(mktemp)"
-        trap 'rm -f "$auth_keys_file"' EXIT
-        python3 - "$auth_keys_file" \
-          ${config.sops.secrets.makinaAmaneHeadscaleAuthKey.path} \
-          ${config.sops.secrets.makinaSachiHeadscaleAuthKey.path} <<'PY'
-        import json, sys
-        output, amane_path, sachi_path = sys.argv[1:]
-        def read(path):
-            with open(path, encoding="utf-8") as source:
-                return source.read().strip()
-        keys = {
-            "amane-tailscale": read(amane_path),
-            "amane-paypal-tailscale": read(amane_path),
-            "sachi-tailscale": read(sachi_path),
-            "sachi-paypal-tailscale": read(sachi_path),
-            "michiru-cn-direct-tailscale": read(sachi_path),
-        }
-        with open(output, "w", encoding="utf-8") as destination:
-            json.dump(keys, destination)
-        PY
-        out="''${1:-/nas/storage/inbox}"
-        if [ -z "''${MICHIRU_PROFILE_CONFIG_FILE:-}" ] && [ -r ${config.sops.templates."asako-hk.json".path} ]; then
-          export MICHIRU_PROFILE_CONFIG_FILE=${config.sops.templates."asako-hk.json".path}
-        fi
-        if [ "$out" = /nas/storage/inbox ] && [ ! -d "$out" ]; then
-          echo "NAS inbox is unavailable: $out" >&2
-          exit 1
-        fi
-        export REALITY_SNI_TARGETS_FILE=${../common/reality-sni-targets.json}
-        export REALITY_PRIMARY_TARGETS_FILE=${../common/reality-primary-targets.json}
-        python3 ${../makina/android-profiles.py} "$uuid_file" "$out" "$auth_keys_file"
+        exec makina-sing-box-android-profiles "$@"
       '';
     })
   ];
@@ -122,9 +90,6 @@ in
     secrets = {
       hashedPassword.neededForUsers = true;
       xrayClientId = { owner = "root"; group = "sinkerine"; mode = "0440"; };
-      makinaXrayClientId = { owner = "root"; group = "sinkerine"; mode = "0440"; };
-      makinaAmaneHeadscaleAuthKey = { owner = "root"; group = "sinkerine"; mode = "0440"; };
-      makinaSachiHeadscaleAuthKey = { owner = "root"; group = "sinkerine"; mode = "0440"; };
       asakoHKProfile = {
         sopsFile = ../michiru/relay-secrets.yaml;
         key = "asakoHKProfile";

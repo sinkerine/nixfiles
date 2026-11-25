@@ -59,6 +59,7 @@ in
     ../common/boot-loader.nix
     ../common/users.nix
     ../common/trusted.nix
+    ../makina/exporter.nix
     ../modules/services/networking/regional-proxy
   ];
 

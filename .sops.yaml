@@ -37,6 +37,9 @@ creation_rules:
   - path_regex: hosts/asako/secrets\.yaml$
     pgp: *sinkerine
     age: *asako
+  - path_regex: hosts/makina/secrets\.yaml$
+    # kazuki, asako, sachi, amane
+    age: "age1sc2gp8d40y7d9engfqhydg5v6mcg0aj40x3yccndzh7ruxvj63cqcpax76,age1kez9h9hmz4amrq5phv8cwv3d04l775ctzaqgrd7q9u70hp6s0ehsjp5wk8,age147zmk06prg2864yym9tcg5z9vl9ldykv5zkwuuefuy85q994qp3sjh3lfd,age1snfpluv03zwz8t6cxt0a26gpjxum2cad75gqw5k5fjg6y7cgx4zqcjq8fm"
   - path_regex: hosts/sachi/secrets\.yaml$
     pgp: *sinkerine
     age: *sachi

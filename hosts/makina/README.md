@@ -47,11 +47,13 @@ profiles, so no Python mode table or per-airline Nix routing edits are needed.
 The Nix-installed exporter embeds the registry through `REALITY_SNI_TARGETS_FILE`;
 source-tree invocation reads it from the repository by default.
 
-Deploy the Amane/Sachi server changes and Asako's updated exporter, then run
-`asako-sing-box-android-profiles` and import the desired JSON profile into Android
-sing-box. Sachi's public TCP/443 must reach its Traefik listener through the
-upstream router. Backend listener ports bind only to loopback and need no public
-firewall openings.
+Deploy the Amane/Sachi server changes and either Kazuki or Asako's updated
+exporter (`hosts/makina/exporter.nix`, using `hosts/makina/secrets.yaml`), then
+run `makina-sing-box-android-profiles` (writes to `/nas/storage/inbox/singbox`
+by default; `asako-sing-box-android-profiles` remains as an alias on Asako) and
+import the desired JSON profile into Android sing-box. Sachi's public TCP/443
+must reach its Traefik listener through the upstream router. Backend listener
+ports bind only to loopback and need no public firewall openings.
 
 The spoofed profiles proxy public Internet traffic without the China-direct
 rules; private network and tailnet routes remain enabled. Their Tailscale
