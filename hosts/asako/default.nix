@@ -47,13 +47,13 @@ in
       text = ''
         set -euo pipefail
         case "''${1:-}" in
-          amane|on) /run/wrappers/bin/sudo systemctl restart asako-proxy-enable.service ;;
-          sachi) /run/wrappers/bin/sudo systemctl restart asako-proxy-sachi.service ;;
-          michiru) /run/wrappers/bin/sudo systemctl restart asako-proxy-michiru.service ;;
-          off) /run/wrappers/bin/sudo systemctl restart asako-proxy-disable.service ;;
+          amane|on) systemctl restart asako-proxy-enable.service ;;
+          sachi) systemctl restart asako-proxy-sachi.service ;;
+          michiru) systemctl restart asako-proxy-michiru.service ;;
+          off) systemctl restart asako-proxy-disable.service ;;
           status)
-            /run/wrappers/bin/sudo systemctl status --no-pager sing-box-tun.service || true
-            /run/wrappers/bin/sudo systemctl status --no-pager sing-box-hk-tun.service || true
+            systemctl status --no-pager sing-box-tun.service || true
+            systemctl status --no-pager sing-box-hk-tun.service || true
             if [ -f /var/lib/asako-proxy/state ]; then
               echo "Boot choice: $(cat /var/lib/asako-proxy/state)"
             else
@@ -184,6 +184,7 @@ in
     };
   };
 
+  services.automatic-timezoned.enable = true;
   services.fwupd.enable = true;
   services.udisks2.enable = true;
   services.kmonad = {

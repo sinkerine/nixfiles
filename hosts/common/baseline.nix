@@ -74,7 +74,7 @@ with lib;
 
   users.mutableUsers = false;
   hardware.enableRedistributableFirmware = true;
-  time.timeZone = "America/Los_Angeles";
+  time.timeZone = lib.mkDefault "America/Los_Angeles";
   services.acpid.enable = true;
   programs.zsh.enable = true;
 

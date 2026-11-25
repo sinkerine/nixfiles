@@ -598,7 +598,11 @@ in
       digest.maxTokens = 800;
       recall.policy = "smart";
       recall.timeoutMs = 5000;
+      recall.minScores = {
+        reranker = 0.2;
+      };
       retain.auto = true;
+      retain.queue = true;
     };
     home.file.".pi/agent/keybindings.json".text = builtins.toJSON {
       "app.interrupt" = "ctrl+g";

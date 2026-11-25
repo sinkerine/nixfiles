@@ -1,8 +1,22 @@
 diff --git a/README.md b/README.md
-index 2b58905..7ed4db1 100644
+index 2b58905..3dbd4bf 100644
 --- a/README.md
 +++ b/README.md
-@@ -87,6 +87,7 @@ The complete defaults are:
+@@ -69,10 +69,12 @@ The complete defaults are:
+     "topicShiftThreshold": 0.15,
+     "display": true,
+     "preferObservations": true,
+-    "dedupThreshold": 0.8
++    "dedupThreshold": 0.8,
++    "minScores": {}
+   },
+   "retain": {
+     "auto": true,
++    "queue": true,
+     "minUserTurns": 1,
+     "ephemeral": true,
+     "includeToolCalls": true,
+@@ -87,6 +89,7 @@ The complete defaults are:
    "digest": {
      "enabled": true,
      "maxTokens": 800,
@@ -10,62 +24,74 @@ index 2b58905..7ed4db1 100644
      "timeoutMs": 2500,
      "refreshCron": "0 3 * * *",
      "fullRefreshCron": "0 3 * * 0"
-@@ -94,7 +95,7 @@ The complete defaults are:
+@@ -94,7 +97,7 @@ The complete defaults are:
  }
  ```
-
+ 
 -Optional global fields are `apiToken`, `project` (override project naming), and `recall.types` (an array containing `world`, `experience`, and/or `observation`). `budget` accepts `low`, `mid`, or `high`. Durations and size limits must be positive safe integers; `minPromptChars` and `maxAutoRecallsPerSession` also accept zero. `topicShiftThreshold` and `supersedeMinRelevance` must be between zero and one; `dedupThreshold` and `supersedeThreshold` must be greater than zero and at most one. `digest.maxTokens` must be between 256 and 8,192, and cron fields must be five-field UTC expressions.
 +Optional global fields are `apiToken`, `project` (override project naming), and `recall.types` (an array containing `world`, `experience`, and/or `observation`). `budget` accepts `low`, `mid`, or `high`. Durations and size limits must be positive safe integers; `minPromptChars` and `maxAutoRecallsPerSession` also accept zero. `topicShiftThreshold` and `supersedeMinRelevance` must be between zero and one; `dedupThreshold` and `supersedeThreshold` must be greater than zero and at most one. `digest.maxTokens` must be between 256 and 8,192. `digest.maxInjectedChars` must be at least 512. Cron fields must be five-field UTC expressions.
-
+ 
  The project file `<cwd>/.pi/hindsight-memory.json` may only restrict behavior:
-
-@@ -115,15 +116,15 @@ Projects share the default bank `pi`. Retrieval uses `project:<name>` with `tags
-
+ 
+@@ -115,15 +118,15 @@ Projects share the default bank `pi`. Retrieval uses `project:<name>` with `tags
+ 
  When `PI_SUBAGENT_CHILD=1`, `subagents` controls memory: `"off"` (default) disables all memory traffic, `"recall"` permits automatic/manual recall but blocks automatic and explicit retention, and `"full"` permits both. Children never load or inject the project digest; the parent's brief provides context. Global disabled settings and project restrictions still apply. The child environment marker, not prompt wording, identifies children.
-
+ 
 -`retain.minUserTurns` is a positive integer (default 1). Automatic settled/shutdown checkpoints wait for that many user messages on the current branch, excluding inherited fork entries. Set it to 2 to omit single-prompt sessions; this also omits potentially useful single-prompt decisions. Explicit checkpoints and durable-fact tools bypass the turn threshold, but never bypass child restrictions, disabled memory or pause.
 +`retain.minUserTurns` is a positive integer (default 1). Before the first automatic checkpoint, the active branch needs that many user messages, excluding inherited fork entries. Established checkpoints continue to follow later branch changes. Set the threshold to 2 to omit automatic retention of single-prompt sessions. Explicit checkpoints and durable-fact tools bypass the turn threshold. Child restrictions, disabled memory and pause still apply.
-
+ 
  ## Recall behavior
-
+ 
 -`smart` skips disabled or paused memory, an open circuit breaker, custom-triggered runs, short prompts and acknowledgements such as `ok`, `continue`, and `thanks`. It also respects the per-session automatic recall budget. Expanded `<skill>…</skill>` instructions, Paseo transport wrappers and known recovery preambles are removed before gating, topic comparison and query bounding; the request body is preserved. Eligible prompts recall on the first query, after compaction, on explicit memory cues (`remember`, `recall`, `last time`, `we decided`, `convention`, `preference`, `as discussed`), or on a topic shift. Standalone `again`, `before`, `earlier`, `previously`, `usually` and `history` are not memory cues; a substantive request can still trigger a topic shift. Topic shifts require at least 40 characters and Jaccard similarity of content words below `topicShiftThreshold` relative to the last recall query.
 +`smart` skips disabled or paused memory, an open circuit breaker, custom-triggered runs, short prompts and acknowledgements such as `ok`, `continue`, and `thanks`. It also respects the per-session automatic recall budget. Expanded `<skill>…</skill>` instructions, Paseo transport wrappers and known recovery preambles are removed before gating, topic comparison and query bounding; the request body is preserved. Eligible prompts recall on the first query, after compaction, on explicit memory cues (`remember`, `recall`, `last time`, `we decided`, `convention`, `preference`, `as discussed`), or on a topic shift. Standalone `again`, `before`, `earlier`, `previously`, `usually` and `history` are not memory cues; a substantive request can still trigger a topic shift. Under `smart` and `first`, complete Paseo agent-message envelopes and known plan or handoff receipts skip implicit recall. Explicit memory cues such as “check past launch failures” still trigger recall. Topic shifts require at least 40 characters and Jaccard similarity of content words below `topicShiftThreshold` against both the last recalled query and each of up to three recent substantive user turns.
-
+ 
  `always` recalls every eligible nontrivial prompt within the budget. `first` skips later topic shifts; the specified rule ordering still allows explicit cues and post-compaction recall. `off` disables automatic recall. Manual recall and the model tool complement these automatic policies.
-
+ 
 -Queries are bounded to approximately 500 tokens using a Unicode byte-cost estimate. Recall is retrieval only: no extra model calls for gating, relevance judging or query rewriting. Hits already injected on the active branch are removed; an empty or duplicate-only response adds no message. Recalled content is enclosed in an escaped `<hindsight_memory>` block labeled as untrusted reference data. When provided by the server, each hit also shows its type, mentioned-at timestamp, source document, up to three source-fact IDs, and a short context. Optional metadata is redacted, escaped and bounded; it adds some input tokens beyond the server's memory-text budget. Mentioned-at timestamps describe source history, not current verification.
 +Queries are bounded to approximately 500 tokens using a Unicode byte-cost estimate. Recall is retrieval only: no extra model calls for gating, relevance judging or query rewriting. Automatic recall filters IDs already present in Pi’s projected model context, including visible direct recall tool results. Compaction can make an older hit eligible again once Pi drops its message. An empty or duplicate-only response adds no context message. Recalled content is enclosed in an escaped `<hindsight_memory>` block labeled as untrusted reference data. When provided by the server, each hit also shows its type, mentioned-at timestamp, source document, up to three source-fact IDs, and a short context. Optional metadata is redacted, escaped and bounded. Automatic recall omits the generic Pi session context label and preserves source IDs, dates, and specific context. Mentioned-at timestamps describe source history, not current verification.
-
+ 
  The tool guidance encourages narrow follow-up recall when available memory does not answer a relevant historical question, even if other memories or a project digest are present. It asks the model to stop once that history is sufficient, verify consequential or changeable claims against the current owning source when needed, and preserve uncertainty and project/task scope.
-
-@@ -147,7 +148,7 @@ Read and back up existing overrides first; adapt this guidance to the bank's pur
-
+ 
+@@ -147,7 +150,7 @@ Read and back up existing overrides first; adapt this guidance to the bank's pur
+ 
  **Project digest.** Each project gets one server-side mental model, `pi-digest-<project>-<hash>`, tagged `project:<name>` with `tags_match:"all_strict"`. It answers a question about durable decisions, conventions, preferences, constraints and pitfalls, within the configured `digest.maxTokens` budget. The digest also provides a few useful topic routes: what prior decision or debugging lesson to recall, when its detail matters, and specific search terms. It preserves project/task scope, separates single-task requests and tentative claims from durable preferences and verified outcomes, and includes exact source pointers only when supplied by evidence. The server refreshes it in `delta` mode on `refreshCron` (default daily at 03:00 UTC), skips the refresh when nothing in scope changed, and regenerates it fully on `fullRefreshCron` (default Sundays). Each refresh that does work is one server-side LLM reflect run. At session start the extension reads the digest; if it does not exist the extension creates it. A digest that is still empty while the server reports newer in-scope memories gets one refresh request per session; otherwise it would wait for the next cron. Changing settings does not silently rewrite an existing digest. Run `/hindsight digest refresh` to apply the configured query, token budget and schedules to this project digest and queue a full regeneration; reload after it completes. The compact default is 800 tokens. Refresh is explicit so ordinary session starts do not each spend an LLM call.
-
+ 
 -The digest is injected in an escaped `<hindsight_project_digest>` block, as untrusted reference data, at the first prompt of a branch and again after compaction. Its model-visible metadata includes the last refresh timestamp and a marker when the server reports newer source memories. Refresh time describes the summary, not verification of its claims. Existing digests adopt new query wording only after `/hindsight digest refresh`; reload once regeneration finishes. It shares the custom message with any recall from the same prompt; a digest-only message uses reason `digest` and does not count against the automatic recall budget. Before the first prompt, the extension waits at most `digest.timeoutMs` for the read. A paused branch receives no digest. The digest summarizes current memories only: if source memories are deleted, the next refresh drops their content.
 +The digest is injected as untrusted reference data at the first eligible prompt and after compaction if its earlier block has left Pi’s projected context. `digest.maxInjectedChars` caps the escaped block with its freshness header intact and removes whole entries when necessary. `/hindsight digest` displays the full summary. `/hindsight status` compares the server’s prompt, token budget, and schedule with the current configuration. Its model-visible metadata includes the last refresh timestamp and a marker when the server reports newer source memories. Refresh time describes the summary, not verification of its claims. Existing digests adopt new query wording only after `/hindsight digest refresh`; reload once regeneration finishes. It shares the custom message with any recall from the same prompt; a digest-only message uses reason `digest` and does not count against the automatic recall budget. Before the first prompt, the extension waits at most `digest.timeoutMs` for the read. A paused branch receives no digest. The digest summarizes current memories only: if source memories are deleted, the next refresh drops their content.
-
+ 
  **Restated explicit facts.** After `hindsight_retain` stores a fact, it recalls existing raw facts from other `pi:fact:` documents of the project (`tags_match:"all_strict"` with `kind:explicit`). Facts whose content-word similarity to the new text reaches `supersedeThreshold`, and whose cross-encoder relevance is at least `supersedeMinRelevance` when the server reports one, are invalidated with reason `superseded-by:<new document>`. Invalidation is reversible on the server, excluded from recall and consolidation, and kept for audit; it also prunes observations built from that fact so consolidation rebuilds them. Invalidated ids are recorded in a branch state entry. Failures leave the older facts in place. Contradictions without restated wording are left to consolidation.
-
-@@ -159,13 +160,13 @@ After a settled prompt, the extension renders the active branch as timestamped u
-
+ 
+@@ -159,13 +162,13 @@ After a settled prompt, the extension renders the active branch as timestamped u
+ 
  Redaction recognizes PEM private keys, AWS access IDs, GitHub tokens, OpenAI/Anthropic-style `sk-` keys, Slack tokens, Google API keys, JWTs, Bearer credentials, URL user/password credentials and secret-like values assigned to common key names. Replacements use `[REDACTED:<kind>]`. Ordinary expressions such as `token = getToken()` are preserved. Pattern-based redaction cannot recognize every credential or private fact; review what you send, disable automatic retention for sensitive projects, or set `includeToolCalls:false` to reduce exposure through arguments.
-
+ 
 -Messages are packed into segments of at most `segmentChars` characters. Oversized individual messages are split deterministically. Appending messages preserves all earlier frozen segments. Each changed segment is retained asynchronously as `pi:<sessionId>:<segment>` with a SHA-256 content hash; unchanged acknowledged segments are skipped. Hindsight upserts the document and reuses unchanged chunks, avoiding repeated extraction of a stable prefix. Branch rewrites update affected segments and delete acknowledged higher segments that no longer exist.
 +Messages are packed into segments of at most `segmentChars` characters. Oversized individual messages are split deterministically. Appending messages preserves all earlier frozen segments. Each changed segment is retained asynchronously as `pi:<sessionId>:<segment>` with a SHA-256 content hash; unchanged acknowledged segments are skipped. Hindsight upserts the document and reuses unchanged chunks, avoiding repeated extraction of a stable prefix. Branch rewrites update affected segments and delete former segments that no longer exist. The session records submissions, acknowledged hashes, and deletions for the server and bank so reloads and resumed sessions can reconcile. If a prior asynchronous submission for an affected segment is still running, the writer waits within the retain timeout before it replaces or deletes that segment.
-
+ 
 -The writer allows one request in flight, coalesces pending snapshots to the latest, and retries transient network/timeouts, HTTP 429, and HTTP 5xx errors at most twice after 500 ms and 1,500 ms. Each segment submission uses one generated operation ID across its retries. Only successful responses acknowledge hashes. A successful HTTP submission means the server accepted asynchronous work; it does not mean extraction has completed. `/hindsight status` fetches the bank-wide `failed_operations` count on demand; diagnostic failures do not affect the recall circuit breaker. To recover, inspect `GET /v1/default/banks/<bank>/operations?status=failed&limit=100`, fix the provider/configuration cause, and run `/hindsight retry-failed <operation-id>` for the selected job. This uses the native retry endpoint, reports only that work was queued, and never automatically retries failures or replays documents. For retain jobs with both a batch parent and child, retry the batch parent rather than both; check its resulting status before retrying any remaining child. The count covers all producers in the bank, not just this session.
 +The writer allows one request in flight, coalesces pending snapshots to the latest, and retries transient network/timeouts, HTTP 429, and HTTP 5xx errors at most twice after 500 ms and 1,500 ms. Each segment submission uses one generated operation ID across its retries. Only successful responses acknowledge hashes. A successful HTTP submission acknowledges acceptance of asynchronous extraction. `/hindsight status` fetches the latest accepted checkpoint operation’s current status and the bank-wide `failed_operations` count. Diagnostic failures leave the recall circuit breaker untouched. To recover, inspect `GET /v1/default/banks/<bank>/operations?status=failed&limit=100`, fix the provider/configuration cause, and run `/hindsight retry-failed <operation-id>` for the selected job. This uses the native retry endpoint, reports only that work was queued, and never automatically retries failures or replays documents. For retain jobs with both a batch parent and child, retry the batch parent rather than both; check its resulting status before retrying any remaining child. The count covers all producers in the bank, not just this session.
-
+ 
  Graceful shutdown checkpoints and waits at most `shutdownFlushMs` (default 3 seconds). Work still pending at that bound may be lost on exit; crashes or SIGKILL can lose the current prompt. Forks exclude inherited branch entry IDs to avoid re-retaining the parent transcript. Resumed sessions use their existing session ID. Ephemeral `--no-session` sessions still have an ID and are retained by default; set `retain.ephemeral:false` globally to exclude them.
-
+ 
 -Recall times out after 2.5 seconds by default; retain requests after 5 seconds. Three consecutive failures open a circuit breaker for 60 seconds. A later checkpoint after cooldown can submit the current transcript again. A missing bank returns empty recall until the first retain creates it. Pi event handlers fail open, report status, and limit UI warnings to once per session per kind.
 +Recall times out after 2.5 seconds by default; retain requests after 5 seconds. Three consecutive failures open a circuit breaker for 60 seconds. A later checkpoint after cooldown can submit the current transcript again. A missing bank returns empty recall until the first retain creates it. Pi event handlers fail open and limit warnings to once per session per kind. Local diagnostic entries record recall outcomes and deadlines plus turn-start time and digest wait without query or response text. Timeouts have a distinct warning. Caller cancellations leave the breaker’s failure count untouched.
-
+ 
  ## Tools and commands
-
+ 
+@@ -176,9 +179,11 @@ The Pi wiring supplies these controls:
+ | `/hindsight status`         | Show server URL, bank, project, policy, recent results, digest and breaker state                       |
+ | `/hindsight pause`          | Persist a branch-local pause for automatic recall and retention                                        |
+ | `/hindsight resume`         | Persist a branch-local resume                                                                          |
++| `/hindsight next-opt-out`   | Toggle excluding the next settled turn from automatic retention (excluded entries stay excluded later) |
+ | `/hindsight recall <query>` | Display a manual preview without injecting it into model context                                       |
+ | `/hindsight digest`         | Display the project digest, or its status when it has no content                                       |
+ | `/hindsight checkpoint`     | Request a checkpoint                                                                                   |
++| `/hindsight flush`          | Flush the active checkpoint writer and drain any locally queued checkpoints for the current bank       |
+ | `/hindsight forget`         | Confirm deletion of this session's conversation documents                                              |
+ | `hindsight_recall` tool     | Model-directed retrieval with `query` and optional `max_tokens`                                        |
+ | `hindsight_retain` tool     | Retain a redacted durable fact with `content` and optional `context`; invalidates restated older facts |
 diff --git a/src/core/client.ts b/src/core/client.ts
-index dad0f64..7de66d5 100644
+index dad0f64..dbdbf59 100644
 --- a/src/core/client.ts
 +++ b/src/core/client.ts
 @@ -1,5 +1,10 @@
@@ -80,7 +106,21 @@ index dad0f64..7de66d5 100644
  export class HindsightError extends Error {
    readonly retryable: boolean;
    constructor(
-@@ -34,6 +39,9 @@ export interface MentalModel {
+@@ -24,7 +29,12 @@ export interface RecallHit {
+   mentionedAt?: string | null;
+   tags?: string[];
+   /** Server ranking scores; `reranker` is cross-encoder relevance in [0, 1]. */
+-  scores?: { final?: number; reranker?: number | null };
++  scores?: {
++    final?: number;
++    reranker?: number | null;
++    semantic?: number | null;
++    keyword?: number | null;
++  };
+   /** Raw facts an observation was consolidated from. */
+   sourceFactIds?: string[];
+ }
+@@ -34,6 +44,9 @@ export interface MentalModel {
    lastRefreshedAt?: string;
    /** In-scope memories were written since the last refresh. */
    isStale?: boolean;
@@ -90,7 +130,7 @@ index dad0f64..7de66d5 100644
  }
  export interface MentalModelSpec {
    id: string;
-@@ -79,6 +87,7 @@ export interface HindsightClientOptions {
+@@ -79,6 +92,7 @@ export interface HindsightClientOptions {
    apiToken?: string;
    bankId: string;
    fetch?: typeof fetch;
@@ -98,7 +138,7 @@ index dad0f64..7de66d5 100644
  }
  export class HindsightClient {
    readonly bankId: string;
-@@ -101,7 +110,10 @@ export class HindsightClient {
+@@ -101,7 +115,10 @@ export class HindsightClient {
      missingOk = false,
    ): Promise<unknown> {
      const timeout = AbortSignal.timeout(timeoutMs);
@@ -110,7 +150,7 @@ index dad0f64..7de66d5 100644
      try {
        const response = await this.fetcher(`${this.base}${path}`, {
          method,
-@@ -130,14 +142,12 @@ export class HindsightClient {
+@@ -130,14 +147,12 @@ export class HindsightClient {
        }
      } catch (error) {
        if (error instanceof HindsightError) throw error;
@@ -131,7 +171,18 @@ index dad0f64..7de66d5 100644
      }
    }
    async health(
-@@ -279,6 +289,13 @@ export class HindsightClient {
+@@ -211,6 +226,10 @@ export class HindsightClient {
+           mapped.scores.final = scores.final;
+         if (typeof scores.reranker === "number")
+           mapped.scores.reranker = scores.reranker;
++        if (typeof scores.semantic === "number")
++          mapped.scores.semantic = scores.semantic;
++        if (typeof scores.keyword === "number")
++          mapped.scores.keyword = scores.keyword;
+       }
+       if (
+         Array.isArray(hit.source_fact_ids) &&
+@@ -279,6 +298,13 @@ export class HindsightClient {
        ...(typeof model.is_stale === "boolean"
          ? { isStale: model.is_stale }
          : {}),
@@ -145,7 +196,7 @@ index dad0f64..7de66d5 100644
      };
    }
    /** Explicit migration of an existing project digest; never touches bank settings. */
-@@ -391,6 +408,23 @@ export class HindsightClient {
+@@ -391,6 +417,23 @@ export class HindsightClient {
        throw new HindsightError("Invalid Hindsight stats", "parse");
      return data.failed_operations as number;
    }
@@ -170,10 +221,38 @@ index dad0f64..7de66d5 100644
    async retryOperation(id: string, timeoutMs: number): Promise<void> {
      if (
 diff --git a/src/core/config.ts b/src/core/config.ts
-index dcf5f71..de975a0 100644
+index dcf5f71..2812817 100644
 --- a/src/core/config.ts
 +++ b/src/core/config.ts
-@@ -34,6 +34,7 @@ export interface RetainConfig {
+@@ -2,6 +2,12 @@ import { join } from "node:path";
+ import { isCron } from "./digest.js";
+ export type RecallPolicy = "smart" | "always" | "first" | "off";
+ export type RecallBudget = "low" | "mid" | "high";
++export interface RecallMinScores {
++  final?: number;
++  reranker?: number;
++  semantic?: number;
++  keyword?: number;
++}
+ export interface RecallConfig {
+   policy: RecallPolicy;
+   budget: RecallBudget;
+@@ -15,10 +21,14 @@ export interface RecallConfig {
+   preferObservations: boolean;
+   /** Word-similarity at or above which two recalled memories count as duplicates. */
+   dedupThreshold: number;
++  /** Optional per-stage score floors in [0, 1] applied to automatic recall hits. */
++  minScores: RecallMinScores;
+   types?: Array<"world" | "experience" | "observation">;
+ }
+ export interface RetainConfig {
+   auto: boolean;
++  /** Persist unsent checkpoints locally when shutdown times out or the server is unreachable. */
++  queue: boolean;
+   minUserTurns: number;
+   ephemeral: boolean;
+   includeToolCalls: boolean;
+@@ -34,6 +44,7 @@ export interface RetainConfig {
  export interface DigestConfig {
    enabled: boolean;
    maxTokens: number;
@@ -181,7 +260,19 @@ index dcf5f71..de975a0 100644
    timeoutMs: number;
    refreshCron: string;
    fullRefreshCron: string;
-@@ -84,6 +85,7 @@ export const DEFAULT_CONFIG: HindsightMemoryConfig = {
+@@ -67,9 +78,11 @@ export const DEFAULT_CONFIG: HindsightMemoryConfig = {
+     display: true,
+     preferObservations: true,
+     dedupThreshold: 0.8,
++    minScores: {},
+   },
+   retain: {
+     auto: true,
++    queue: true,
+     minUserTurns: 1,
+     ephemeral: true,
+     includeToolCalls: true,
+@@ -84,6 +97,7 @@ export const DEFAULT_CONFIG: HindsightMemoryConfig = {
    digest: {
      enabled: true,
      maxTokens: 800,
@@ -189,7 +280,45 @@ index dcf5f71..de975a0 100644
      timeoutMs: 2500,
      refreshCron: "0 3 * * *",
      fullRefreshCron: "0 3 * * 0",
-@@ -192,6 +194,7 @@ export function loadConfig(input: LoadConfigInput): LoadedConfig {
+@@ -137,7 +151,9 @@ export function loadConfig(input: LoadConfigInput): LoadedConfig {
+       const optionalKey =
+         (target === (config as unknown) &&
+           ["apiToken", "project"].includes(key)) ||
+-        (target === (config.recall as unknown) && key === "types");
++        (target === (config.recall as unknown) && key === "types") ||
++        (target === (config.recall.minScores as unknown) &&
++          ["final", "reranker", "semantic", "keyword"].includes(key));
+       if (!Object.hasOwn(target, key) && !optionalKey) {
+         warnings.push(`Ignored unknown configuration field: ${key}`);
+         continue;
+@@ -150,6 +166,7 @@ export function loadConfig(input: LoadConfigInput): LoadedConfig {
+         continue;
+       }
+       const optional = ["apiToken", "project"].includes(key);
++      const isMinScore = target === (config.recall.minScores as unknown);
+       const validArray =
+         key === "extraTags" &&
+         Array.isArray(item) &&
+@@ -160,12 +177,16 @@ export function loadConfig(input: LoadConfigInput): LoadedConfig {
+         item.every((x) => ["world", "experience", "observation"].includes(x));
+       let valid = optional
+         ? typeof item === "string"
+-        : typeof item === typeof old && old !== undefined;
++        : isMinScore
++          ? typeof item === "number"
++          : typeof item === typeof old && old !== undefined;
+       if (typeof item === "number")
+         valid =
+           valid &&
+           Number.isFinite(item) &&
+-          (key === "topicShiftThreshold" || key === "supersedeMinRelevance"
++          (isMinScore ||
++          key === "topicShiftThreshold" ||
++          key === "supersedeMinRelevance"
+             ? item >= 0 && item <= 1
+             : key === "dedupThreshold" || key === "supersedeThreshold"
+               ? item > 0 && item <= 1
+@@ -192,6 +213,7 @@ export function loadConfig(input: LoadConfigInput): LoadedConfig {
        }
        if (target === (config.digest as unknown) && key === "maxTokens")
          valid = valid && (item as number) >= 256 && (item as number) <= 8192;
@@ -197,6 +326,53 @@ index dcf5f71..de975a0 100644
        if (key === "refreshCron" || key === "fullRefreshCron")
          valid = typeof item === "string" && isCron(item);
        if (key === "bankId")
+@@ -220,6 +242,7 @@ export function loadConfig(input: LoadConfigInput): LoadedConfig {
+   const project = read(join(input.cwd, ".pi", "hindsight-memory.json"));
+   if (project.enabled === false) config.enabled = false;
+   if (object(project.retain).auto === false) config.retain.auto = false;
++  if (object(project.retain).queue === false) config.retain.queue = false;
+   if (object(project.retain).supersede === false)
+     config.retain.supersede = false;
+   if (object(project.digest).enabled === false) config.digest.enabled = false;
+diff --git a/src/core/dedup.ts b/src/core/dedup.ts
+index 0b6f887..f7cc96e 100644
+--- a/src/core/dedup.ts
++++ b/src/core/dedup.ts
+@@ -1,6 +1,34 @@
+ import type { RecallHit } from "./client.js";
++import type { RecallMinScores } from "./config.js";
+ import { contentWords, jaccard } from "./policy.js";
+ 
++const SCORE_FIELDS = ["final", "reranker", "semantic", "keyword"] as const;
++
++/**
++ * Drops recall hits whose reported per-stage score falls below any configured
++ * floor. Hits without a `scores` object, or missing a configured field, are
++ * preserved so older servers or BM25-only responses are not accidentally emptied.
++ */
++export function filterByMinScores(
++  hits: readonly RecallHit[],
++  minScores?: RecallMinScores,
++): RecallHit[] {
++  if (!minScores) return [...hits];
++  const floors = SCORE_FIELDS.flatMap((field) => {
++    const floor = minScores[field];
++    return typeof floor === "number" ? [[field, floor] as const] : [];
++  });
++  if (!floors.length) return [...hits];
++  return hits.filter((hit) => {
++    if (!hit.scores) return true;
++    for (const [field, floor] of floors) {
++      const value = hit.scores[field];
++      if (typeof value === "number" && value < floor) return false;
++    }
++    return true;
++  });
++}
++
+ /** Smallest word set for which containment alone marks a duplicate. */
+ const MIN_CONTAINED_WORDS = 6;
+ const CONTAINMENT = 0.9;
 diff --git a/src/core/digest.ts b/src/core/digest.ts
 index 1eafc1f..302c6fa 100644
 --- a/src/core/digest.ts
@@ -206,12 +382,12 @@ index 1eafc1f..302c6fa 100644
 -import type { MentalModelSpec } from "./client.js";
 +import type { MentalModel, MentalModelSpec } from "./client.js";
  import type { DigestConfig } from "./config.js";
-
+ 
  function digestSourceQuery(maxTokens: number): string {
 @@ -36,6 +36,38 @@ export function digestSpec(
    };
  }
-
+ 
 +export function digestSettingsStatus(
 +  model: MentalModel,
 +  spec: MentalModelSpec,
@@ -424,6 +600,280 @@ index 2752856..76bb9c9 100644
 +  }
    return skip("same-topic");
  }
+diff --git a/src/core/queue.ts b/src/core/queue.ts
+new file mode 100644
+index 0000000..320d912
+--- /dev/null
++++ b/src/core/queue.ts
+@@ -0,0 +1,268 @@
++import { createHash, randomUUID } from "node:crypto";
++import {
++  mkdirSync,
++  readdirSync,
++  readFileSync,
++  renameSync,
++  unlinkSync,
++  writeFileSync,
++} from "node:fs";
++import { join } from "node:path";
++import type { CircuitBreaker } from "./breaker.js";
++import type { HindsightClient, HindsightError } from "./client.js";
++import {
++  type CheckpointRequest,
++  type CheckpointSegmentReceipt,
++  CheckpointWriter,
++  type UnflushedCheckpoint,
++} from "./writer.js";
++
++const DEFAULT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
++const DEFAULT_MAX_FILES = 100;
++
++export interface QueuedCheckpoint extends UnflushedCheckpoint {
++  version: 1;
++  queuedAt: string;
++  destination: string;
++  sessionId: string;
++  attempts: number;
++  lastError?: string;
++}
++
++export interface RetainQueueOptions {
++  dir: string;
++  now?: () => number;
++  maxAgeMs?: number;
++  maxFiles?: number;
++}
++
++function fileNameFor(destination: string, sessionId: string): string {
++  const destPart = destination.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "d";
++  const sessPart = createHash("sha256")
++    .update(sessionId)
++    .digest("hex")
++    .slice(0, 16);
++  return `${destPart}-${sessPart}.json`;
++}
++
++function isValidQueued(value: unknown): value is QueuedCheckpoint {
++  if (!value || typeof value !== "object") return false;
++  const v = value as Record<string, unknown>;
++  if (v.version !== 1) return false;
++  if (
++    typeof v.queuedAt !== "string" ||
++    typeof v.destination !== "string" ||
++    typeof v.sessionId !== "string" ||
++    typeof v.attempts !== "number"
++  )
++    return false;
++  if (!v.request || typeof v.request !== "object") return false;
++  const req = v.request as Record<string, unknown>;
++  if (typeof req.sessionId !== "string" || !Array.isArray(req.segments))
++    return false;
++  if (!Array.isArray(v.ackedHashes) || !Array.isArray(v.knownIndices))
++    return false;
++  return true;
++}
++
++export class RetainQueue {
++  private readonly now: () => number;
++  private readonly maxAgeMs: number;
++  private readonly maxFiles: number;
++
++  constructor(private readonly opts: RetainQueueOptions) {
++    this.now = opts.now ?? Date.now;
++    this.maxAgeMs = opts.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
++    this.maxFiles = opts.maxFiles ?? DEFAULT_MAX_FILES;
++  }
++
++  private pathFor(destination: string, sessionId: string): string {
++    return join(this.opts.dir, fileNameFor(destination, sessionId));
++  }
++
++  private readEntry(path: string): QueuedCheckpoint | undefined {
++    try {
++      const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
++      if (!isValidQueued(parsed)) {
++        this.unlinkQuiet(path);
++        return undefined;
++      }
++      const queuedMs = Date.parse(parsed.queuedAt);
++      if (!Number.isFinite(queuedMs) || this.now() - queuedMs > this.maxAgeMs) {
++        this.unlinkQuiet(path);
++        return undefined;
++      }
++      return parsed;
++    } catch {
++      return undefined;
++    }
++  }
++
++  private unlinkQuiet(path: string): void {
++    try {
++      unlinkSync(path);
++    } catch {}
++  }
++
++  private pruneExcess(): void {
++    try {
++      const files = readdirSync(this.opts.dir).filter((name) =>
++        name.endsWith(".json"),
++      );
++      if (files.length <= this.maxFiles) return;
++      const entries: Array<{ path: string; queuedMs: number }> = [];
++      for (const name of files) {
++        const path = join(this.opts.dir, name);
++        const entry = this.readEntry(path);
++        if (entry)
++          entries.push({ path, queuedMs: Date.parse(entry.queuedAt) || 0 });
++      }
++      entries.sort((a, b) => a.queuedMs - b.queuedMs);
++      const excess = entries.length - this.maxFiles;
++      for (let i = 0; i < excess; i++) {
++        const target = entries[i];
++        if (target) this.unlinkQuiet(target.path);
++      }
++    } catch {}
++  }
++
++  save(input: {
++    destination: string;
++    sessionId: string;
++    snapshot: UnflushedCheckpoint;
++    attempts?: number;
++    lastError?: string;
++  }): void {
++    try {
++      mkdirSync(this.opts.dir, { recursive: true, mode: 0o700 });
++      const target = this.pathFor(input.destination, input.sessionId);
++      const existing = this.readEntry(target);
++      const record: QueuedCheckpoint = {
++        version: 1,
++        queuedAt: new Date(this.now()).toISOString(),
++        destination: input.destination,
++        sessionId: input.sessionId,
++        request: structuredClone(input.snapshot.request),
++        ackedHashes: input.snapshot.ackedHashes.map(([idx, hash]) => [
++          idx,
++          hash,
++        ]),
++        knownIndices: [...input.snapshot.knownIndices],
++        attempts: input.attempts ?? existing?.attempts ?? 0,
++        ...(input.lastError ? { lastError: input.lastError } : {}),
++      };
++      const tmp = `${target}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`;
++      try {
++        writeFileSync(tmp, JSON.stringify(record), {
++          encoding: "utf8",
++          mode: 0o600,
++        });
++        renameSync(tmp, target);
++      } catch {
++        this.unlinkQuiet(tmp);
++      }
++      this.pruneExcess();
++    } catch {}
++  }
++
++  remove(destination: string, sessionId: string): void {
++    this.unlinkQuiet(this.pathFor(destination, sessionId));
++  }
++
++  list(destination: string): QueuedCheckpoint[] {
++    try {
++      const files = readdirSync(this.opts.dir).filter((name) =>
++        name.endsWith(".json"),
++      );
++      const matching: QueuedCheckpoint[] = [];
++      for (const name of files) {
++        const entry = this.readEntry(join(this.opts.dir, name));
++        if (entry && entry.destination === destination) matching.push(entry);
++      }
++      matching.sort(
++        (a, b) => (Date.parse(a.queuedAt) || 0) - (Date.parse(b.queuedAt) || 0),
++      );
++      return matching;
++    } catch {
++      return [];
++    }
++  }
++
++  count(destination: string): number {
++    return this.list(destination).length;
++  }
++}
++
++export interface DrainQueueOptions {
++  queue: RetainQueue;
++  destination: string;
++  client: Pick<HindsightClient, "retain" | "deleteDocument">;
++  breaker: CircuitBreaker;
++  timeoutMs: number;
++  signal?: AbortSignal;
++  sleep?: (ms: number) => Promise<void>;
++  waitForOperation?: (operationId: string) => Promise<void>;
++  /** When set, entries for this session are handed to the callback instead of a standalone writer. */
++  currentSessionId?: string;
++  onCurrentSession?: (request: CheckpointRequest) => void;
++}
++
++export interface DrainQueueResult {
++  flushed: number;
++  remaining: number;
++}
++
++export async function drainQueuedCheckpoints(
++  opts: DrainQueueOptions,
++): Promise<DrainQueueResult> {
++  const entries = opts.queue.list(opts.destination);
++  let flushed = 0;
++  for (const entry of entries) {
++    if (opts.signal?.aborted || opts.breaker.isOpen()) break;
++    if (
++      opts.currentSessionId &&
++      entry.sessionId === opts.currentSessionId &&
++      opts.onCurrentSession
++    ) {
++      opts.onCurrentSession(entry.request);
++      continue;
++    }
++    const receipts = new Map<number, CheckpointSegmentReceipt>();
++    for (const index of entry.knownIndices)
++      receipts.set(index, { index, hash: null });
++    for (const [index, hash] of entry.ackedHashes)
++      receipts.set(index, { index, hash });
++
++    let outcome: { ok: boolean; error?: HindsightError } | undefined;
++    const writer = new CheckpointWriter({
++      client: opts.client,
++      timeoutMs: opts.timeoutMs,
++      breaker: opts.breaker,
++      sleep: opts.sleep,
++      waitForOperation: opts.waitForOperation,
++      onResult: (r) => {
++        outcome = { ok: r.ok, error: r.error };
++      },
++    });
++    writer.restoreSegments(entry.sessionId, receipts);
++    writer.submit(entry.request);
++    await writer.flush();
++
++    if (outcome?.ok) {
++      opts.queue.remove(opts.destination, entry.sessionId);
++      flushed++;
++    } else if (outcome?.error?.kind !== "cancelled") {
++      const snapshot = writer.unflushed();
++      if (snapshot)
++        opts.queue.save({
++          destination: opts.destination,
++          sessionId: entry.sessionId,
++          snapshot,
++          attempts: entry.attempts + 1,
++          lastError: outcome?.error?.message,
++        });
++      else opts.queue.remove(opts.destination, entry.sessionId);
++    }
++  }
++  return { flushed, remaining: opts.queue.count(opts.destination) };
++}
 diff --git a/src/core/state.ts b/src/core/state.ts
 index ef492bd..908992f 100644
 --- a/src/core/state.ts
@@ -561,10 +1011,10 @@ index ef492bd..908992f 100644
 +  return { ids, digestVisible };
 +}
 diff --git a/src/core/writer.ts b/src/core/writer.ts
-index 3524fde..cab876c 100644
+index 3524fde..91baa83 100644
 --- a/src/core/writer.ts
 +++ b/src/core/writer.ts
-@@ -10,11 +10,19 @@ export interface CheckpointRequest {
+@@ -10,31 +10,83 @@ export interface CheckpointRequest {
    metadata: Record<string, string>;
    observationScopes: string[][];
  }
@@ -584,9 +1034,14 @@ index 3524fde..cab876c 100644
    uuid?: () => string;
    sleep?: (ms: number) => Promise<void>;
  }
-@@ -22,15 +30,38 @@ export function documentIdFor(sessionId: string, segment: number): string {
+ export function documentIdFor(sessionId: string, segment: number): string {
    return `pi:${sessionId}:${segment}`;
  }
++export interface UnflushedCheckpoint {
++  request: CheckpointRequest;
++  ackedHashes: Array<[number, string]>;
++  knownIndices: number[];
++}
  export class CheckpointWriter {
 -  private readonly hashes = new Map<string, Map<number, string>>();
 +  private readonly receipts = new Map<
@@ -594,11 +1049,25 @@ index 3524fde..cab876c 100644
 +    Map<number, CheckpointSegmentReceipt>
 +  >();
    private pending: CheckpointRequest | undefined;
++  private lastRequest: CheckpointRequest | undefined;
    private running: Promise<void> | undefined;
    constructor(private readonly opts: CheckpointWriterOptions) {}
    get busy(): boolean {
      return this.running !== undefined;
    }
++  clearPending(): void {
++    this.pending = undefined;
++    this.lastRequest = undefined;
++  }
++  unflushed(): UnflushedCheckpoint | undefined {
++    const req = this.pending ?? this.lastRequest;
++    if (!req || this.matches(req.sessionId, req.segments)) return undefined;
++    return {
++      request: structuredClone(req),
++      ackedHashes: [...this.ackedHashes(req.sessionId)],
++      knownIndices: [...(this.receipts.get(req.sessionId)?.keys() ?? [])],
++    };
++  }
 +  restoreSegments(
 +    sessionId: string,
 +    segments: ReadonlyMap<number, CheckpointSegmentReceipt>,
@@ -625,7 +1094,14 @@ index 3524fde..cab876c 100644
    }
    submit(req: CheckpointRequest): void {
      try {
-@@ -55,11 +86,10 @@ export class CheckpointWriter {
+-      this.pending = structuredClone(req);
++      const cloned = structuredClone(req);
++      this.pending = cloned;
++      this.lastRequest = cloned;
+       if (!this.running) this.start();
+     } catch {}
+   }
+@@ -55,11 +107,10 @@ export class CheckpointWriter {
        this.opts.onResult?.(result);
      } catch {}
    }
@@ -639,7 +1115,7 @@ index 3524fde..cab876c 100644
        } catch (error) {
          const failure =
            error instanceof HindsightError
-@@ -82,13 +112,22 @@ export class CheckpointWriter {
+@@ -82,13 +133,22 @@ export class CheckpointWriter {
        this.pending = undefined;
        if (this.opts.breaker.isOpen()) continue;
        let sent = 0;
@@ -666,7 +1142,7 @@ index 3524fde..cab876c 100644
              this.opts.client.retain({
                operationId,
                timeoutMs: this.opts.timeoutMs,
-@@ -105,32 +144,39 @@ export class CheckpointWriter {
+@@ -105,36 +165,49 @@ export class CheckpointWriter {
                ],
              }),
            );
@@ -698,6 +1174,8 @@ index 3524fde..cab876c 100644
 -        this.opts.breaker.recordSuccess();
 +        if (sent > 0 || initialSize !== ack.size)
 +          this.opts.breaker.recordSuccess();
++        if (!this.pending && this.lastRequest === req)
++          this.lastRequest = undefined;
          this.notify({ ok: true, sent });
        } catch (error) {
 -        this.opts.breaker.recordFailure();
@@ -718,11 +1196,37 @@ index 3524fde..cab876c 100644
        }
      }
    }
+-  async flush(timeoutMs: number): Promise<void> {
++  async flush(timeoutMs?: number): Promise<void> {
++    if (timeoutMs === undefined) {
++      while (this.running) await this.running;
++      return;
++    }
+     let timer: ReturnType<typeof setTimeout> | undefined;
+     try {
+       await Promise.race([
+@@ -142,7 +215,10 @@ export class CheckpointWriter {
+           while (this.running) await this.running;
+         })(),
+         new Promise<void>((resolve) => {
+-          timer = setTimeout(resolve, Math.max(0, timeoutMs));
++          timer = setTimeout(
++            resolve,
++            Math.min(2_147_483_647, Math.max(0, timeoutMs)),
++          );
+         }),
+       ]);
+     } catch {
 diff --git a/src/index.ts b/src/index.ts
-index a70076f..cc496fc 100644
+index a70076f..d0d5718 100644
 --- a/src/index.ts
 +++ b/src/index.ts
-@@ -5,19 +5,20 @@ import {
+@@ -1,23 +1,29 @@
+ import { createHash, randomUUID } from "node:crypto";
+ import { readFileSync } from "node:fs";
++import { join } from "node:path";
+ import { setTimeout as delay } from "node:timers/promises";
+ import {
    type ExtensionAPI,
    type ExtensionContext,
    getAgentDir,
@@ -737,15 +1241,20 @@ index a70076f..cc496fc 100644
    type MentalModel,
  } from "./core/client.js";
  import { loadConfig } from "./core/config.js";
- import { collapseDuplicates, restatedFacts } from "./core/dedup.js";
+-import { collapseDuplicates, restatedFacts } from "./core/dedup.js";
 -import { digestSpec } from "./core/digest.js";
-+import { digestSettingsStatus, digestSpec } from "./core/digest.js";
  import {
++  collapseDuplicates,
++  filterByMinScores,
++  restatedFacts,
++} from "./core/dedup.js";
++import { digestSettingsStatus, digestSpec } from "./core/digest.js";
++import {
 +  DIAGNOSTICS_ENTRY_TYPE,
    formatDigestBlock,
    formatHitsForTool,
    formatRecallBlock,
-@@ -25,12 +26,23 @@ import {
+@@ -25,12 +31,24 @@ import {
    type RecallDetails,
    STATE_ENTRY_TYPE,
  } from "./core/format.js";
@@ -759,6 +1268,7 @@ index a70076f..cc496fc 100644
 +  type SkipReason,
 +} from "./core/policy.js";
  import { deriveProjectName } from "./core/project.js";
++import { drainQueuedCheckpoints, RetainQueue } from "./core/queue.js";
  import { redactSecrets } from "./core/redact.js";
 -import { reconstructState } from "./core/state.js";
 +import { reconstructState, visibleRecallContext } from "./core/state.js";
@@ -769,13 +1279,13 @@ index a70076f..cc496fc 100644
 +  CheckpointWriter,
 +  documentIdFor,
 +} from "./core/writer.js";
-
+ 
  function readConfig(cwd: string) {
    return loadConfig({
-@@ -47,25 +59,57 @@ function readConfig(cwd: string) {
+@@ -47,25 +65,58 @@ function readConfig(cwd: string) {
    });
  }
-
+ 
 -// Supplemental state is stored outside model context, including successful empty recalls.
 -function replay(branch: readonly SessionEntry[]) {
 -  return reconstructState(
@@ -844,12 +1354,13 @@ index a70076f..cc496fc 100644
 +  destination?: string;
 +  settings?: string;
 +  forkBaseline?: string[];
++  excludedEntryIds?: string[];
 +  segments?: number[];
 +  checkpoint?: CheckpointSegmentReceipt;
  }
-
+ 
  export default function hindsightMemory(pi: ExtensionAPI): void {
-@@ -77,38 +121,49 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+@@ -77,43 +128,62 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
      const canRetain =
        process.env.PI_SUBAGENT_CHILD !== "1" || config.subagents === "full";
      const controller = new AbortController();
@@ -876,7 +1387,15 @@ index a70076f..cc496fc 100644
 +    let state = reconstructState(ctx.sessionManager.getBranch());
      let forkBaseline = new Set<string>();
 -    const documents = new Set<number>();
++    const excludedEntryIds = new Set<string>();
++    let nextOptOutBaseline: Set<string> | undefined;
 +    const documents = new Map<number, CheckpointSegmentReceipt>();
++    const queue = new RetainQueue({
++      dir: join(
++        process.env.PI_CODING_AGENT_DIR || getAgentDir(),
++        "hindsight-retain-queue",
++      ),
++    });
 +    const destination = createHash("sha256")
 +      .update(
 +        JSON.stringify([config.apiUrl.replace(/\/+$/, ""), config.bankId]),
@@ -920,14 +1439,35 @@ index a70076f..cc496fc 100644
      const status = () => {
        if (ctx.hasUI && !closed)
          ctx.ui.setStatus(
-@@ -129,44 +184,69 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
-         try {
-           await delay(ms, undefined, { signal: controller.signal });
-         } catch {
+           "hindsight",
+-          `Hindsight: ${!config.enabled ? "disabled" : state.paused ? "paused" : breaker.isOpen() ? "unavailable" : "ready"}`,
++          `Hindsight: ${!config.enabled ? "disabled" : state.paused ? "paused" : breaker.isOpen() ? "unavailable" : nextOptOutBaseline ? "ready (skip next)" : "ready"}`,
+         );
+     };
+     const warn = (kind: string, message: string) => {
+@@ -121,106 +191,160 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+       notices.add(kind);
+       if (ctx.hasUI) ctx.ui.notify(message, "warning");
+     };
++    const writerSleep = async (ms: number) => {
++      try {
++        await delay(ms, undefined, { signal: controller.signal });
++      } catch {
++        throw new HindsightError("Hindsight stopped", "cancelled");
++      }
++    };
+     const writer = new CheckpointWriter({
+       client,
+       timeoutMs: config.retain.timeoutMs,
+       breaker,
+-      sleep: async (ms) => {
+-        try {
+-          await delay(ms, undefined, { signal: controller.signal });
+-        } catch {
 -          throw new HindsightError("Hindsight stopped", "parse");
-+          throw new HindsightError("Hindsight stopped", "cancelled");
-         }
-       },
+-        }
+-      },
++      sleep: writerSleep,
 +      onReceipt: settleReceipt,
 +      waitForOperation: (id) =>
 +        waitForCheckpoint(
@@ -941,12 +1481,26 @@ index a70076f..cc496fc 100644
 -        else if (result.sent > 0)
 -          lastRetain = `saved ${result.sent} segment(s)`;
 -        if (!result.ok) warn("retain", "Hindsight checkpoint unavailable.");
-+        if (!result.ok && result.error?.kind === "cancelled") return;
-+        if (!result.ok) {
-+          lastRetain = "unavailable";
-+          warn("retain", "Hindsight checkpoint unavailable.");
-+        } else if (result.sent > 0)
-+          lastRetain = `accepted ${result.sent} segment(s)`;
++        if (result.ok) {
++          if (config.retain.queue) queue.remove(destination, sessionId);
++          if (result.sent > 0)
++            lastRetain = `accepted ${result.sent} segment(s)`;
++          status();
++          return;
++        }
++        if (result.error?.kind === "cancelled") return;
++        if (config.retain.queue && !forgetting) {
++          const snapshot = writer.unflushed();
++          if (snapshot)
++            queue.save({
++              destination,
++              sessionId,
++              snapshot,
++              lastError: result.error?.message,
++            });
++        }
++        lastRetain = "unavailable";
++        warn("retain", "Hindsight checkpoint unavailable.");
          status();
        },
      });
@@ -991,6 +1545,8 @@ index a70076f..cc496fc 100644
 +      const data = entry.data as StoredCheckpoint | undefined;
 +      if (data?.sessionId !== sessionId) continue;
 +      if (data.forkBaseline) forkBaseline = new Set(data.forkBaseline);
++      if (data.excludedEntryIds)
++        for (const id of data.excludedEntryIds) excludedEntryIds.add(id);
 +      for (const index of data.segments ?? [])
 +        if (!documents.has(index)) documents.set(index, { index, hash: null });
 +      if (data.destination !== destination || !data.checkpoint) continue;
@@ -1017,17 +1573,66 @@ index a70076f..cc496fc 100644
      const tags = () => [
        "harness:pi",
        `project:${project}`,
-@@ -187,39 +267,24 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+       `session:${sessionId}`,
+       ...config.retain.extraTags,
+     ];
++    const drainQueue = () =>
++      drainQueuedCheckpoints({
++        queue,
++        destination,
++        client,
++        breaker,
++        timeoutMs: config.retain.timeoutMs,
++        signal: controller.signal,
++        sleep: writerSleep,
++        currentSessionId: sessionId,
++        onCurrentSession: (req) => writer.submit(req),
++      });
++    if (
++      config.enabled &&
++      canRetain &&
++      !state.paused &&
++      config.retain.queue &&
++      queue.count(destination) > 0
++    ) {
++      void drainQueue().catch(() => undefined);
++    }
+     const checkpoint = (manual = false) => {
+-      if (
+-        closed ||
+-        forgetting ||
+-        !config.enabled ||
+-        !canRetain ||
+-        state.paused ||
+-        breaker.isOpen()
+-      )
++      if (closed || forgetting || !config.enabled || !canRetain || state.paused)
+         return;
+       if (!manual && !config.retain.auto) return;
        if (!config.retain.ephemeral && !ctx.sessionManager.getSessionFile())
          return;
        const branch = ctx.sessionManager.getBranch();
 -      if (
 -        !manual &&
++      if (!manual && nextOptOutBaseline) {
++        const added = branch
++          .map((entry) => entry.id)
++          .filter((id) => !nextOptOutBaseline?.has(id));
++        if (added.length) {
++          for (const id of added) excludedEntryIds.add(id);
++          persist({ sessionId, excludedEntryIds: [...excludedEntryIds] });
++          nextOptOutBaseline = undefined;
++          status();
++          return;
++        }
++      }
++      const excluded = new Set([...forkBaseline, ...excludedEntryIds]);
 +      const eligible =
 +        manual ||
          branch.filter(
            (entry) =>
-             !forkBaseline.has(entry.id) &&
+-            !forkBaseline.has(entry.id) &&
++            !excluded.has(entry.id) &&
              entry.type === "message" &&
              entry.message.role === "user",
 -        ).length < config.retain.minUserTurns
@@ -1044,7 +1649,7 @@ index a70076f..cc496fc 100644
 -        rendered.messages,
 +        renderMessages(branch, {
 +          includeToolCalls: config.retain.includeToolCalls,
-+          excludeEntryIds: forkBaseline,
++          excludeEntryIds: excluded,
 +        }).messages,
          config.retain.segmentChars,
        );
@@ -1063,11 +1668,37 @@ index a70076f..cc496fc 100644
 -        for (const s of added) documents.add(s.index);
 -        persist({ sessionId, segments: added.map((s) => s.index) });
 -      }
+-      writer.submit({
 +      if (!writer.busy && writer.matches(sessionId, segments)) return;
-       writer.submit({
++      const req = {
          sessionId,
          segments,
-@@ -242,10 +307,23 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+         tags: tags(),
+@@ -232,7 +356,22 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+           cwd: ctx.cwd,
+         },
+         observationScopes: [[`project:${project}`]],
+-      });
++      };
++      if (breaker.isOpen()) {
++        if (config.retain.queue)
++          queue.save({
++            destination,
++            sessionId,
++            snapshot: {
++              request: req,
++              ackedHashes: [...writer.ackedHashes(sessionId)],
++              knownIndices: [...documents.keys()],
++            },
++            lastError: "Hindsight circuit breaker open",
++          });
++        return;
++      }
++      writer.submit(req);
+     };
+     const recall = async (
+       query: string,
+@@ -242,10 +381,23 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
      ) => {
        if (closed || forgetting || !config.enabled || breaker.isOpen())
          throw new HindsightError("Hindsight disabled or unavailable", "parse");
@@ -1093,7 +1724,7 @@ index a70076f..cc496fc 100644
            budget: config.recall.budget,
            maxTokens,
            tags: [`project:${project}`],
-@@ -253,67 +331,96 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+@@ -253,67 +405,99 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
            types: config.recall.types,
            preferObservations: config.recall.preferObservations,
            timeoutMs: config.recall.timeoutMs,
@@ -1103,12 +1734,16 @@ index a70076f..cc496fc 100644
 +            : readController.signal,
          });
          breaker.recordSuccess();
++        const auto = reason !== "manual" && reason !== "tool";
++        const scored = auto
++          ? filterByMinScores(hits, config.recall.minScores)
++          : hits;
          const unique = collapseDuplicates(
-           [...new Map(hits.map((hit) => [hit.id, hit])).values()],
+-          [...new Map(hits.map((hit) => [hit.id, hit])).values()],
++          [...new Map(scored.map((hit) => [hit.id, hit])).values()],
            config.recall.dedupThreshold,
          );
 -        const fresh = unique.filter((hit) => !state.injectedIds.has(hit.id));
-+        const auto = reason !== "manual" && reason !== "tool";
 +        const visible = auto
 +          ? visibleRecallContext(
 +              ctx.sessionManager.buildSessionProjection().messages,
@@ -1215,7 +1850,7 @@ index a70076f..cc496fc 100644
            digestStatus = "refresh requested; the server is generating it";
          } else
            digestStatus = digest.content.trim()
-@@ -324,19 +431,30 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+@@ -324,19 +508,30 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
          digestStatus = "unavailable";
        }
      })();
@@ -1253,7 +1888,7 @@ index a70076f..cc496fc 100644
      };
      for (const warning of warnings) warn("config", warning);
      return {
-@@ -344,8 +462,16 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+@@ -344,8 +539,16 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
        canRetain,
        project,
        loadedDigest,
@@ -1272,12 +1907,30 @@ index a70076f..cc496fc 100644
        },
        breaker,
        writer,
-@@ -367,21 +493,37 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+@@ -367,21 +570,65 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
          persist({ paused });
          status();
        },
 -      describe: () =>
 -        `${new URL(config.apiUrl).origin} | bank: ${config.bankId} | project: ${project} | policy: ${config.recall.policy} | ${state.paused ? "paused" : "active"} | recall: ${lastRecall} | retain: ${lastRetain} | digest: ${digestStatus} | breaker: ${breaker.isOpen() ? "open" : "closed"}`,
++      toggleNextOptOut() {
++        if (nextOptOutBaseline) nextOptOutBaseline = undefined;
++        else
++          nextOptOutBaseline = new Set(
++            ctx.sessionManager.getBranch().map((entry) => entry.id),
++          );
++        status();
++        return nextOptOutBaseline !== undefined;
++      },
++      async flushQueue() {
++        await writer.flush(config.retain.timeoutMs);
++        if (!config.enabled || !canRetain || !config.retain.queue)
++          return { flushed: 0, remaining: queue.count(destination) };
++        const res = await drainQueue();
++        await writer.flush(config.retain.timeoutMs);
++        status();
++        return { flushed: res.flushed, remaining: queue.count(destination) };
++      },
 +      describe: () => {
 +        const turn = lastTurn
 +          ? ` | turn start: ${lastTurn.decision}, ${lastTurn.ms} ms${lastTurn.digestWaitMs === undefined ? "" : ` (digest wait ${lastTurn.digestWaitMs} ms)`}`
@@ -1285,12 +1938,22 @@ index a70076f..cc496fc 100644
 +        const settingsStatus = digest
 +          ? `, ${digestSettingsStatus(digest, spec)}`
 +          : "";
-+        return `${new URL(config.apiUrl).origin} | bank: ${config.bankId} | project: ${project} | policy: ${config.recall.policy} | ${state.paused ? "paused" : "active"} | recall: ${recallStatus(lastRecall)}${turn} | retain: ${lastRetain} | digest: ${digestStatus}${settingsStatus} | breaker: ${breaker.isOpen() ? "open" : "closed"}`;
++        const queued = config.retain.queue ? queue.count(destination) : 0;
++        const queuePart = queued > 0 ? ` | queue: ${queued}` : "";
++        const mode = state.paused
++          ? "paused"
++          : nextOptOutBaseline
++            ? "active (next-opt-out)"
++            : "active";
++        return `${new URL(config.apiUrl).origin} | bank: ${config.bankId} | project: ${project} | policy: ${config.recall.policy} | ${mode} | recall: ${recallStatus(lastRecall)}${turn} | retain: ${lastRetain}${queuePart} | digest: ${digestStatus}${settingsStatus} | breaker: ${breaker.isOpen() ? "open" : "closed"}`;
 +      },
        async forget() {
          forgetting = true;
          state.paused = true;
++        nextOptOutBaseline = undefined;
          persist({ paused: true });
++        writer.clearPending();
++        queue.remove(destination, sessionId);
 +        readController.abort();
          controller.abort();
          await writer.flush(config.retain.timeoutMs);
@@ -1313,7 +1976,7 @@ index a70076f..cc496fc 100644
          status();
        },
        async shutdown() {
-@@ -390,6 +532,7 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+@@ -390,11 +637,27 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
            checkpoint();
          } finally {
            closed = true;
@@ -1321,7 +1984,27 @@ index a70076f..cc496fc 100644
            try {
              await writer.flush(config.retain.shutdownFlushMs);
            } finally {
-@@ -434,16 +577,41 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+             controller.abort();
+             await writer.flush(0);
++            if (
++              config.retain.queue &&
++              canRetain &&
++              !forgetting &&
++              !state.paused
++            ) {
++              const pending = writer.unflushed();
++              if (pending)
++                queue.save({
++                  destination,
++                  sessionId,
++                  snapshot: pending,
++                  lastError: "Shutdown flush timed out",
++                });
++            }
+             if (ctx.hasUI) ctx.ui.setStatus("hindsight", undefined);
+           }
+         }
+@@ -434,16 +697,41 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
          ctx.ui.notify("Hindsight initialization unavailable.", "warning");
      }
    });
@@ -1366,7 +2049,7 @@ index a70076f..cc496fc 100644
        priorAutoRecalls: r.state.autoRecalls,
        maxAutoRecalls: r.config.recall.maxAutoRecallsPerSession,
        lastRecallQuery: r.state.lastRecallQuery,
-@@ -453,15 +621,41 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+@@ -453,15 +741,41 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
        r.config.enabled &&
        r.config.digest.enabled &&
        !r.state.paused &&
@@ -1412,7 +2095,7 @@ index a70076f..cc496fc 100644
      if (!fresh.length && !digest) return;
      const digestDetails = digest && {
        id: digest.id,
-@@ -487,24 +681,16 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+@@ -487,24 +801,16 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
              ms: 0,
              ...(digestDetails ? { digest: digestDetails } : {}),
            };
@@ -1439,7 +2122,50 @@ index a70076f..cc496fc 100644
    pi.on("session_tree", () => runtime?.restore());
    pi.on("agent_settled", () => {
      try {
-@@ -595,12 +781,22 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+@@ -519,7 +825,7 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+ 
+   pi.registerCommand("hindsight", {
+     description:
+-      "Memory status, pause, resume, recall, digest, checkpoint, retry-failed, or forget",
++      "Memory status, pause, resume, next-opt-out, recall, digest, checkpoint, flush, retry-failed, or forget",
+     handler: async (args, ctx) => {
+       const r = runtime;
+       if (!r) return;
+@@ -527,7 +833,25 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+       try {
+         if (command === "pause" || command === "resume")
+           r.pause(command === "pause");
+-        else if (command === "checkpoint") {
++        else if (command === "next-opt-out") {
++          const armed = r.toggleNextOptOut();
++          if (ctx.hasUI)
++            ctx.ui.notify(
++              armed
++                ? "Next turn will be excluded from automatic retention."
++                : "Next-turn retain opt-out cancelled.",
++              "info",
++            );
++          return;
++        } else if (command === "flush") {
++          const res = await r.flushQueue();
++          if (ctx.hasUI)
++            ctx.ui.notify(
++              `Retain queue flushed (${res.flushed} sent, ${res.remaining} remaining).`,
++              "info",
++            );
++          return;
++        } else if (command === "checkpoint") {
+           r.checkpoint(true);
+           await r.writer.flush(r.config.retain.shutdownFlushMs);
+         } else if (command === "recall" && rest.length) {
+@@ -589,18 +913,28 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+         } else if (command !== "status" && command !== "") {
+           if (ctx.hasUI)
+             ctx.ui.notify(
+-              "Usage: /hindsight status|pause|resume|recall <query>|digest|checkpoint|retry-failed <operation-id>|forget",
++              "Usage: /hindsight status|pause|resume|next-opt-out|recall <query>|digest|checkpoint|flush|retry-failed <operation-id>|forget",
+               "info",
+             );
            return;
          }
          let serverStatus = "";
@@ -1468,7 +2194,7 @@ index a70076f..cc496fc 100644
          }
          if (ctx.hasUI && runtime)
            ctx.ui.notify(runtime.describe() + serverStatus, "info");
-@@ -753,8 +949,9 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
+@@ -753,8 +1087,9 @@ export default function hindsightMemory(pi: ExtensionAPI): void {
            ],
            details: { documentId, superseded },
          };
@@ -1480,3 +2206,1009 @@ index a70076f..cc496fc 100644
          return unavailable();
        }
      },
+diff --git a/test/helpers/fake-pi.ts b/test/helpers/fake-pi.ts
+index 8226a84..511155c 100644
+--- a/test/helpers/fake-pi.ts
++++ b/test/helpers/fake-pi.ts
+@@ -1,23 +1,25 @@
+ import { randomUUID } from "node:crypto";
+-import type {
+-  ExtensionAPI,
+-  ExtensionCommandContext,
+-  ExtensionContext,
+-  SessionEntry,
+-  ToolDefinition,
++import {
++  buildSessionProjection,
++  type ExtensionAPI,
++  type ExtensionCommandContext,
++  type ExtensionContext,
++  type SessionEntry,
++  type ToolDefinition,
+ } from "@earendil-works/pi-coding-agent";
+ 
+ export function fakePi(
+   cwd: string,
+   branch: SessionEntry[] = [],
+   sessionId = "session-test",
++  allEntries = branch,
+ ) {
+   const handlers = new Map<
+     string,
+     (event: never, ctx: ExtensionContext) => unknown
+   >();
+   const tools = new Map<string, ToolDefinition>();
+-  const entries = [...branch];
++  const entries = [...allEntries];
+   let command:
+     | ((args: string, ctx: ExtensionCommandContext) => Promise<void>)
+     | undefined;
+@@ -37,6 +39,8 @@ export function fakePi(
+     },
+     sessionManager: {
+       getBranch: () => [...branch],
++      buildSessionProjection: () =>
++        buildSessionProjection(branch, branch.at(-1)?.id),
+       getEntries: () => [...entries],
+       getSessionId: () => sessionId,
+       getSessionFile: () => (ephemeral ? undefined : "/tmp/fake-session.jsonl"),
+@@ -85,6 +89,7 @@ export function fakePi(
+     api,
+     context,
+     branch,
++    entries,
+     notices,
+     statuses,
+     tools,
+@@ -102,17 +107,24 @@ export function fakePi(
+       });
+     },
+     async emit(event: string, payload: object = {}) {
++      if (event === "session_compact" && !("compactionEntry" in payload))
++        append({
++          type: "compaction",
++          firstKeptEntryId: "retain-none",
++          summary: "Summary",
++          tokensBefore: 100,
++        });
+       return await handlers.get(event)?.(
+         { type: event, ...payload } as never,
+         context,
+       );
+     },
+     async prompt(prompt: string) {
+-      this.user(prompt);
+       const result = (await this.emit("before_agent_start", {
+         messageType: "user",
+         prompt,
+       })) as { message?: object } | undefined;
++      this.user(prompt);
+       if (result?.message)
+         append({ type: "custom_message", ...result.message });
+       return result;
+@@ -120,13 +132,17 @@ export function fakePi(
+     async command(args: string) {
+       await command?.(args, context);
+     },
+-    async tool(name: string, params: Record<string, unknown>) {
++    async tool(
++      name: string,
++      params: Record<string, unknown>,
++      signal?: AbortSignal,
++    ) {
+       const tool = tools.get(name);
+       if (!tool) throw new Error(`Missing tool ${name}`);
+       return await tool.execute(
+         "call",
+         params,
+-        undefined,
++        signal,
+         undefined,
+         context as never,
+       );
+diff --git a/test/helpers/mock-hindsight.ts b/test/helpers/mock-hindsight.ts
+index 8c855f2..820535e 100644
+--- a/test/helpers/mock-hindsight.ts
++++ b/test/helpers/mock-hindsight.ts
+@@ -11,6 +11,7 @@ export async function mockHindsight() {
+   let retainStatus = 200;
+   let hangRecall = false;
+   let hangRetain = false;
++  let operationStatus = "completed";
+   let hits: Record<string, unknown>[] = [
+     { id: "memory-1", text: "Deploy with make ship. ZEBRA-42." },
+   ];
+@@ -38,6 +39,8 @@ export async function mockHindsight() {
+       res.end('{"failed_operations":16}');
+     } else if (pathname.endsWith("/retry") && req.method === "POST") {
+       res.end('{"success":true}');
++    } else if (pathname.includes("/operations/") && req.method === "GET") {
++      res.end(JSON.stringify({ status: operationStatus }));
+     } else if (req.method === "PATCH") {
+       res.end("null");
+     } else if (path.endsWith("/recall")) {
+@@ -79,12 +82,14 @@ export async function mockHindsight() {
+       content: string,
+       refreshedAt = "2026-11-08T03:00:00Z",
+       isStale = false,
++      settings: Record<string, unknown> = {},
+     ) {
+       models.set(id, {
+         id,
+         content,
+         last_refreshed_at: refreshedAt,
+         is_stale: isStale,
++        ...settings,
+       });
+     },
+     hits(value: typeof hits) {
+@@ -102,6 +107,9 @@ export async function mockHindsight() {
+     hangRetain(value = true) {
+       hangRetain = value;
+     },
++    operationStatus(value: string) {
++      operationStatus = value;
++    },
+     async close() {
+       for (const response of waiting) response.destroy();
+       server.closeAllConnections();
+diff --git a/test/integration/compaction.test.ts b/test/integration/compaction.test.ts
+index 62a7ae7..e894202 100644
+--- a/test/integration/compaction.test.ts
++++ b/test/integration/compaction.test.ts
+@@ -115,6 +115,66 @@ describe("automatic forget and compaction", () => {
+     expect(latest[1]?.content).not.toContain("<hindsight_memory>");
+   });
+ 
++  it("reports digest settings drift and sends only complete digest entries within the injection limit", async () => {
++    const largeItem = `- ${"<oversize>".repeat(110)}`;
++    server.model(
++      digestId,
++      `## Practices\n- Keep scoped decisions.\n${largeItem}\n- Use the release playbook.`,
++      undefined,
++      true,
++      {
++        source_query: "Older prompt",
++        max_tokens: 700,
++        trigger: { mode: "full", refresh_cron: "0 0 * * *" },
++      },
++    );
++    configure({ digest: { maxInjectedChars: 512 } });
++    const pi = await start();
++    await pi.prompt("How do we deploy this project?");
++    const text =
++      injected(pi)[0]?.content.split("\n\n<hindsight_memory>")[0] ?? "";
++    expect(text.length).toBeLessThanOrEqual(512);
++    expect(text).toContain("newer_source_memories=true");
++    expect(text).toContain("- Keep scoped decisions.");
++    expect(text).toContain("- Use the release playbook.");
++    expect(text).not.toContain("oversize");
++    await pi.command("status");
++    expect(pi.notices.at(-1)).toContain(
++      "settings differ (prompt, token budget, schedule)",
++    );
++    expect(pi.notices.at(-1)).toContain("digest wait");
++    await pi.command("digest");
++    expect(pi.notices.at(-1)).toContain("&lt;oversize&gt;");
++    expect(server.modelRequests().map((request) => request.method)).toEqual([
++      "GET",
++    ]);
++  });
++
++  it("re-injects retired recall IDs after compaction and skips retained ones", async () => {
++    const pi = await start();
++    server.hits([{ id: "old", text: "Migration orders use staging." }]);
++    await pi.prompt("Explain the migration procedure");
++    server.hits([{ id: "kept", text: "Release approval comes from QA." }]);
++    await pi.prompt("Remember our release convention");
++    const kept = pi.branch.findLast((entry) => entry.type === "custom_message");
++    pi.append({
++      type: "compaction",
++      firstKeptEntryId: kept?.id,
++      summary: "Summary",
++      tokensBefore: 100,
++    });
++    await pi.emit("session_compact", { compactionEntry: pi.branch.at(-1) });
++    server.hits([
++      { id: "old", text: "Migration orders use staging." },
++      { id: "kept", text: "Release approval comes from QA." },
++    ]);
++    await pi.prompt("Explain the migration procedure");
++    expect(injected(pi).at(-1)?.details).toMatchObject({
++      reason: "post-compaction",
++      ids: ["old"],
++    });
++  });
++
+   it("updates only the project digest and requests a full regeneration explicitly", async () => {
+     server.model(digestId, "Old oversized digest");
+     configure({ digest: { maxTokens: 512, timeoutMs: 200 } });
+diff --git a/test/integration/index.test.ts b/test/integration/index.test.ts
+index a0fd6eb..d252672 100644
+--- a/test/integration/index.test.ts
++++ b/test/integration/index.test.ts
+@@ -2,7 +2,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import { join } from "node:path";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+-import { RECALL_CUSTOM_TYPE, STATE_ENTRY_TYPE } from "../../src/core/format.js";
++import {
++  DIAGNOSTICS_ENTRY_TYPE,
++  RECALL_CUSTOM_TYPE,
++  STATE_ENTRY_TYPE,
++} from "../../src/core/format.js";
+ import hindsightMemory from "../../src/index.js";
+ import { fakePi } from "../helpers/fake-pi.js";
+ import { mockHindsight } from "../helpers/mock-hindsight.js";
+@@ -28,8 +32,9 @@ describe("hindsightMemory extension with real HTTP", () => {
+     branch?: ReturnType<typeof fakePi>["branch"],
+     reason = "startup",
+     sessionId?: string,
++    entries?: ReturnType<typeof fakePi>["entries"],
+   ) {
+-    const pi = fakePi(root, branch, sessionId);
++    const pi = fakePi(root, branch, sessionId, entries);
+     instances.push(pi);
+     hindsightMemory(pi.api);
+     await pi.emit("session_start", { reason });
+@@ -244,13 +249,66 @@ describe("hindsightMemory extension with real HTTP", () => {
+     expect(Date.now() - started).toBeLessThan(350);
+     await pi.prompt("How do we deploy this project?");
+     expect(
+-      pi.notices.filter((n) => n.includes("recall unavailable")),
++      pi.notices.filter((n) => n.includes("recall timed out after 60 ms")),
+     ).toHaveLength(1);
++    const diagnostics = pi.branch.filter(
++      (entry) =>
++        entry.type === "custom" && entry.customType === DIAGNOSTICS_ENTRY_TYPE,
++    );
++    expect(diagnostics).toContainEqual(
++      expect.objectContaining({
++        data: expect.objectContaining({
++          recall: expect.objectContaining({
++            outcome: "timeout",
++            deadlineMs: 60,
++            ms: expect.any(Number),
++          }),
++        }),
++      }),
++    );
++    expect(JSON.stringify(diagnostics)).not.toContain("deploy");
++    await pi.command("status");
++    expect(pi.notices.at(-1)).toContain("first-prompt: timeout");
+     expect(pi.branch.filter((e) => e.type === "custom_message")).toHaveLength(
+       0,
+     );
+   });
+ 
++  it("does not count cancelled requests as breaker failures", async () => {
++    const pi = await start();
++    server.hangRecall();
++    for (let i = 0; i < 3; i++) {
++      const controller = new AbortController();
++      const lookup = pi.tool(
++        "hindsight_recall",
++        { query: "deployment history" },
++        controller.signal,
++      );
++      controller.abort();
++      await lookup;
++    }
++    await pi.command("status");
++    expect(pi.notices.at(-1)).toContain("tool: cancelled");
++    expect(pi.notices.at(-1)).toContain("breaker: closed");
++    server.hangRecall(false);
++    await expect(
++      pi.prompt("How do we deploy this project?"),
++    ).resolves.toBeDefined();
++  });
++
++  it("abandons an in-flight turn-start read during shutdown", async () => {
++    configure({ recall: { timeoutMs: 1000 } });
++    server.hangRecall();
++    const pi = await start();
++    const pending = pi.prompt("How do we deploy this project?");
++    await vi.waitFor(() => expect(server.recalls()).toHaveLength(1));
++    await pi.emit("session_shutdown");
++    await expect(pending).resolves.toBeUndefined();
++    expect(pi.notices.some((notice) => notice.includes("recall failed"))).toBe(
++      false,
++    );
++  });
++
+   it("keeps recall failures across empty and unchanged settled checkpoints", async () => {
+     const pi = await start();
+     server.recallStatus(500);
+@@ -272,7 +330,7 @@ describe("hindsightMemory extension with real HTTP", () => {
+     expect(server.retains()).toHaveLength(1);
+     await pi.command("status");
+     expect(pi.notices.at(-1)).toContain("breaker: open");
+-    expect(pi.notices.at(-1)).toContain("retain: saved 1 segment(s)");
++    expect(pi.notices.at(-1)).toContain("retain: accepted 1 segment(s)");
+   });
+ 
+   it("opens the breaker after three HTTP failures", async () => {
+@@ -323,6 +381,97 @@ describe("hindsightMemory extension with real HTTP", () => {
+     });
+   });
+ 
++  it("restores checkpoints across resume and reconciles an abandoned branch", async () => {
++    configure({ retain: { segmentChars: 120 } });
++    const pi = await start();
++    pi.user(
++      "First segment with a durable convention to keep on the resumed branch.",
++    );
++    await settle(pi);
++    const kept = pi.branch.length;
++    pi.user(
++      "Second segment holds development details from a branch we will abandon.",
++    );
++    await settle(pi);
++    await pi.emit("session_shutdown");
++    expect(server.retains()).toHaveLength(2);
++    const resumed = await start([...pi.branch], "resume");
++    await settle(resumed);
++    expect(server.retains()).toHaveLength(2);
++    resumed.branch.splice(kept);
++    await resumed.emit("session_tree");
++    await settle(resumed);
++    expect(server.retains()).toHaveLength(2);
++    expect(
++      server.deletes().map(({ path }) => decodeURIComponent(path)),
++    ).toEqual(["/v1/default/banks/test/documents/pi:session-test:1"]);
++    await resumed.command("status");
++    expect(resumed.notices.at(-1)).toContain("latest checkpoint operation");
++    expect(resumed.notices.at(-1)).toContain("completed");
++    await resumed.emit("session_shutdown");
++    const restarted = await start(
++      resumed.branch,
++      "resume",
++      "session-test",
++      resumed.entries,
++    );
++    await settle(restarted);
++    expect(server.deletes()).toHaveLength(1);
++  });
++
++  it("keeps a pending segment receipt across resume and waits before deleting it", async () => {
++    configure({ retain: { segmentChars: 120, timeoutMs: 800 } });
++    const pi = await start();
++    pi.user(
++      "First segment with a durable convention to keep on the resumed branch.",
++    );
++    await settle(pi);
++    const kept = pi.branch.length;
++    pi.user(
++      "Second segment holds development details from a branch we will abandon.",
++    );
++    await settle(pi);
++    await pi.emit("session_shutdown");
++    const operation = server.retains()[1]?.body.operation_id;
++    const resumed = await start(
++      pi.branch.slice(0, kept),
++      "resume",
++      "session-test",
++      pi.entries,
++    );
++    server.operationStatus("processing");
++    await resumed.emit("agent_settled");
++    await vi.waitFor(() =>
++      expect(
++        server.requests.some(({ path }) =>
++          path.endsWith(`/operations/${operation}`),
++        ),
++      ).toBe(true),
++    );
++    expect(server.deletes()).toHaveLength(0);
++    server.operationStatus("completed");
++    await vi.waitFor(() => expect(server.deletes()).toHaveLength(1));
++    expect(server.retains()).toHaveLength(2);
++  });
++
++  it("reconciles legacy allocations without treating them as acknowledged hashes", async () => {
++    const previous = fakePi(root);
++    previous.user(
++      "Retain the same user turn once when migrating legacy state.",
++    );
++    previous.append({
++      type: "custom",
++      customType: STATE_ENTRY_TYPE,
++      data: { sessionId: "session-test", segments: [0, 1] },
++    });
++    const pi = await start(previous.branch, "resume");
++    await settle(pi);
++    expect(server.retains()).toHaveLength(1);
++    expect(
++      server.deletes().map(({ path }) => decodeURIComponent(path)),
++    ).toEqual(["/v1/default/banks/test/documents/pi:session-test:1"]);
++  });
++
+   it("bounds shutdown, aborts pending work and is idempotent", async () => {
+     configure({
+       retain: { segmentChars: 50, timeoutMs: 1000, shutdownFlushMs: 35 },
+@@ -419,6 +568,16 @@ describe("hindsightMemory extension with real HTTP", () => {
+       { text: expect.stringContaining("ZEBRA-42") },
+     ]);
+     expect(server.recalls()[0]?.body.max_tokens).toBe(42);
++    pi.append({
++      type: "message",
++      message: {
++        role: "toolResult",
++        toolName: "hindsight_recall",
++        toolCallId: "call",
++        timestamp: Date.now(),
++        ...result,
++      },
++    });
+     await pi.emit("session_tree");
+     await pi.prompt("Remember our deployment conventions from last time");
+     expect(pi.branch.filter((e) => e.type === "custom_message")).toHaveLength(
+@@ -478,10 +637,12 @@ describe("hindsightMemory extension with real HTTP", () => {
+     await pi.emit("session_shutdown");
+     await new Promise((resolve) => setTimeout(resolve, 600));
+     expect(server.retains()).toHaveLength(count);
+-    expect(pi.branch.at(-1)).toMatchObject({
+-      type: "custom",
+-      data: { paused: true },
+-    });
++    expect(pi.branch).toContainEqual(
++      expect.objectContaining({
++        type: "custom",
++        data: { paused: true },
++      }),
++    );
+   });
+ 
+   it("cancels a retry backoff during shutdown without another request", async () => {
+@@ -541,4 +702,78 @@ describe("hindsightMemory extension with real HTTP", () => {
+     ).toBe(true);
+     expect(server.requests).toHaveLength(0);
+   });
++
++  it("filters automatic recall by minScores while preserving manual and tool recall", async () => {
++    server.hits([
++      {
++        id: "low",
++        text: "Low-relevance deployment note",
++        scores: { reranker: 0.1, semantic: 0.9 },
++      },
++      {
++        id: "high",
++        text: "High-relevance deployment convention",
++        scores: { reranker: 0.85, semantic: 0.9 },
++      },
++    ]);
++    configure({ recall: { timeoutMs: 120, minScores: { reranker: 0.5 } } });
++    const pi = await start();
++    const res = (await pi.prompt("How do we deploy this project?")) as
++      | { message?: { content?: string } }
++      | undefined;
++    expect(res?.message?.content).toContain(
++      "High-relevance deployment convention",
++    );
++    expect(res?.message?.content).not.toContain(
++      "Low-relevance deployment note",
++    );
++    const tool = await pi.tool("hindsight_recall", { query: "deployment" });
++    const toolText = JSON.stringify(tool.content);
++    expect(toolText).toContain("Low-relevance deployment note");
++    expect(toolText).toContain("High-relevance deployment convention");
++  });
++
++  it("excludes the next turn permanently when next-opt-out is armed", async () => {
++    const pi = await start();
++    await pi.command("next-opt-out");
++    expect(pi.notices.at(-1)).toContain("excluded from automatic retention");
++    expect(pi.statuses.at(-1)).toContain("skip next");
++    pi.user("Sensitive one-off turn that must not be retained.");
++    await pi.emit("agent_settled");
++    await new Promise((resolve) => setTimeout(resolve, 20));
++    expect(server.retains()).toHaveLength(0);
++
++    // Subsequent turn retains normally, still excluding the opted-out turn.
++    pi.user("Normal durable deployment decision.");
++    await settle(pi);
++    expect(server.retains()).toHaveLength(1);
++    const body = JSON.stringify(server.retains()[0]?.body);
++    expect(body).toContain("Normal durable deployment decision.");
++    expect(body).not.toContain("Sensitive one-off turn");
++  });
++
++  it("persists unsent checkpoints to the local queue on shutdown timeout and drains them next session", async () => {
++    server.hangRetain(true);
++    configure({ retain: { timeoutMs: 250, shutdownFlushMs: 30, queue: true } });
++    const pi1 = await start(undefined, "startup", "queued-session");
++    pi1.user("Durable decision saved right before shutdown timeout.");
++    await pi1.emit("session_shutdown");
++
++    // Server recovers; next session drains the queued checkpoint.
++    server.hangRetain(false);
++    configure({
++      retain: { timeoutMs: 250, shutdownFlushMs: 100, queue: true },
++    });
++    const pi2 = await start(undefined, "startup", "next-session");
++    await vi.waitFor(() => {
++      const texts = server.retains().map((r) => JSON.stringify(r.body));
++      expect(
++        texts.some((t) =>
++          t.includes("Durable decision saved right before shutdown timeout."),
++        ),
++      ).toBe(true);
++    });
++    await pi2.command("flush");
++    expect(pi2.notices.at(-1)).toContain("0 remaining");
++  });
+ });
+diff --git a/test/unit/client.test.ts b/test/unit/client.test.ts
+index 3c2e448..16afda9 100644
+--- a/test/unit/client.test.ts
++++ b/test/unit/client.test.ts
+@@ -184,7 +184,7 @@ it("aborts stalled fetch at deadline and supports external cancellation", async
+   controller.abort();
+   await expect(
+     client.recall({ ...params, signal: controller.signal }),
+-  ).rejects.toMatchObject({ kind: "network" });
++  ).rejects.toMatchObject({ kind: "cancelled", retryable: false });
+ });
+ it("health includes optional version and tolerates unavailable version endpoint", async () => {
+   const { client, fetcher } = setup(async () =>
+diff --git a/test/unit/config.test.ts b/test/unit/config.test.ts
+index cb130d3..2e8ea1a 100644
+--- a/test/unit/config.test.ts
++++ b/test/unit/config.test.ts
+@@ -179,15 +179,40 @@ it("validates compaction, supersession and digest settings", () => {
+     "Ignored invalid configuration field: fullRefreshCron",
+   ]);
+ });
+-it("lets project configuration disable only digest and supersession", () => {
++it("lets project configuration disable only digest, queue and supersession", () => {
+   const { config } = load({
+     "/repo/.pi/hindsight-memory.json": JSON.stringify({
+       digest: { enabled: false, maxTokens: 8000 },
+-      retain: { supersede: false },
++      retain: { supersede: false, queue: false },
+       recall: { preferObservations: false },
+     }),
+   });
+   expect(config.digest).toEqual({ ...DEFAULT_CONFIG.digest, enabled: false });
+   expect(config.retain.supersede).toBe(false);
++  expect(config.retain.queue).toBe(false);
+   expect(config.recall.preferObservations).toBe(true);
+ });
++it("validates recall.minScores floors and ignores invalid or unknown score fields", () => {
++  const result = load({
++    "/agent/hindsight-memory.json": JSON.stringify({
++      recall: {
++        minScores: {
++          reranker: 0.25,
++          semantic: 0.5,
++          final: 1.5,
++          keyword: -0.1,
++          bogus: 0.5,
++        },
++      },
++    }),
++  });
++  expect(result.config.recall.minScores).toEqual({
++    reranker: 0.25,
++    semantic: 0.5,
++  });
++  expect(result.warnings).toEqual([
++    "Ignored invalid configuration field: final",
++    "Ignored invalid configuration field: keyword",
++    "Ignored unknown configuration field: bogus",
++  ]);
++});
+diff --git a/test/unit/dedup.test.ts b/test/unit/dedup.test.ts
+index 2bc34cb..c1a1308 100644
+--- a/test/unit/dedup.test.ts
++++ b/test/unit/dedup.test.ts
+@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
+ import type { RecallHit } from "../../src/core/client.js";
+ import {
+   collapseDuplicates,
++  filterByMinScores,
+   restatedFacts,
+   similarity,
+ } from "../../src/core/dedup.js";
+@@ -87,3 +88,24 @@ it("selects only restated raw facts from other explicit documents", () => {
+     restatedFacts(content, hits, "pi:fact:new", 0.6, 0.5).map((h) => h.id),
+   ).toEqual(["restated"]);
+ });
++it("filters recall hits by configured minScores while preserving unscored hits", () => {
++  const hits = [
++    hit("unscored", "No score metadata"),
++    hit("low-rerank", "Low reranker", {
++      scores: { reranker: 0.15, semantic: 0.8 },
++    }),
++    hit("low-semantic", "Low semantic", {
++      scores: { reranker: 0.9, semantic: 0.2 },
++    }),
++    hit("missing-semantic", "Missing semantic field", {
++      scores: { reranker: 0.8, semantic: null },
++    }),
++    hit("good", "Passes both floors", {
++      scores: { reranker: 0.6, semantic: 0.7, final: 0.65, keyword: 0.5 },
++    }),
++  ];
++  expect(filterByMinScores(hits, {})).toEqual(hits);
++  expect(
++    filterByMinScores(hits, { reranker: 0.3, semantic: 0.4 }).map((h) => h.id),
++  ).toEqual(["unscored", "missing-semantic", "good"]);
++});
+diff --git a/test/unit/policy.test.ts b/test/unit/policy.test.ts
+index 143a0d9..9af88b7 100644
+--- a/test/unit/policy.test.ts
++++ b/test/unit/policy.test.ts
+@@ -139,6 +139,47 @@ it.each(["previously", "earlier", "before", "usually", "history", "again"])(
+     ).toBe("first-only");
+   },
+ );
++it("skips structured and known textual workflow relays while retaining explicit requests", () => {
++  const relay = `<paseo-system version="1" kind="agent-message" source-agent-id="peer" message-id="123">Plan audit found evidence gaps. Please add detailed verification steps.</paseo-system>`;
++  expect(decideRecall({ ...base, prompt: relay })).toMatchObject({
++    recall: false,
++    reason: "workflow-relay",
++  });
++  expect(
++    decideRecall({ ...base, prompt: "PLAN_READY /work/plan.md: approved." })
++      .reason,
++  ).toBe("workflow-relay");
++  expect(
++    decideRecall({ ...base, prompt: `${relay}\nExplain the remaining work.` })
++      .reason,
++  ).toBe("first-prompt");
++  expect(
++    decideRecall({
++      ...base,
++      lastRecallQuery: "new topic",
++      prompt: "GOAL_HANDOFF_READY Please check past launch failures.",
++    }).reason,
++  ).toBe("cue");
++  expect(
++    decideRecall({ ...base, prompt: relay, policy: "always" }).reason,
++  ).toBe("always");
++});
++
++it("uses recent substantive turns to recognize an ordinary follow-up", () => {
++  const input = {
++    ...base,
++    lastRecallQuery: "Limit Android emulator memory",
++    prompt: "Why does the embedding shape end in the vocabulary size?",
++  };
++  expect(decideRecall(input).reason).toBe("topic-shift");
++  expect(
++    decideRecall({
++      ...input,
++      recentPrompts: ["The embedding output shape ends in vocabulary size."],
++    }).reason,
++  ).toBe("same-topic");
++});
++
+ it("bounds query by Unicode byte costs without splitting characters", () => {
+   expect(boundQuery("abcdef", 2)).toBe("abcd");
+   expect(boundQuery("é中😀x", 9)).toBe("é中😀");
+diff --git a/test/unit/queue.test.ts b/test/unit/queue.test.ts
+new file mode 100644
+index 0000000..bf371c4
+--- /dev/null
++++ b/test/unit/queue.test.ts
+@@ -0,0 +1,155 @@
++import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { afterEach, beforeEach, expect, it, vi } from "vitest";
++import { CircuitBreaker } from "../../src/core/breaker.js";
++import { HindsightError, type RetainParams } from "../../src/core/client.js";
++import { drainQueuedCheckpoints, RetainQueue } from "../../src/core/queue.js";
++import { segmentMessages } from "../../src/core/transcript.js";
++import type { CheckpointRequest } from "../../src/core/writer.js";
++
++const timestamp = "2026-11-25T00:00:00Z";
++function request(text: string, sessionId = "s1"): CheckpointRequest {
++  return {
++    sessionId,
++    segments: segmentMessages([{ entryId: "e1", timestamp, text }], 100),
++    tags: ["harness:pi", "project:demo", `session:${sessionId}`],
++    context: "Pi coding-agent session in project demo",
++    metadata: { harness: "pi", project: "demo", session_id: sessionId },
++    observationScopes: [["project:demo"]],
++  };
++}
++
++let dir: string;
++beforeEach(() => {
++  dir = mkdtempSync(join(tmpdir(), "hindsight-queue-"));
++});
++afterEach(() => {
++  rmSync(dir, { recursive: true, force: true });
++});
++
++it("persists, lists by destination, replaces per session, and prunes expired or corrupted files", () => {
++  let now = Date.parse("2026-11-25T00:00:00Z");
++  const queue = new RetainQueue({
++    dir,
++    now: () => now,
++    maxAgeMs: 60_000,
++    maxFiles: 2,
++  });
++  queue.save({
++    destination: "dest-a",
++    sessionId: "s1",
++    snapshot: {
++      request: request("v1", "s1"),
++      ackedHashes: [],
++      knownIndices: [],
++    },
++  });
++  now += 1000;
++  queue.save({
++    destination: "dest-a",
++    sessionId: "s1",
++    snapshot: {
++      request: request("v2", "s1"),
++      ackedHashes: [],
++      knownIndices: [],
++    },
++  });
++  now += 1000;
++  queue.save({
++    destination: "dest-b",
++    sessionId: "s2",
++    snapshot: {
++      request: request("other", "s2"),
++      ackedHashes: [],
++      knownIndices: [],
++    },
++  });
++  writeFileSync(join(dir, "corrupt.json"), "{bad");
++
++  const listA = queue.list("dest-a");
++  expect(listA).toHaveLength(1);
++  expect(listA[0]?.request.segments[0]?.content).toBe("v2");
++  expect(queue.count("dest-b")).toBe(1);
++
++  now += 1000;
++  queue.save({
++    destination: "dest-a",
++    sessionId: "s3",
++    snapshot: {
++      request: request("v3", "s3"),
++      ackedHashes: [],
++      knownIndices: [],
++    },
++  });
++  // maxFiles=2 pruned oldest (s1), leaving s2 and s3
++  expect(queue.list("dest-a").map((e) => e.sessionId)).toEqual(["s3"]);
++
++  now += 100_000;
++  expect(queue.list("dest-a")).toHaveLength(0);
++});
++
++it("drains queued checkpoints, deletes abandoned segments, and updates partial progress on failure", async () => {
++  const queue = new RetainQueue({ dir });
++  const req = request("queued message", "s1");
++  queue.save({
++    destination: "dest",
++    sessionId: "s1",
++    snapshot: {
++      request: req,
++      ackedHashes: [],
++      knownIndices: [0, 1],
++    },
++  });
++  const client = {
++    retain: vi.fn(async (_p: RetainParams) => ({ operationId: "op-1" })),
++    deleteDocument: vi.fn(async (_id: string, _ms: number) => true),
++  };
++  const breaker = new CircuitBreaker();
++  const res = await drainQueuedCheckpoints({
++    queue,
++    destination: "dest",
++    client,
++    breaker,
++    timeoutMs: 1000,
++    sleep: async () => {},
++  });
++  expect(res).toEqual({ flushed: 1, remaining: 0 });
++  expect(client.retain).toHaveBeenCalledTimes(1);
++  expect(client.deleteDocument).toHaveBeenCalledWith("pi:s1:1", 1000);
++  expect(queue.count("dest")).toBe(0);
++
++  // Partial failure preserves acked segment hash and increments attempts
++  const segs = segmentMessages(
++    [
++      { entryId: "a", timestamp, text: "first segment" },
++      { entryId: "b", timestamp, text: "second segment" },
++    ],
++    15,
++  );
++  queue.save({
++    destination: "dest",
++    sessionId: "s2",
++    snapshot: {
++      request: { ...req, sessionId: "s2", segments: segs },
++      ackedHashes: [],
++      knownIndices: [],
++    },
++  });
++  client.retain.mockReset();
++  client.retain
++    .mockResolvedValueOnce({ operationId: "ok-0" })
++    .mockRejectedValue(new HindsightError("server down", "http", 503));
++  const res2 = await drainQueuedCheckpoints({
++    queue,
++    destination: "dest",
++    client,
++    breaker,
++    timeoutMs: 1000,
++    sleep: async () => {},
++  });
++  expect(res2).toEqual({ flushed: 0, remaining: 1 });
++  const remaining = queue.list("dest")[0];
++  expect(remaining?.attempts).toBe(1);
++  expect(remaining?.ackedHashes).toEqual([[0, segs[0]?.hash]]);
++});
+diff --git a/test/unit/state.test.ts b/test/unit/state.test.ts
+index 92fea21..af8f324 100644
+--- a/test/unit/state.test.ts
++++ b/test/unit/state.test.ts
+@@ -1,7 +1,10 @@
+ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+ import { expect, it } from "vitest";
+ import { RECALL_CUSTOM_TYPE, STATE_ENTRY_TYPE } from "../../src/core/format.js";
+-import { reconstructState } from "../../src/core/state.js";
++import {
++  reconstructState,
++  visibleRecallContext,
++} from "../../src/core/state.js";
+ 
+ const base = { id: "entry", parentId: null, timestamp: "2026-11-08T00:00:00Z" };
+ const recall = (details: unknown): SessionEntry => ({
+@@ -19,101 +22,73 @@ const compact: SessionEntry = {
+   tokensBefore: 100,
+   firstKeptEntryId: "old",
+ };
+-it("reconstructs branch ids, pause state, query and compaction state in order", () => {
+-  const branch: SessionEntry[] = [
+-    recall({ ids: ["a", "b"], query: "first", reason: "first-prompt" }),
+-    {
+-      ...base,
+-      type: "custom",
+-      customType: STATE_ENTRY_TYPE,
+-      data: { paused: true },
+-    },
++const state = (data: unknown): SessionEntry => ({
++  ...base,
++  type: "custom",
++  customType: STATE_ENTRY_TYPE,
++  data,
++});
++
++it("replays branch pause, original and empty recalls, and compaction in order", () => {
++  const branch = [
++    recall({ ids: ["a"], query: "first", reason: "first-prompt" }),
++    state({ paused: true }),
+     compact,
+-    recall({ ids: ["b", "c"], query: "next", reason: "post-compaction" }),
++    state({ recall: { ids: [], query: "next", reason: "post-compaction" } }),
+   ];
+   expect(reconstructState(branch)).toEqual({
+-    injectedIds: new Set(["a", "b", "c"]),
+     autoRecalls: 2,
+     lastRecallQuery: "next",
+     paused: true,
+     compactedSinceLastRecall: false,
+-    digestInjected: false,
+   });
+   expect(
+-    reconstructState([
+-      ...branch,
+-      compact,
+-      {
+-        ...base,
+-        type: "custom",
+-        customType: STATE_ENTRY_TYPE,
+-        data: { paused: false },
+-      },
+-    ]),
+-  ).toMatchObject({ paused: false, compactedSinceLastRecall: true });
+-  expect(reconstructState(branch.slice(0, 1))).toMatchObject({
+-    autoRecalls: 1,
+-    lastRecallQuery: "first",
++    reconstructState([...branch, compact, state({ paused: false })]),
++  ).toMatchObject({
+     paused: false,
++    compactedSinceLastRecall: true,
+   });
+ });
+-it("manual/tool ids dedupe without using the automatic recall budget or compaction reset", () => {
++
++it("ignores manual previews, tool recalls, digests and malformed state for recall policy", () => {
+   expect(
+     reconstructState([
+       compact,
+-      recall({ ids: ["tool"], query: "manual", reason: "tool" }),
++      state({ paused: "true" }),
++      recall(null),
++      recall({ ids: [], reason: "digest" }),
+       recall({ ids: ["preview"], reason: "manual" }),
++      state({ recall: { ids: ["tool"], reason: "tool" } }),
+     ]),
+-  ).toEqual({
+-    injectedIds: new Set(["tool", "preview"]),
+-    autoRecalls: 0,
+-    paused: false,
+-    compactedSinceLastRecall: true,
+-    digestInjected: false,
+-  });
++  ).toEqual({ autoRecalls: 0, paused: false, compactedSinceLastRecall: true });
+ });
+-it("ignores malformed and unrelated stored details", () => {
++
++it("gets IDs from visible automatic blocks and direct tool results", () => {
+   expect(
+-    reconstructState([
+-      recall(null),
++    visibleRecallContext([
+       {
+-        ...base,
+-        type: "custom",
+-        customType: STATE_ENTRY_TYPE,
+-        data: { paused: "true" },
++        role: "custom",
++        customType: RECALL_CUSTOM_TYPE,
++        content:
++          "<hindsight_project_digest>\nDigest\n</hindsight_project_digest>",
++        details: { ids: ["omitted"] },
++        display: true,
++        timestamp: 1,
+       },
+       {
+-        ...base,
+-        type: "custom_message",
+-        customType: "other",
+-        content: "other",
+-        display: true,
+-        details: { ids: ["ignored"] },
++        role: "toolResult",
++        toolName: "hindsight_recall",
++        toolCallId: "call",
++        content: [
++          {
++            type: "text",
++            text: "<hindsight_memory>\nMemory\n</hindsight_memory>",
++          },
++        ],
++        details: { ids: ["tool"] },
++        isError: false,
++        timestamp: 2,
+       },
+     ]),
+-  ).toEqual({
+-    injectedIds: new Set(),
+-    autoRecalls: 0,
+-    paused: false,
+-    compactedSinceLastRecall: false,
+-    digestInjected: false,
+-  });
+-  expect(
+-    reconstructState([recall({ ids: ["valid", 123], query: 3 })]).injectedIds,
+-  ).toEqual(new Set(["valid"]));
+-});
+-
+-it("tracks the project digest until a later compaction without counting auto recalls", () => {
+-  const digest = { id: "pi-digest-demo-1234abcd" };
+-  expect(
+-    reconstructState([
+-      recall({ ids: [], query: "", reason: "digest", digest }),
+-    ]),
+-  ).toMatchObject({ digestInjected: true, autoRecalls: 0 });
+-  expect(
+-    reconstructState([
+-      recall({ ids: ["a"], query: "q", reason: "first-prompt", digest }),
+-      compact,
+-    ]),
+-  ).toMatchObject({ digestInjected: false, autoRecalls: 1 });
++  ).toEqual({ digestVisible: true, ids: new Set(["tool"]) });
+ });

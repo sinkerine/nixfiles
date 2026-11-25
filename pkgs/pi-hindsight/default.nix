@@ -2,7 +2,7 @@
 
 stdenvNoCC.mkDerivation {
   pname = "pi-hindsight";
-  version = "0.1.0-unstable-2026-11-18";
+  version = "0.1.0-unstable-2026-11-25";
 
   src = fetchFromGitHub {
     owner = "sinkerine";

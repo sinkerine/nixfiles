@@ -112,5 +112,26 @@ with lib;
         ExecStart = "${pkgs.python3}/bin/python ${./proxy-state.py} michiru";
       };
     };
+
+    security.polkit = {
+      enable = true;
+      extraConfig = ''
+        polkit.addRule(function(action, subject) {
+          if (
+            action.id == "org.freedesktop.systemd1.manage-units" &&
+            subject.isInGroup("wheel") &&
+            (action.lookup("verb") == "start" || action.lookup("verb") == "restart") &&
+            (
+              action.lookup("unit") == "asako-proxy-enable.service" ||
+              action.lookup("unit") == "asako-proxy-disable.service" ||
+              action.lookup("unit") == "asako-proxy-sachi.service" ||
+              action.lookup("unit") == "asako-proxy-michiru.service"
+            )
+          ) {
+            return polkit.Result.YES;
+          }
+        });
+      '';
+    };
   };
 }
