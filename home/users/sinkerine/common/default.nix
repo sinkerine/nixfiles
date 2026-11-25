@@ -14,6 +14,9 @@
   home.sessionVariables.GRADLE_USER_HOME = "${config.xdg.cacheHome}/gradle";
   systemd.user.sessionVariables.GRADLE_USER_HOME = config.home.sessionVariables.GRADLE_USER_HOME;
 
+  home.sessionVariables.SOPS_DECRYPTION_ORDER = "age,pgp";
+  systemd.user.sessionVariables.SOPS_DECRYPTION_ORDER = config.home.sessionVariables.SOPS_DECRYPTION_ORDER;
+
   # One agent shared by terminals, GUI apps, and user services. Home Manager
   # exports $XDG_RUNTIME_DIR/ssh-agent while preserving forwarded SSH agents.
   services.ssh-agent.enable = true;
