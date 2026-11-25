@@ -136,7 +136,7 @@ class AndroidProfileTests(unittest.TestCase):
                                 "hostname": f"makina-{server_name}",
                                 "control_url": "https://headscale.mado.moe", "detour": tailnet_detour, "accept_routes": True,
                                 "exit_node": "sachi", "exit_node_allow_lan_access": True,
-                                **({"domain_resolver": {"server": control_resolver, "strategy": "ipv4_only"}} if spoofed else
+                                **({} if spoofed else
                                    {"domain_resolver": "lan-dns"} if server_name == "sachi" else {}),
                             }])
                         self.assertEqual(config["route"]["rules"][1:4], [

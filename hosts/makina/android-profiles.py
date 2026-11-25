@@ -182,9 +182,10 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
             "exit_node": "sachi",
             "exit_node_allow_lan_access": True,
         }
-        if spoofed:
-            endpoint["domain_resolver"] = {"server": control_resolver, "strategy": "ipv4_only"}
-        elif server_name == "sachi":
+        # Spoofed profiles leave the endpoint resolver unset so DNS rules apply:
+        # Headscale uses control_resolver while DERP hostnames use the default
+        # server. The global ipv4_only strategy still applies.
+        if not spoofed and server_name == "sachi":
             endpoint["domain_resolver"] = "lan-dns"
         if tailnet_auth_key:
             endpoint["auth_key"] = tailnet_auth_key
