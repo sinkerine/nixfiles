@@ -53,7 +53,7 @@ class AndroidProfileTests(unittest.TestCase):
                 {"domain_suffix": ["mado.moe"], "server": "managed-dns"},
                 {"rule_set": ["geosite-cn"], "server": "local-dns"},
             ])
-            self.assertEqual(config["inbounds"][0]["address"], ["172.19.0.1/30"])
+            self.assertEqual(config["inbounds"][0]["address"], ["198.18.0.1/30"])
             self.assertEqual(config["endpoints"], [{
                 "type": "tailscale", "tag": "tailscale", "state_directory": "tailscale-sachi",
                 "hostname": "makina-sachi", "control_url": "https://headscale.mado.moe",

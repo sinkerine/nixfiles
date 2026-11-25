@@ -27,7 +27,7 @@ class AsakoHKConfigTests(unittest.TestCase):
             android_profiles = Path(__file__).parents[4] / "makina" / "android-profiles.py"
             config = asako_hk.render(source, android_profiles)
         self.assertEqual(config["inbounds"][0]["interface_name"], "singtun-hk0")
-        self.assertEqual(config["inbounds"][0]["address"], ["172.19.0.1/30"])
+        self.assertEqual(config["inbounds"][0]["address"], ["198.18.0.1/30"])
         self.assertEqual(config["outbounds"][0]["tag"], "hk-direct")
         self.assertEqual(config["outbounds"][1]["tag"], "hk-us")
         rules = config["route"]["rules"]

@@ -133,7 +133,7 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
             {
                 "type": "tun",
                 "tag": "tun-in",
-                "address": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
+                "address": ["198.18.0.1/30", "fdfe:dcba:9876::1/126"],
                 "mtu": 9000,
                 "auto_route": True,
                 "strict_route": True,
@@ -258,7 +258,7 @@ def hk_profile(config, tailnet_auth_key=None, *, always_proxy=False):
             {"domain_suffix": ["mado.moe"], "server": "managed-dns"},
             {"rule_set": ["geosite-cn"], "server": "local-dns"},
         ], "final": "managed-dns", "strategy": "ipv4_only", "reverse_mapping": True},
-        "inbounds": [{"type": "tun", "tag": "tun-in", "address": ["172.19.0.1/30"],
+        "inbounds": [{"type": "tun", "tag": "tun-in", "address": ["198.18.0.1/30"],
                        "mtu": 9000, "auto_route": True, "strict_route": True}],
         "endpoints": [endpoint],
         "outbounds": [vless("hk-direct", config["direct_uuid"]),
