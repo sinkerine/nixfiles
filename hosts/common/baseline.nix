@@ -37,6 +37,8 @@ with lib;
     git-lfs
   ];
 
+  environment.sessionVariables.SOPS_DECRYPTION_ORDER = "age,pgp";
+
   nix = {
     gc = {
       automatic = true;
