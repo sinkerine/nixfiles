@@ -59,13 +59,16 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
     # SNI profiles must carry control-plane and peer traffic through the same
     # allowed TLS connection, including when Sachi is the proxy server.
     tailnet_detour = "proxy" if spoofed or server_name != "sachi" else "direct"
+    tailnet_outbound = "proxy" if spoofed else "tailscale"
     rules = [{"protocol": "dns", "action": "hijack-dns"}]
     if tailnet:
         rules.extend([
             {"action": "sniff"},
             {"domain": ["headscale.mado.moe"], "action": "route", "outbound": tailnet_detour},
             # Sachi's Docker subnet is reachable through its advertised exit route.
-            {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48", "172.16.0.0/16"], "action": "route", "outbound": "tailscale"},
+            # SNI networks block direct DERP and UDP, which bypass the detour in
+            # sing-box's Tailscale, so reach tailnet hosts via the proxy server.
+            {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48", "172.16.0.0/16"], "action": "route", "outbound": tailnet_outbound},
         ])
     rules.extend([
         {"ip_cidr": LAN_DIRECT_CIDRS, "action": "route", "outbound": "direct"},

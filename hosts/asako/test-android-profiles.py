@@ -142,7 +142,7 @@ class AndroidProfileTests(unittest.TestCase):
                         self.assertEqual(config["route"]["rules"][1:4], [
                                 {"action": "sniff"},
                                 {"domain": ["headscale.mado.moe"], "action": "route", "outbound": tailnet_detour},
-                                {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48", "172.16.0.0/16"], "action": "route", "outbound": "tailscale"},
+                                {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48", "172.16.0.0/16"], "action": "route", "outbound": "proxy" if spoofed else "tailscale"},
                         ])
                         if spoofed:
                             self.assertEqual(config["dns"]["strategy"], "ipv4_only")
