@@ -65,10 +65,10 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
         rules.extend([
             {"action": "sniff"},
             {"domain": ["headscale.mado.moe"], "action": "route", "outbound": tailnet_detour},
-            # Sachi's Docker subnet is reachable through its advertised exit route.
             # SNI networks block direct DERP and UDP, which bypass the detour in
             # sing-box's Tailscale, so reach tailnet hosts via the proxy server.
-            {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48", "172.16.0.0/16"], "action": "route", "outbound": tailnet_outbound},
+            # Docker subnets are not routed; containers are reached via Traefik.
+            {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48"], "action": "route", "outbound": tailnet_outbound},
         ])
     rules.extend([
         {"ip_cidr": LAN_DIRECT_CIDRS, "action": "route", "outbound": "direct"},
@@ -218,7 +218,7 @@ def hk_profile(config, tailnet_auth_key=None, *, always_proxy=False):
     rules = [
         {"protocol": "dns", "action": "hijack-dns"},
         {"domain_suffix": ["mado.moe"], "action": "route", "outbound": "hk-direct"},
-        {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48", "172.16.0.0/16"], "action": "route", "outbound": "tailscale"},
+        {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48"], "action": "route", "outbound": "tailscale"},
         {"ip_is_private": True, "action": "route", "outbound": "direct"},
         {"rule_set": ["geosite-cn"], "action": "route", "outbound": "direct"},
         {"rule_set": ["geoip-cn"], "action": "route", "outbound": "direct"},
