@@ -34,6 +34,74 @@ let
       fi
     '';
   };
+  disableKeepassxcQuickUnlock = pkgs.writers.writePython3 "disable-keepassxc-quick-unlock" { } ''
+    import os
+    import sys
+    import tempfile
+    from pathlib import Path
+
+    path = Path(sys.argv[1])
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if path.exists():
+        original = path.read_text(encoding="utf-8")
+        lines = original.splitlines(keepends=True)
+    else:
+        original = ""
+        lines = []
+
+    out = []
+    in_security = False
+    found_security = False
+    found_key = False
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            if in_security and not found_key:
+                insert_at = len(out)
+                while insert_at > 0 and out[insert_at - 1].strip() == "":
+                    insert_at -= 1
+                out.insert(insert_at, "QuickUnlock=false\n")
+                found_key = True
+            in_security = stripped == "[Security]"
+            if in_security:
+                found_security = True
+            out.append(line)
+        elif in_security and stripped.startswith("QuickUnlock="):
+            if not found_key:
+                out.append("QuickUnlock=false\n")
+                found_key = True
+        else:
+            out.append(line)
+
+    if in_security and not found_key:
+        if out and not out[-1].endswith("\n"):
+            out[-1] += "\n"
+        out.append("QuickUnlock=false\n")
+        found_key = True
+    elif not found_security:
+        if out:
+            if not out[-1].endswith("\n"):
+                out[-1] += "\n"
+            if out[-1].strip() != "":
+                out.append("\n")
+        out.append("[Security]\n")
+        out.append("QuickUnlock=false\n")
+
+    updated = "".join(out)
+    if updated != original or not path.exists():
+        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(updated)
+            if path.exists():
+                os.chmod(tmp, path.stat().st_mode & 0o777)
+            os.replace(tmp, path)
+        except Exception:
+            os.unlink(tmp)
+            raise
+  '';
 in
 {
   options.my.essentials.gui = {
@@ -424,6 +492,11 @@ in
           enable = true;
           plugins = with pkgs.obs-studio-plugins; [ wlrobs ];
         };
+
+        # Keep KeePassXC's local state file writable while disabling Polkit/fingerprint Quick Unlock.
+        home.activation.disableKeepassxcQuickUnlock = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          run ${disableKeepassxcQuickUnlock} ${lib.escapeShellArg "${config.xdg.stateHome}/keepassxc/keepassxc.ini"}
+        '';
       }
     ]
   );

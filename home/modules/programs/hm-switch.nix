@@ -25,7 +25,7 @@ in {
     home.file."local/bin/switch-nix-os.sh".source =
       let osFlakeUri = with nixinfo; "path:${projectRoot}#${hostname}";
       in pkgs.writeShellScript "switch-nix-os.sh" ''
-        ${if hostname == "kazuki" then ''
+        ${if builtins.elem hostname [ "kazuki" "asako" ] then ''
           # Match the existing passwordless sudo rule exactly.
           sudo -n /run/current-system/sw/bin/nixos-rebuild switch "$@" --flake ${nixinfo.projectRoot}#${hostname}
         '' else ''

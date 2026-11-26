@@ -50,6 +50,34 @@ in {
       enable = true;
       configPath = "${config.xdg.configHome}/mozilla/firefox";
       package = cfg.package;
+      policies = {
+        "3rdparty" = {
+          Extensions = {
+            "keepassxc-browser@keepassxc.org" = {
+              settings = {
+                redirectAllowance = 1;
+                showLoginNotifications = false;
+                sitePreferences = [
+                  {
+                    allowIframes = true;
+                    ignore = "ignoreNothing";
+                    improvedFieldDetection = false;
+                    url = "https://*/*";
+                    usernameOnly = false;
+                  }
+                  {
+                    allowIframes = true;
+                    ignore = "ignoreNothing";
+                    improvedFieldDetection = false;
+                    url = "http://*/*";
+                    usernameOnly = false;
+                  }
+                ];
+              };
+            };
+          };
+        };
+      };
       profiles.default = {
         id = 0;
         name = "default";

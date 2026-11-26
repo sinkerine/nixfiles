@@ -218,8 +218,12 @@ def hk_profile(config, tailnet_auth_key=None, *, always_proxy=False):
     rules = [
         {"protocol": "dns", "action": "hijack-dns"},
         {"domain_suffix": ["mado.moe"], "action": "route", "outbound": "hk-direct"},
-        {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48"], "action": "route", "outbound": "tailscale"},
+        # Forward outbound tailnet traffic through Michiru's hk-direct outbound
+        # (matching Asako), while keeping the embedded Tailscale endpoint active
+        # for Makina's own tailnet identity.
+        {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48"], "action": "route", "outbound": "hk-direct"},
         {"ip_is_private": True, "action": "route", "outbound": "direct"},
+        {"rule_set": ["geosite-google"], "action": "route", "outbound": "hk-us"},
         {"rule_set": ["geosite-cn"], "action": "route", "outbound": "direct"},
         {"rule_set": ["geoip-cn"], "action": "route", "outbound": "direct"},
         {"rule_set": ["geoip-us"], "action": "route", "outbound": "hk-us"},
@@ -227,9 +231,10 @@ def hk_profile(config, tailnet_auth_key=None, *, always_proxy=False):
     manual_us_domains = config.get("us_domains", [])
     if manual_us_domains:
         # Domain matches must win before destination-IP GeoIP rules.
-        rules.insert(5, {"domain": manual_us_domains, "action": "route", "outbound": "hk-us"})
+        rules.insert(6, {"domain": manual_us_domains, "action": "route", "outbound": "hk-us"})
     sets = []
     for tag, url in (
+        ("geosite-google", "https://github.com/SagerNet/sing-geosite/raw/rule-set/geosite-google.srs"),
         ("geosite-cn", "https://github.com/SagerNet/sing-geosite/raw/rule-set/geosite-cn.srs"),
         ("geoip-cn", "https://github.com/SagerNet/sing-geoip/raw/rule-set/geoip-cn.srs"),
         ("geoip-us", "https://github.com/SagerNet/sing-geoip/raw/rule-set/geoip-us.srs"),
@@ -260,6 +265,7 @@ def hk_profile(config, tailnet_auth_key=None, *, always_proxy=False):
             {"type": "https", "tag": "managed-dns", "server": "1.1.1.1", "path": "/dns-query", "detour": "hk-direct"},
         ], "rules": [
             {"domain_suffix": ["mado.moe"], "server": "managed-dns"},
+            {"rule_set": ["geosite-google"], "server": "managed-dns"},
             {"rule_set": ["geosite-cn"], "server": "local-dns"},
         ], "final": "managed-dns", "strategy": "ipv4_only", "reverse_mapping": True},
         "inbounds": [{"type": "tun", "tag": "tun-in", "address": ["198.18.0.1/30"],

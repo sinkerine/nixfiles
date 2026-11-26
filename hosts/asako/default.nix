@@ -187,6 +187,19 @@ in
   services.automatic-timezoned.enable = true;
   services.fwupd.enable = true;
   services.udisks2.enable = true;
+
+  # Keep agent-driven activation scoped to this host and flake target.
+  security.sudo.extraRules = [
+    {
+      users = [ "sinkerine" ];
+      commands = [
+        {
+          command = "/run/current-system/sw/bin/nixos-rebuild switch --flake /nixfiles\\#asako";
+          options = [ "NOPASSWD" ];
+        }
+      ];
+    }
+  ];
   services.kmonad = {
     enable = true;
     keyboards = {

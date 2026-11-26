@@ -21,6 +21,7 @@ IP6TABLES = os.environ.get("ASAKO_IP6TABLES", "ip6tables")
 CLASH_API = os.environ.get("ASAKO_CLASH_API", "http://127.0.0.1:19090")
 HK_TUN = "sing-box-hk-tun.service"
 HK_INTERFACE = "singtun-hk0"
+TAILSCALE_TABLE = "52"
 HK_TABLE = "109"
 GUARD_TABLE = "110"
 TAILNET_CIDRS = ("100.64.0.0/10", "fd7a:115c:a1e0::/48")
@@ -50,14 +51,30 @@ def guard_tailnet(enabled):
             run(IP, family, "route", "replace", "blackhole", cidr, "table", GUARD_TABLE)
         for cidr in TAILNET_CIDRS:
             family = "-6" if ":" in cidr else "-4"
+            # Return replies to inbound tailscale0 connections (sourced from our
+            # tailnet IP) via Tailscale's table 52. Unbound outbound connections
+            # start with 0.0.0.0/:: and still fall through to tables 109/110.
+            remove_inbound_reply_rule(family, cidr)
+            run(
+                IP, family, "rule", "add", "priority", "999",
+                "iif", "lo", "from", cidr, "to", cidr, "lookup", TAILSCALE_TABLE,
+            )
             remove_tailnet_rules(family, 1001, cidr, GUARD_TABLE)
             run(IP, family, "rule", "add", "priority", "1001", "iif", "lo", "to", cidr, "lookup", GUARD_TABLE)
         return
 
     for cidr in TAILNET_CIDRS:
         family = "-6" if ":" in cidr else "-4"
+        remove_inbound_reply_rule(family, cidr)
         remove_tailnet_rules(family, 1001, cidr, GUARD_TABLE)
         remove_route(family, cidr, GUARD_TABLE, blackhole=True)
+
+
+def remove_inbound_reply_rule(family, cidr):
+    subprocess.run([
+        IP, family, "rule", "del", "priority", "999",
+        "iif", "lo", "from", cidr, "to", cidr, "lookup", TAILSCALE_TABLE,
+    ])
 
 
 def remove_rule(family, priority, cidr, table):

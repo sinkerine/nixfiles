@@ -51,6 +51,7 @@ class AndroidProfileTests(unittest.TestCase):
             self.assertEqual(dns_servers["local-dns"]["type"], "local")
             self.assertEqual(config["dns"]["rules"], [
                 {"domain_suffix": ["mado.moe"], "server": "managed-dns"},
+                {"rule_set": ["geosite-google"], "server": "managed-dns"},
                 {"rule_set": ["geosite-cn"], "server": "local-dns"},
             ])
             self.assertEqual(config["inbounds"][0]["address"], ["198.18.0.1/30"])
@@ -71,11 +72,12 @@ class AndroidProfileTests(unittest.TestCase):
             })
             rules = config["route"]["rules"]
             self.assertEqual(rules[1], {"domain_suffix": ["mado.moe"], "action": "route", "outbound": "hk-direct"})
-            self.assertEqual(rules[2], {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48"], "action": "route", "outbound": "tailscale"})
-            self.assertEqual(rules[4]["rule_set"], ["geosite-cn"])
-            self.assertEqual(rules[5], {"domain": profile_config["us_domains"], "action": "route", "outbound": "hk-us"})
-            self.assertEqual(rules[6]["rule_set"], ["geoip-cn"])
-            self.assertEqual(rules[7], {"rule_set": ["geoip-us"], "action": "route", "outbound": "hk-us"})
+            self.assertEqual(rules[2], {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48"], "action": "route", "outbound": "hk-direct"})
+            self.assertEqual(rules[4], {"rule_set": ["geosite-google"], "action": "route", "outbound": "hk-us"})
+            self.assertEqual(rules[5]["rule_set"], ["geosite-cn"])
+            self.assertEqual(rules[6], {"domain": profile_config["us_domains"], "action": "route", "outbound": "hk-us"})
+            self.assertEqual(rules[7]["rule_set"], ["geoip-cn"])
+            self.assertEqual(rules[8], {"rule_set": ["geoip-us"], "action": "route", "outbound": "hk-us"})
             self.assertEqual(config["route"]["final"], "hk-direct")
             self.assertTrue(all(item["http_client"] == "rule-set-via-hk-direct" for item in config["route"]["rule_set"]))
             always = json.loads((output / "michiru-always-proxy-tailscale.json").read_text())
@@ -87,7 +89,7 @@ class AndroidProfileTests(unittest.TestCase):
             self.assertEqual(always["route"]["rules"], [
                 rule for rule in rules if rule.get("rule_set") not in (["geosite-cn"], ["geoip-cn"])
             ])
-            self.assertEqual([item["tag"] for item in always["route"]["rule_set"]], ["geoip-us"])
+            self.assertEqual([item["tag"] for item in always["route"]["rule_set"]], ["geosite-google", "geoip-us"])
             enrolled = android_profiles.hk_profile(profile_config, "test-key", always_proxy=True)
             self.assertEqual(enrolled["endpoints"][0]["auth_key"], "test-key")
 
@@ -323,12 +325,18 @@ class ProxyStateTests(unittest.TestCase):
             self.assertEqual((root / "state" / "state").read_text().strip(), "michiru")
             routes = ip_calls.read_text()
             self.assertIn("route replace blackhole 100.64.0.0/10 table 110", routes)
+            self.assertIn("rule add priority 999 iif lo from 100.64.0.0/10 to 100.64.0.0/10 lookup 52", routes)
+            self.assertIn("rule add priority 999 iif lo from fd7a:115c:a1e0::/48 to fd7a:115c:a1e0::/48 lookup 52", routes)
             self.assertIn("rule add priority 1001 iif lo to 100.64.0.0/10 lookup 110", routes)
             self.assertIn("rule add priority 1000 iif lo to 100.64.0.0/10 lookup 109", routes)
             calls.unlink()
+            ip_calls.unlink()
             subprocess.run(["python3", str(state_path), "off"], env=env, check=True)
             self.assertEqual(calls.read_text().splitlines(), ["stop sing-box-hk-tun.service", "stop sing-box-tun.service"])
-            self.assertIn("route del blackhole 100.64.0.0/10 table 110", ip_calls.read_text())
+            off_routes = ip_calls.read_text()
+            self.assertIn("rule del priority 999 iif lo from 100.64.0.0/10 to 100.64.0.0/10 lookup 52", off_routes)
+            self.assertIn("rule del priority 999 iif lo from fd7a:115c:a1e0::/48 to fd7a:115c:a1e0::/48 lookup 52", off_routes)
+            self.assertIn("route del blackhole 100.64.0.0/10 table 110", off_routes)
 
     def test_failed_clash_switch_leaves_saved_hk_guard_installed(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -371,6 +379,8 @@ class ProxyStateTests(unittest.TestCase):
             routes = ip_calls.read_text()
             self.assertIn("-4 route replace blackhole 100.64.0.0/10 table 110", routes)
             self.assertIn("-6 route replace blackhole fd7a:115c:a1e0::/48 table 110", routes)
+            self.assertIn("-4 rule add priority 999 iif lo from 100.64.0.0/10 to 100.64.0.0/10 lookup 52", routes)
+            self.assertIn("-6 rule add priority 999 iif lo from fd7a:115c:a1e0::/48 to fd7a:115c:a1e0::/48 lookup 52", routes)
             self.assertIn("-4 rule add priority 1001 iif lo to 100.64.0.0/10 lookup 110", routes)
             self.assertIn("-6 rule add priority 1001 iif lo to fd7a:115c:a1e0::/48 lookup 110", routes)
             self.assertNotIn("sing-box-hk-tun", routes)

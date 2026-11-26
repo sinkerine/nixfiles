@@ -69,11 +69,13 @@ profile's enrollment key. The exporter removes only its exact legacy Amane, Sach
 output filenames when regenerating; it does not delete profiles for removed
 registry entries, so remove those files manually when retiring a target.
 
-The Michiru profile sends China destinations direct, sends tailnet destinations
-through its Tailscale endpoint, and sends other destinations through Michiru.
-It reuses Makina's Sachi Tailscale identity because SFA runs only one profile at a
-time. Its outbound uses relay address `103.117.101.12`; encrypted config still
-supplies its port and credentials.
+The Michiru profile sends China destinations direct, forwards outbound tailnet
+destinations (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`) through `hk-direct` (so
+Michiru's own Tailscale reaches the target peer, matching Asako), and sends
+other destinations through Michiru. It keeps the embedded Tailscale endpoint
+(reusing Makina's Sachi Tailscale identity because SFA runs only one profile at
+a time). Its outbound uses relay address `103.117.101.12`; encrypted config
+still supplies its port and credentials.
 
 `michiru-always-proxy-tailscale` removes the China-direct routing and DNS
 exceptions. Public Internet traffic and DNS go through Michiru, retaining the
