@@ -7,6 +7,42 @@
 }:
 
 let
+  noctaliaUnwrapped = pkgs.noctalia.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [ ./screenshot-open.patch ];
+  });
+  # Noctalia's IPC client defaults to wayland-0 when WAYLAND_DISPLAY is unset,
+  # while Niri typically serves wayland-1. Auto-discover the single active
+  # Noctalia socket for `noctalia msg` so IPC works over SSH and inside tmux.
+  noctaliaWrapper = pkgs.writeShellScript "noctalia" ''
+    if [ "''${1:-}" = "msg" ] && [ -z "''${WAYLAND_DISPLAY:-}" ]; then
+      runtime_dir="''${XDG_RUNTIME_DIR:-/run/user/$(${pkgs.coreutils}/bin/id -u)}"
+      found=""
+      count=0
+      for sock in "$runtime_dir"/noctalia-*.sock; do
+        [ -S "$sock" ] || continue
+        case "$sock" in
+          */noctalia-dmenu-*.sock) continue ;;
+        esac
+        found="$sock"
+        count=$((count + 1))
+      done
+      if [ "$count" -eq 1 ]; then
+        base="''${found##*/noctalia-}"
+        export XDG_RUNTIME_DIR="$runtime_dir"
+        export WAYLAND_DISPLAY="''${base%.sock}"
+      fi
+    fi
+    exec "${noctaliaUnwrapped}/bin/noctalia" "$@"
+  '';
+  noctaliaWrapped = pkgs.symlinkJoin {
+    name = "noctalia-wrapped";
+    paths = [ noctaliaUnwrapped ];
+    postBuild = ''
+      rm "$out/bin/noctalia"
+      ln -s "${noctaliaWrapper}" "$out/bin/noctalia"
+    '';
+    meta.mainProgram = "noctalia";
+  };
   noctalia = lib.getExe config.programs.noctalia.package;
   niriActiveWorkspacePlugin = ./niri-active-workspace;
   syncSystemAppearance = pkgs.writeShellScript "sync-noctalia-system-appearance" ''
@@ -60,12 +96,11 @@ in
 
   programs.noctalia = {
     enable = true;
-    package = pkgs.noctalia.overrideAttrs (old: {
-      patches = (old.patches or [ ]) ++ [ ./screenshot-open.patch ];
-    });
+    package = noctaliaWrapped;
     systemd.enable = true;
     settings = {
       plugins.enabled = [ "salemsayed/niri-active-workspace" ];
+      theme.mode = "auto";
       shell = {
         font_family = "sans-serif";
         time_format = "{:%H:%M}";
