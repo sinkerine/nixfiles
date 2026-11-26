@@ -39,8 +39,8 @@ class AsakoHKConfigTests(unittest.TestCase):
         self.assertEqual(config["dns"]["strategy"], "ipv4_only")
         self.assertEqual(config["dns"]["rules"][1]["server"], "local-dns")
         self.assertIn("key-from-runtime", json.dumps(config))
-        self.assertEqual(config["outbounds"][0]["tls"]["server_name"], "hkust.edu.hk")
-        self.assertEqual(config["outbounds"][1]["tls"]["server_name"], "hkust.edu.hk")
+        self.assertEqual(config["outbounds"][0]["tls"]["server_name"], "www.apple.com")
+        self.assertEqual(config["outbounds"][1]["tls"]["server_name"], "www.apple.com")
 
     def test_hk_render_respects_primary_targets_env_var(self):
         profile = {

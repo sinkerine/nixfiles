@@ -219,7 +219,7 @@ class AndroidProfileTests(unittest.TestCase):
             for outbound in michiru["outbounds"]:
                 if outbound.get("type") == "vless":
                     self.assertEqual(outbound["tls"]["server_name"], android_profiles.PRIMARY_TARGETS["michiru"])
-                    self.assertEqual(outbound["tls"]["server_name"], "hkust.edu.hk")
+                    self.assertEqual(outbound["tls"]["server_name"], "www.apple.com")
 
     def test_primary_targets_env_override_for_store_safe_execution(self):
         with tempfile.TemporaryDirectory() as temp:

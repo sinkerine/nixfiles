@@ -59,7 +59,7 @@ class RelayRendererTest(unittest.TestCase):
 
     def test_relay_uses_primary_targets_michiru_sni(self):
         primary_targets = json.loads((ROOT / "hosts/common/reality-primary-targets.json").read_text())
-        self.assertEqual(primary_targets["michiru"], "hkust.edu.hk")
+        self.assertEqual(primary_targets["michiru"], "www.apple.com")
         relay_nix = (ROOT / "hosts/modules/services/networking/regional-proxy/relay.nix").read_text()
         self.assertIn("reality-primary-targets.json", relay_nix)
         self.assertNotIn("www.cloudflare.com", relay_nix)

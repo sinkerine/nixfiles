@@ -25,7 +25,7 @@ continuing to serve the existing HTTPS domains. The original PayPal listeners
 remain available on Amane port 10088 and Sachi port 10089. Normal profiles on
 port 10087 use the verified per-node institutional decoys from
 [`../common/reality-primary-targets.json`](../common/reality-primary-targets.json)
-(`amane`: `www.sinet.ad.jp`, `sachi`: `www.sdsc.edu`, `michiru`: `hkust.edu.hk`),
+(`amane`: `www.sinet.ad.jp`, `sachi`: `www.sdsc.edu`, `michiru`: `www.apple.com`),
 embedded via `REALITY_PRIMARY_TARGETS_FILE` in the Nix-installed exporter.
 
 To add another airline, add one entry to the shared registry:
