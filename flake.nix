@@ -16,9 +16,6 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nur = {
-      url = "github:nix-community/NUR";
-    };
     flake-utils.url = "github:numtide/flake-utils";
     # nixgl is needed for alacritty outside of nixOS
     # refer to https://github.com/NixOS/nixpkgs/issues/122671
@@ -94,7 +91,6 @@
       disko,
       nixpkgs-stable,
       home-manager,
-      nur,
       nixgl,
       sops-nix,
       kmonad,
@@ -201,7 +197,6 @@
               ./home/modules
               {
                 imports = [
-                  nur.modules.homeManager.default
                   nixvim.homeModules.nixvim
                   sops-nix.homeManagerModules.sops
                   lrc-catalog-merge.homeManagerModules.default

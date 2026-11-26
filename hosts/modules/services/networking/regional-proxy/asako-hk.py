@@ -18,6 +18,12 @@ def render(profile_path, android_profiles_path):
     with open(profile_path, encoding="utf-8") as source:
         profile = json.load(source)
     config = module.hk_profile(profile)
+    # Asako does not enroll an embedded Tailscale endpoint; Michiru's hk-direct
+    # relay already forwards tailnet IPv4/IPv6 CIDRs onto its own tailscale0.
+    config.pop("endpoints", None)
+    for rule in config["route"]["rules"]:
+        if rule.get("outbound") == "tailscale":
+            rule["outbound"] = "hk-direct"
     # LAN DNS can bypass the TUN on Linux. Recover HTTP/TLS hostnames before
     # domain rules so home-service and manual US overrides still take effect.
     config["route"]["rules"].insert(0, {"action": "sniff"})
@@ -30,16 +36,17 @@ def render(profile_path, android_profiles_path):
     ]
     config["route"]["default_domain_resolver"] = "local-dns"
     config["inbounds"][0]["interface_name"] = "singtun-hk0"
+    config["inbounds"][0]["address"] = ["198.18.0.1/30", "fdfe:dcba:9876::1/126"]
     tailnet_ipv6 = ipaddress.ip_network("fd7a:115c:a1e0::/48")
+    # Route all IPv4 plus only the tailnet IPv6 prefix through the HK TUN.
+    # Michiru's US exit rejects IPv6 and direct IPv6 fails on IPv4-only Wi-Fi;
+    # advertising ::/0 on the TUN makes the local TCP stack accept global IPv6
+    # connections (defeating Happy Eyeballs) before upstream closes them.
+    config["inbounds"][0]["route_address"] = ["0.0.0.0/0", str(tailnet_ipv6)]
     excluded_addresses = [
         "10.0.0.0/8", "127.0.0.0/8", "169.254.0.0/16",
-        "172.16.0.0/12", "192.168.0.0/16", "fe80::/10",
+        "172.16.0.0/12", "192.168.0.0/16",
     ]
-    # Preserve ULA exclusions while allowing the tailnet range through HK.
-    excluded_addresses.extend(
-        str(network)
-        for network in ipaddress.ip_network("fd00::/8").address_exclude(tailnet_ipv6)
-    )
     # With strict TUN routing, explicitly bypass every resolved relay address;
     # otherwise VLESS's own TCP connection can be captured by its TUN.
     relay_addresses = {

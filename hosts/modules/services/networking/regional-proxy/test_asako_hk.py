@@ -27,13 +27,16 @@ class AsakoHKConfigTests(unittest.TestCase):
             android_profiles = Path(__file__).parents[4] / "makina" / "android-profiles.py"
             config = asako_hk.render(source, android_profiles)
         self.assertEqual(config["inbounds"][0]["interface_name"], "singtun-hk0")
-        self.assertEqual(config["inbounds"][0]["address"], ["198.18.0.1/30"])
+        self.assertEqual(config["inbounds"][0]["address"], ["198.18.0.1/30", "fdfe:dcba:9876::1/126"])
+        self.assertEqual(config["inbounds"][0]["route_address"], ["0.0.0.0/0", "fd7a:115c:a1e0::/48"])
+        self.assertNotIn("endpoints", config)
         self.assertEqual(config["outbounds"][0]["tag"], "hk-direct")
         self.assertEqual(config["outbounds"][1]["tag"], "hk-us")
         rules = config["route"]["rules"]
         self.assertEqual(rules[0]["action"], "sniff")
         self.assertEqual(rules[2]["domain_suffix"], ["mado.moe"])
         self.assertEqual(rules[3]["ip_cidr"], ["100.64.0.0/10", "fd7a:115c:a1e0::/48"])
+        self.assertEqual(rules[3]["outbound"], "hk-direct")
         self.assertEqual(rules[6]["domain"], ["example.com"])
         self.assertIn("203.0.113.2/32", config["inbounds"][0]["route_exclude_address"])
         self.assertEqual(config["dns"]["strategy"], "ipv4_only")
