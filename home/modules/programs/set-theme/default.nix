@@ -94,7 +94,9 @@ in {
             # Powerline replaces status-right; reinstall Continuum's autosave hook.
             tmux run-shell ${pkgs.tmuxPlugins.continuum}/share/tmux-plugins/continuum/continuum.tmux
           ''}
-          tmux refresh-client -S
+          for client in $(tmux list-clients -F '#{client_tty}' 2>/dev/null || true); do
+            tmux refresh-client -t "$client" -S || true
+          done
         fi
       '';
     })
