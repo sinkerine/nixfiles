@@ -45,6 +45,8 @@ SERVERS = {
     },
 }
 MICHIRU_PROXY_HOST = "103.117.101.12"
+MICHIRU_PROXY_HOST_V6 = "2403:18c0:4:3cb:be24:11ff:fe2e:3260"
+MICHIRU_PROXY_PORT = 443
 
 LAN_DIRECT_CIDRS = [
     "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
@@ -202,8 +204,8 @@ def hk_profile(config, tailnet_auth_key=None, *, always_proxy=False):
     if missing:
         raise ValueError("HK profile config missing: " + ", ".join(missing))
     # Keep proxy credentials and TLS parameters in the encrypted config while
-    # pinning the relay address used by Makina's exported profile.
-    host, port = MICHIRU_PROXY_HOST, config["port"]
+    # pinning Michiru's public relay address and TCP/443 port for Makina and Asako.
+    host, port = MICHIRU_PROXY_HOST, MICHIRU_PROXY_PORT
 
     def vless(tag, uuid, server=host, server_port=port):
         return {
@@ -273,8 +275,18 @@ def hk_profile(config, tailnet_auth_key=None, *, always_proxy=False):
                        "route_address": ["0.0.0.0/0", "fd7a:115c:a1e0::/48"],
                        "mtu": 9000, "auto_route": True, "strict_route": True}],
         "endpoints": [endpoint],
-        "outbounds": [vless("hk-direct", config["direct_uuid"]),
-                      vless("hk-us", config["us_uuid"]),
+        "outbounds": [vless("hk-direct-v6", config["direct_uuid"], server=MICHIRU_PROXY_HOST_V6),
+                      vless("hk-direct-v4", config["direct_uuid"], server=host),
+                      {"type": "urltest", "tag": "hk-direct",
+                       "outbounds": ["hk-direct-v6", "hk-direct-v4"],
+                       "url": "https://www.gstatic.com/generate_204",
+                       "interval": "30s", "tolerance": 100},
+                      vless("hk-us-v6", config["us_uuid"], server=MICHIRU_PROXY_HOST_V6),
+                      vless("hk-us-v4", config["us_uuid"], server=host),
+                      {"type": "urltest", "tag": "hk-us",
+                       "outbounds": ["hk-us-v6", "hk-us-v4"],
+                       "url": "https://www.gstatic.com/generate_204",
+                       "interval": "30s", "tolerance": 100},
                       # SFA 1.14.2 rejects detours to a direct outbound without
                       # an explicit timeout (for example managed DNS bootstrap).
                       {"type": "direct", "tag": "direct", "connect_timeout": "5s"}],

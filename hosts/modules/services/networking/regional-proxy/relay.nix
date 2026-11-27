@@ -6,29 +6,29 @@ let
   primaryTargets = builtins.fromJSON (builtins.readFile ../../../../common/reality-primary-targets.json);
   credentialDir = "/etc/regional-proxy/credentials";
   configPath = "/run/sing-box-hk-relay/config.json";
+  publicRealityInbound = tag: listen: listen_port: {
+    type = "vless";
+    inherit tag listen listen_port;
+    users = [
+      { name = "hk-direct"; uuid = "@HK_DIRECT_UUID@"; flow = "xtls-rprx-vision"; }
+      { name = "us-exit"; uuid = "@US_EXIT_UUID@"; flow = "xtls-rprx-vision"; }
+    ];
+    tls = {
+      enabled = true;
+      server_name = primaryTargets.michiru;
+      reality = {
+        enabled = true;
+        handshake = { server = primaryTargets.michiru; server_port = 443; };
+        private_key = "@REALITY_PRIVATE_KEY@";
+        short_id = "@REALITY_SHORT_ID@";
+      };
+    };
+  };
   singBoxConfig = builtins.toJSON {
     log.level = "warn";
     inbounds = [
-      {
-        type = "vless";
-        tag = "public-reality";
-        listen = "0.0.0.0";
-        listen_port = 10087;
-        users = [
-          { name = "hk-direct"; uuid = "@HK_DIRECT_UUID@"; flow = "xtls-rprx-vision"; }
-          { name = "us-exit"; uuid = "@US_EXIT_UUID@"; flow = "xtls-rprx-vision"; }
-        ];
-        tls = {
-          enabled = true;
-          server_name = primaryTargets.michiru;
-          reality = {
-            enabled = true;
-            handshake = { server = primaryTargets.michiru; server_port = 443; };
-            private_key = "@REALITY_PRIVATE_KEY@";
-            short_id = "@REALITY_SHORT_ID@";
-          };
-        };
-      }
+      (publicRealityInbound "public-reality" "::" 443)
+      (publicRealityInbound "public-reality-legacy" "0.0.0.0" 10087)
       {
         type = "socks";
         tag = "tailnet-socks";
@@ -53,9 +53,9 @@ let
     ];
     route = {
       rules = [
-        { inbound = [ "public-reality" ]; auth_user = [ "hk-direct" ]; ip_cidr = [ "100.64.0.0/10" "fd7a:115c:a1e0::/48" ]; outbound = "tailnet"; }
-        { inbound = [ "public-reality" ]; auth_user = [ "hk-direct" ]; outbound = "hk-uplink"; }
-        { inbound = [ "public-reality" ]; auth_user = [ "us-exit" ]; outbound = "sachi-us-exit"; }
+        { inbound = [ "public-reality" "public-reality-legacy" ]; auth_user = [ "hk-direct" ]; ip_cidr = [ "100.64.0.0/10" "fd7a:115c:a1e0::/48" ]; outbound = "tailnet"; }
+        { inbound = [ "public-reality" "public-reality-legacy" ]; auth_user = [ "hk-direct" ]; outbound = "hk-uplink"; }
+        { inbound = [ "public-reality" "public-reality-legacy" ]; auth_user = [ "us-exit" ]; outbound = "sachi-us-exit"; }
         { inbound = [ "tailnet-socks" ]; ip_cidr = [ "100.64.0.0/10" "fd7a:115c:a1e0::/48" ]; outbound = "tailnet"; }
         { inbound = [ "tailnet-socks" ]; outbound = "hk-uplink"; }
       ];
@@ -104,13 +104,15 @@ in
         Restart = "on-failure";
         RestartSec = 5;
         NoNewPrivileges = true;
+        AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" ];
+        CapabilityBoundingSet = [ "CAP_NET_BIND_SERVICE" ];
         ReadWritePaths = [ "/run/sing-box-hk-relay" ];
         ProtectSystem = "strict";
         ProtectHome = true;
         PrivateTmp = true;
       };
     };
-    networking.firewall.allowedTCPPorts = [ 10087 ];
+    networking.firewall.allowedTCPPorts = [ 443 10087 ];
     networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 10088 ];
   };
 }

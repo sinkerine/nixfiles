@@ -19,7 +19,7 @@ state_path = Path(__file__).with_name("proxy-state.py")
 class AndroidProfileTests(unittest.TestCase):
     def test_optional_makina_hk_profile_and_route_precedence(self):
         profile_config = {
-            "host": "hk.example.net", "port": 443,
+            "host": "hk.example.net", "port": 10087,
             "direct_uuid": "11111111-1111-4111-8111-111111111111",
             "us_uuid": "22222222-2222-4222-8222-222222222222",
             "public_key": "public-key", "short_id": "abcd1234",
@@ -62,13 +62,18 @@ class AndroidProfileTests(unittest.TestCase):
                 "detour": "hk-direct", "domain_resolver": "managed-dns", "accept_routes": True,
                 "exit_node": "sachi", "exit_node_allow_lan_access": True,
             }])
-            self.assertEqual([(x["tag"], x["uuid"]) for x in config["outbounds"][:2]], [
-                ("hk-direct", profile_config["direct_uuid"]), ("hk-us", profile_config["us_uuid"]),
+            outbounds = {x["tag"]: x for x in config["outbounds"]}
+            self.assertEqual(outbounds["hk-direct"]["type"], "urltest")
+            self.assertEqual(outbounds["hk-direct"]["outbounds"], ["hk-direct-v6", "hk-direct-v4"])
+            self.assertEqual(outbounds["hk-us"]["type"], "urltest")
+            self.assertEqual(outbounds["hk-us"]["outbounds"], ["hk-us-v6", "hk-us-v4"])
+            self.assertEqual([(outbounds[t]["server"], outbounds[t]["server_port"], outbounds[t]["uuid"]) for t in ("hk-direct-v6", "hk-direct-v4", "hk-us-v6", "hk-us-v4")], [
+                (android_profiles.MICHIRU_PROXY_HOST_V6, 443, profile_config["direct_uuid"]),
+                ("103.117.101.12", 443, profile_config["direct_uuid"]),
+                (android_profiles.MICHIRU_PROXY_HOST_V6, 443, profile_config["us_uuid"]),
+                ("103.117.101.12", 443, profile_config["us_uuid"]),
             ])
-            self.assertEqual([x["server"] for x in config["outbounds"][:2]], [
-                "103.117.101.12", "103.117.101.12",
-            ])
-            self.assertEqual(config["outbounds"][2], {
+            self.assertEqual(outbounds["direct"], {
                 "type": "direct", "tag": "direct", "connect_timeout": "5s",
             })
             rules = config["route"]["rules"]

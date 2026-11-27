@@ -141,6 +141,6 @@ in
     enable = true;
     strictDomains = [ primaryTargets.michiru ];
     relaxedDomains = [ ];
-    inboundPorts = [ 10087 ];
+    inboundPorts = [ 443 10087 ];
   };
 }

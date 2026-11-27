@@ -15,7 +15,7 @@ spec.loader.exec_module(asako_hk)
 class AsakoHKConfigTests(unittest.TestCase):
     def test_runtime_profile_renders_hk_routes_without_store_secrets(self):
         profile = {
-            "host": "203.0.113.2", "port": 443,
+            "host": "203.0.113.2", "port": 10087,
             "direct_uuid": "11111111-1111-4111-8111-111111111111",
             "us_uuid": "22222222-2222-4222-8222-222222222222",
             "public_key": "key-from-runtime", "short_id": "abcd1234",
@@ -30,8 +30,12 @@ class AsakoHKConfigTests(unittest.TestCase):
         self.assertEqual(config["inbounds"][0]["address"], ["198.18.0.1/30", "fdfe:dcba:9876::1/126"])
         self.assertEqual(config["inbounds"][0]["route_address"], ["0.0.0.0/0", "fd7a:115c:a1e0::/48"])
         self.assertNotIn("endpoints", config)
-        self.assertEqual(config["outbounds"][0]["tag"], "hk-direct")
-        self.assertEqual(config["outbounds"][1]["tag"], "hk-us")
+        outbounds = {x["tag"]: x for x in config["outbounds"]}
+        self.assertEqual(outbounds["hk-direct"]["type"], "urltest")
+        self.assertEqual(outbounds["hk-direct"]["outbounds"], ["hk-direct-v6", "hk-direct-v4"])
+        self.assertEqual(outbounds["hk-us"]["type"], "urltest")
+        self.assertEqual(outbounds["hk-us"]["outbounds"], ["hk-us-v6", "hk-us-v4"])
+        self.assertEqual([outbounds[t]["server_port"] for t in ("hk-direct-v6", "hk-direct-v4", "hk-us-v6", "hk-us-v4")], [443, 443, 443, 443])
         rules = config["route"]["rules"]
         self.assertEqual(rules[0]["action"], "sniff")
         self.assertEqual(rules[2]["domain_suffix"], ["mado.moe"])
@@ -45,8 +49,10 @@ class AsakoHKConfigTests(unittest.TestCase):
         self.assertEqual(config["dns"]["rules"][1], {"rule_set": ["geosite-google"], "server": "managed-dns"})
         self.assertEqual(config["dns"]["rules"][2]["server"], "local-dns")
         self.assertIn("key-from-runtime", json.dumps(config))
-        self.assertEqual(config["outbounds"][0]["tls"]["server_name"], "www.apple.com")
-        self.assertEqual(config["outbounds"][1]["tls"]["server_name"], "www.apple.com")
+        vless_outbounds = [o for o in config["outbounds"] if o.get("type") == "vless"]
+        self.assertEqual(len(vless_outbounds), 4)
+        for outbound in vless_outbounds:
+            self.assertEqual(outbound["tls"]["server_name"], "www.apple.com")
 
     def test_hk_render_respects_primary_targets_env_var(self):
         profile = {
@@ -63,7 +69,10 @@ class AsakoHKConfigTests(unittest.TestCase):
             android_profiles = Path(__file__).parents[4] / "makina" / "android-profiles.py"
             with patch.dict(os.environ, {"REALITY_PRIMARY_TARGETS_FILE": str(override)}):
                 config = asako_hk.render(source, android_profiles)
-        self.assertEqual(config["outbounds"][0]["tls"]["server_name"], "env.hkust.test")
+        vless_outbounds = [o for o in config["outbounds"] if o.get("type") == "vless"]
+        self.assertEqual(len(vless_outbounds), 4)
+        for outbound in vless_outbounds:
+            self.assertEqual(outbound["tls"]["server_name"], "env.hkust.test")
 
 
 if __name__ == "__main__":

@@ -63,6 +63,8 @@ class RelayRendererTest(unittest.TestCase):
         relay_nix = (ROOT / "hosts/modules/services/networking/regional-proxy/relay.nix").read_text()
         self.assertIn("reality-primary-targets.json", relay_nix)
         self.assertNotIn("www.cloudflare.com", relay_nix)
+        self.assertIn('(publicRealityInbound "public-reality" "::" 443)', relay_nix)
+        self.assertIn("CAP_NET_BIND_SERVICE", relay_nix)
 
 
 if __name__ == "__main__":
