@@ -89,7 +89,7 @@ in
         forward-zone = [
           {
             name = ".";
-            forward-addr = [ "1.1.1.1" "1.0.0.1" ];
+            forward-addr = [ "1.1.1.1" "8.8.8.8" ];
           }
         ];
       };

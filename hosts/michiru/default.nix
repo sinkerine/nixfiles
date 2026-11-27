@@ -28,7 +28,12 @@ in
     routes = [ { address = "193.41.250.250"; prefixLength = 32; } ];
   };
   networking.defaultGateway = { address = "193.41.250.250"; interface = "eth0"; };
-  networking.nameservers = [ "1.1.1.1" "1.0.0.1" ];
+  networking.nameservers = [
+    "1.1.1.1"
+    "8.8.8.8"
+    "2001:4860:4860::8888"
+    "2606:4700:4700::1111"
+  ];
   networking.firewall.enable = true;
   sops.age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
   sops.secrets = {
