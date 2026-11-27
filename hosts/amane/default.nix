@@ -53,7 +53,7 @@ in
             {
               type = "vless";
               tag = "reality-main";
-              listen = "0.0.0.0";
+              listen = "::";
               listen_port = config.my.ports.xray.listen;
               users = [
                 { name = "primary"; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; }
@@ -75,7 +75,7 @@ in
             {
               type = "vless";
               tag = "reality-mobile";
-              listen = "0.0.0.0";
+              listen = "::";
               listen_port = config.my.ports.xray.mobileAmane;
               users = [
                 { name = "primary"; uuid = config.sops.placeholder.xrayClientId; flow = "xtls-rprx-vision"; }

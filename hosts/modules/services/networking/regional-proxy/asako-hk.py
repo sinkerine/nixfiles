@@ -47,14 +47,19 @@ def render(profile_path, android_profiles_path):
         "10.0.0.0/8", "127.0.0.0/8", "169.254.0.0/16",
         "172.16.0.0/12", "192.168.0.0/16",
     ]
-    # With strict TUN routing, explicitly bypass every resolved relay address;
-    # otherwise VLESS's own TCP connection can be captured by its TUN.
+    # With strict TUN routing, explicitly bypass every resolved relay address
+    # plus the pinned dual-stack Michiru relay addresses; otherwise VLESS's own
+    # TCP connection can be captured by its TUN.
     relay_addresses = {
         ipaddress.ip_address(result[4][0].split("%", 1)[0])
         for result in socket.getaddrinfo(
             profile["host"], int(profile["port"]), type=socket.SOCK_STREAM
         )
     }
+    relay_addresses.update({
+        ipaddress.ip_address(module.MICHIRU_PROXY_HOST),
+        ipaddress.ip_address(module.MICHIRU_PROXY_HOST_V6),
+    })
     excluded_addresses.extend(
         f"{address}/{32 if address.version == 4 else 128}"
         for address in sorted(relay_addresses, key=lambda item: (item.version, int(item)))

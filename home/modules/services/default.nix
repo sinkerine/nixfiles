@@ -17,6 +17,7 @@
     ./openrgb.nix
     ./dunst
     ./cliphist.nix
+    ./cua-driver.nix
     ./gpg.nix
   ];
 }

@@ -28,7 +28,7 @@ let
     log.level = "warn";
     inbounds = [
       (publicRealityInbound "public-reality" "::" 443)
-      (publicRealityInbound "public-reality-legacy" "0.0.0.0" 10087)
+      (publicRealityInbound "public-reality-legacy" "::" 10087)
       {
         type = "socks";
         tag = "tailnet-socks";

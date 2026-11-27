@@ -9,6 +9,7 @@ let
     if config.my.programs.nvim.enable then "nvim"
     else if config.my.programs.emacs.enable then "${config.home.homeDirectory}/local/bin/exec-editor.sh"
     else "vim";
+  hasArkApiKeySecret = hasAttrByPath [ "sops" "secrets" "volcengineArkAPIKey" ] config;
 in {
   options.my.programs.zsh = {
     enable = mkEnableOption "Zsh";
@@ -103,6 +104,11 @@ in {
             _niri_refresh_socket
           fi
         '')
+        (mkIf hasArkApiKeySecret (mkAfter ''
+          if [[ -r "${config.sops.secrets.volcengineArkAPIKey.path}" ]]; then
+            export ARK_API_KEY="$(< "${config.sops.secrets.volcengineArkAPIKey.path}")"
+          fi
+        ''))
       ];
 
       shellAliases = {

@@ -129,7 +129,7 @@ in
       content = builtins.toJSON {
         log.level = "warn";
         experimental.clash_api = { external_controller = "127.0.0.1:19090"; };
-        dns = { servers = [ { type = "local"; tag = "local-dns"; } { type = "https"; tag = "remote-dns"; server = "1.1.1.1"; path = "/dns-query"; detour = "proxy"; } ]; final = "remote-dns"; strategy = "prefer_ipv4"; };
+        dns = { servers = [ { type = "local"; tag = "local-dns"; } { type = "https"; tag = "remote-dns"; server = "1.1.1.1"; path = "/dns-query"; detour = "proxy"; } ]; final = "remote-dns"; };
         inbounds = [ { type = "tun"; tag = "tun-in"; interface_name = "singtun0"; address = [ "198.18.0.1/30" "fdfe:dcba:9876::1/126" ]; mtu = 9000; auto_route = true; strict_route = true; route_exclude_address = [ "10.0.0.0/8" "100.64.0.0/10" "127.0.0.0/8" "169.254.0.0/16" "172.16.0.0/12" "192.168.0.0/16" "fd00::/8" "fe80::/10" ]; } ];
         outbounds = outbounds;
         route = { final = "proxy"; auto_detect_interface = true; default_domain_resolver = "local-dns"; rules = [ { protocol = "dns"; action = "hijack-dns"; } ]; };

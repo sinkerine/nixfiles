@@ -152,8 +152,8 @@ class AndroidProfileTests(unittest.TestCase):
                                 {"domain": ["headscale.mado.moe"], "action": "route", "outbound": tailnet_detour},
                                 {"ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48"], "action": "route", "outbound": "proxy" if spoofed else "tailscale"},
                         ])
+                        self.assertNotIn("strategy", config["dns"])
                         if spoofed:
-                            self.assertEqual(config["dns"]["strategy"], "ipv4_only")
                             self.assertEqual(config["dns"]["rules"], [{"domain": ["headscale.mado.moe"], "server": control_resolver}])
                             if server_name == "sachi":
                                 self.assertIn({"type": "hosts", "tag": "control-dns", "predefined": {

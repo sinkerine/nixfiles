@@ -64,6 +64,7 @@ class RelayRendererTest(unittest.TestCase):
         self.assertIn("reality-primary-targets.json", relay_nix)
         self.assertNotIn("www.cloudflare.com", relay_nix)
         self.assertIn('(publicRealityInbound "public-reality" "::" 443)', relay_nix)
+        self.assertIn('(publicRealityInbound "public-reality-legacy" "::" 10087)', relay_nix)
         self.assertIn("CAP_NET_BIND_SERVICE", relay_nix)
 
 

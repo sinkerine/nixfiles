@@ -56,15 +56,15 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1794813582,
-        "narHash": "sha256-IKSpeJH9s+p9eNsqOmY8zQTUJvljiCc3e6/uO0v9hZ0=",
-        "owner": "trycua",
+        "lastModified": 1795736071,
+        "narHash": "sha256-W35/Sa1spjw0ENhJJXcTvY7GD6wvvqXkaBfPtE+Df5g=",
+        "owner": "sinkerine",
         "repo": "cua",
-        "rev": "81972305fc1ef6812cbcaf5850829686c8515131",
+        "rev": "e3b62d3741e6a8916527d69656f9b70ac4f11668",
         "type": "github"
       },
       "original": {
-        "owner": "trycua",
+        "owner": "sinkerine",
         "repo": "cua",
         "type": "github"
       }

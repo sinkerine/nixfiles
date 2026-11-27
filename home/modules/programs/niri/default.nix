@@ -91,7 +91,13 @@ in
             natural-scroll = { };
           };
         };
-        gestures."hot-corners".off = { };
+        gestures = {
+          hot-corners.off = { };
+          dnd-edge-workspace-switch = {
+            trigger-height = 0;
+            max-speed = 0;
+          };
+        };
         cursor = {
           xcursor-theme = "breeze_cursors";
           xcursor-size = config.my.display.cursorSize;

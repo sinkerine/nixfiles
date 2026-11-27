@@ -49,6 +49,14 @@ let
     parallel = 1;
   });
 
+  pkgsCuda = import pkgs.path {
+    inherit (pkgs.stdenv.hostPlatform) system;
+    config = {
+      allowUnfree = true;
+      cudaSupport = true;
+    };
+  };
+
 in
 {
   system.stateVersion = "22.05";
@@ -80,6 +88,21 @@ in
         group = "root";
         mode = "0400";
       };
+      volcengineArkAPIKey = {
+        sopsFile = ../../home/users/sinkerine/common/secrets.yaml;
+        owner = "root";
+        group = "root";
+        mode = "0400";
+      };
+    };
+    templates."comfyui-seedance.env" = {
+      owner = "root";
+      group = "root";
+      mode = "0400";
+      content = ''
+        ARK_API_KEY=${config.sops.placeholder.volcengineArkAPIKey}
+      '';
+      restartUnits = [ "comfyui.service" ];
     };
     templates."sing-box-proxy.json" = {
       owner = "sing-box";
@@ -364,7 +387,29 @@ in
     };
   };
 
+  services.comfyui = {
+    enable = true;
+    package = pkgsCuda.comfyui;
+    listen = [ "127.0.0.1" ];
+    port = 8188;
+    extraArgs = [ "--disable-auto-launch" ];
+  };
+
+  systemd.services.comfyui.serviceConfig.EnvironmentFile =
+    config.sops.templates."comfyui-seedance.env".path;
+
   services.traefik.dynamicConfigOptions.http = {
+    routers.comfyui = {
+      rule = "Host(`comfyui.${hostname}.m.mado.moe`)";
+      entryPoints = [ "websecure" ];
+      tls.certResolver = "default";
+      middlewares = [ "lan-only@file" ];
+      service = "comfyui";
+    };
+    services.comfyui.loadBalancer = {
+      servers = [ { url = "http://127.0.0.1:8188"; } ];
+      responseForwarding.flushInterval = "-1ms";
+    };
     routers.strata = mkIf strataEnabled {
       rule = "Host(`strata.${hostname}.m.mado.moe`)";
       entryPoints = [ "websecure" ];

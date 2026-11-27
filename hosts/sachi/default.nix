@@ -83,7 +83,7 @@ in
           log.level = "warn";
           inbounds = [
             {
-              listen = "0.0.0.0";
+              listen = "::";
               type = "vless";
               tag = "reality-main";
               listen_port = config.my.ports.xray.listen;
@@ -100,7 +100,7 @@ in
             }
             # Mobile-only SNI spoofing profile. Excluded from normal client routing.
             {
-              listen = "0.0.0.0";
+              listen = "::";
               type = "vless";
               tag = "reality-mobile";
               listen_port = config.my.ports.xray.mobileSachi;

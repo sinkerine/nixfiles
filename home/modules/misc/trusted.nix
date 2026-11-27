@@ -26,6 +26,7 @@ in {
 
     sops.secrets.githubToken = { };
     sops.secrets.myPwd = { };
+    sops.secrets.volcengineArkAPIKey = { };
 
     my.programs.nvim = {
       enable = true;

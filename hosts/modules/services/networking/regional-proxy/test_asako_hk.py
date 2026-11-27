@@ -45,6 +45,8 @@ class AsakoHKConfigTests(unittest.TestCase):
         self.assertEqual(rules[5]["outbound"], "hk-us")
         self.assertEqual(rules[7]["domain"], ["example.com"])
         self.assertIn("203.0.113.2/32", config["inbounds"][0]["route_exclude_address"])
+        self.assertIn("103.117.101.12/32", config["inbounds"][0]["route_exclude_address"])
+        self.assertIn("2403:18c0:4:3cb:be24:11ff:fe2e:3260/128", config["inbounds"][0]["route_exclude_address"])
         self.assertEqual(config["dns"]["strategy"], "ipv4_only")
         self.assertEqual(config["dns"]["rules"][1], {"rule_set": ["geosite-google"], "server": "managed-dns"})
         self.assertEqual(config["dns"]["rules"][2]["server"], "local-dns")

@@ -37,6 +37,7 @@
 
   my.profiles.trusted.enable = true;
   my.essentials.gui.enable = true;
+  my.services.cua-driver.enable = true;
   my.services.fcitx5.wanxiang.enable = true;
 
   home.packages = with pkgs; [

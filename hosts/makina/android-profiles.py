@@ -128,9 +128,6 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
                 {"type": "https", "tag": "remote-dns", "server": "1.1.1.1", "path": "/dns-query", "detour": "proxy"},
             ],
             "final": "remote-dns",
-            # Amane has no upstream IPv6 route. Keep physical SNI transport
-            # IPv4-only; tailnet IPv6 still runs inside the Tailscale endpoint.
-            "strategy": "ipv4_only" if spoofed else "prefer_ipv4",
         },
         # Keep TUN addresses inside the VPN route. SFA protects outbound sockets;
         # the LAN CIDR rule above sends local destinations through direct.
@@ -189,7 +186,7 @@ def profile(uuid, server_name, mode, tailnet=False, tailnet_auth_key=None):
         }
         # Spoofed profiles leave the endpoint resolver unset so DNS rules apply:
         # Headscale uses control_resolver while DERP hostnames use the default
-        # server. The global ipv4_only strategy still applies.
+        # dual-stack resolver.
         if not spoofed and server_name == "sachi":
             endpoint["domain_resolver"] = "lan-dns"
         if tailnet_auth_key:

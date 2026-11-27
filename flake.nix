@@ -56,7 +56,7 @@
       url = "github:numtide/llm-agents.nix";
     };
     cua = {
-      url = "github:trycua/cua";
+      url = "github:sinkerine/cua";
     };
     pi-artifacts = {
       url = "github:sinkerine/pi-artifacts";

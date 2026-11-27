@@ -60,9 +60,9 @@ rules; private network and tailnet routes remain enabled. Their Tailscale
 endpoints use the selected SNI proxy as the detour, including on Sachi. Headscale
 DNS resolution uses the proxy's DNS on Amane; Sachi uses a static Headscale LAN
 address reached through the SNI proxy, avoiding its router's public-address TLS
-service. Upstream DNS is IPv4-only because Amane has no upstream IPv6 route;
-private tailnet IPv6 addresses remain routed through Tailscale. Normal Sachi
-profiles retain their direct connection and LAN DNS behavior.
+service. Amane and Sachi profiles use V4/V6 dual-stack DNS and TUN addressing
+by default; private tailnet IPv6 addresses remain routed through Tailscale.
+Normal Sachi profiles retain their direct connection and LAN DNS behavior.
 
 All variants for a server reuse its Tailscale identity and can use the normal
 profile's enrollment key. The exporter removes only its exact legacy Amane, Sachi, and `michiru-cn`
@@ -74,8 +74,10 @@ destinations (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`) through `hk-direct` (so
 Michiru's own Tailscale reaches the target peer, matching Asako), and sends
 other destinations through Michiru. It keeps the embedded Tailscale endpoint
 (reusing Makina's Sachi Tailscale identity because SFA runs only one profile at
-a time). Its outbound uses relay address `103.117.101.12`; encrypted config
-still supplies its port and credentials.
+a time). Its `hk-direct` and `hk-us` outbounds use dual-stack IPv4/IPv6 TCP/443 `urltest`
+groups (`103.117.101.12` and `2403:18c0:4:3cb:be24:11ff:fe2e:3260`); encrypted
+config still supplies credentials and TLS parameters. DNS remains `ipv4_only`
+with tailnet-only IPv6 TUN routing because Sachi's US exit is IPv4-only.
 
 `michiru-always-proxy-tailscale` removes the China-direct routing and DNS
 exceptions. Public Internet traffic and DNS go through Michiru, retaining the
