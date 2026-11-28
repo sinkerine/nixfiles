@@ -399,6 +399,71 @@ class ProxyStateTests(unittest.TestCase):
         restore = options.split("systemd.services.asako-proxy-restore = {", 1)[1].split("};", 1)[0]
         self.assertIn('"asako-proxy-hk-guard.service"', restore)
 
+    def test_hk_restore_retries_until_tailscale_ts_input_ready(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            state_dir = root / "state"
+            state_dir.mkdir()
+            (state_dir / "state").write_text("michiru\n", encoding="ascii")
+            calls = root / "systemctl.log"
+            fake_systemctl = root / "systemctl"
+            fake_systemctl.write_text("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CALL_LOG\"\n", encoding="utf-8")
+            fake_systemctl.chmod(0o755)
+            fake_ip = root / "ip"
+            fake_ip.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            fake_ip.chmod(0o755)
+            counter = root / "iptables.count"
+            iptables_log = root / "iptables.log"
+            fake_iptables = root / "iptables"
+            fake_iptables.write_text(
+                '#!/bin/sh\n'
+                'if [ "$1" = "-S" ]; then\n'
+                '  n=$(cat "$COUNT_FILE" 2>/dev/null || echo 0)\n'
+                '  n=$((n + 1))\n'
+                '  printf "%s" "$n" > "$COUNT_FILE"\n'
+                '  if [ "$n" -lt 3 ]; then\n'
+                '    exit 1\n'
+                '  fi\n'
+                '  echo "-N ts-input"\n'
+                '  echo "-A ts-input -i tailscale0 -j ACCEPT"\n'
+                '  case "$0" in *ip6tables) ;; *) echo "-A ts-input -s 100.64.0.0/10 ! -i tailscale0 -j DROP" ;; esac\n'
+                '  exit 0\n'
+                'fi\n'
+                'printf "%s\\n" "$*" >> "$IPTABLES_LOG"\n',
+                encoding="utf-8",
+            )
+            fake_iptables.chmod(0o755)
+            fake_ip6tables = root / "ip6tables"
+            fake_ip6tables.symlink_to(fake_iptables)
+            env = dict(
+                os.environ,
+                ASAKO_PROXY_STATE_DIR=str(state_dir),
+                ASAKO_SYSTEMCTL=str(fake_systemctl),
+                ASAKO_IP=str(fake_ip),
+                ASAKO_IPTABLES=str(fake_iptables),
+                ASAKO_IP6TABLES=str(fake_ip6tables),
+                ASAKO_TS_INPUT_ATTEMPTS="5",
+                ASAKO_TS_INPUT_RETRY_DELAY="0",
+                CALL_LOG=str(calls),
+                COUNT_FILE=str(counter),
+                IPTABLES_LOG=str(iptables_log),
+            )
+            subprocess.run(["python3", str(state_path), "restore", "off"], env=env, check=True)
+            self.assertEqual(calls.read_text().splitlines(), ["stop sing-box-tun.service", "start sing-box-hk-tun.service"])
+            self.assertIn("-I ts-input 2 -i singtun-hk0 -s 100.64.0.0/10 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT", iptables_log.read_text())
+
+            # Fails closed (stops HK TUN) if ts-input never appears.
+            calls.unlink()
+            counter.write_text("0", encoding="ascii")
+            fail_env = dict(env, ASAKO_TS_INPUT_ATTEMPTS="2")
+            result = subprocess.run(["python3", str(state_path), "restore", "off"], env=fail_env, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("ts-input chain is unavailable", result.stderr)
+            self.assertEqual(
+                calls.read_text().splitlines(),
+                ["stop sing-box-tun.service", "start sing-box-hk-tun.service", "stop sing-box-hk-tun.service"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -29,6 +29,8 @@ CLASH_ATTEMPTS = int(os.environ.get("ASAKO_CLASH_ATTEMPTS", "30"))
 CLASH_RETRY_DELAY = float(os.environ.get("ASAKO_CLASH_RETRY_DELAY", "1"))
 HK_INTERFACE_ATTEMPTS = int(os.environ.get("ASAKO_HK_INTERFACE_ATTEMPTS", "20"))
 HK_INTERFACE_RETRY_DELAY = float(os.environ.get("ASAKO_HK_INTERFACE_RETRY_DELAY", "0.5"))
+TS_INPUT_ATTEMPTS = int(os.environ.get("ASAKO_TS_INPUT_ATTEMPTS", "60"))
+TS_INPUT_RETRY_DELAY = float(os.environ.get("ASAKO_TS_INPUT_RETRY_DELAY", "0.5"))
 
 
 def save(choice):
@@ -127,59 +129,80 @@ def wait_for_hk_interface():
     raise RuntimeError(f"HK TUN interface {HK_INTERFACE} did not become ready")
 
 
+def find_scoped_ts_input_rules(stdout, cidr):
+    scoped = []
+    for line in stdout.splitlines():
+        if not line.startswith("-A ts-input "):
+            continue
+        args = shlex.split(line)[2:]
+        try:
+            states = set(args[args.index("--ctstate") + 1].split(","))
+        except (ValueError, IndexError):
+            states = set()
+        if (
+            args[args.index("-i") + 1] == HK_INTERFACE
+            if "-i" in args else False
+        ) and f"-s {cidr}" in line and states == {"ESTABLISHED", "RELATED"} and "-j ACCEPT" in line:
+            scoped.append(args)
+    return scoped
+
+
 def tailnet_return_rule(enabled):
     """Allow established tailnet replies arriving through the HK TUN."""
     for family, executable, cidr in (
         ("-4", IPTABLES, "100.64.0.0/10"),
         ("-6", IP6TABLES, "fd7a:115c:a1e0::/48"),
     ):
-        rules = subprocess.run(
-            [executable, "-S", "ts-input"], capture_output=True, text=True,
-        )
-        if rules.returncode:
-            if enabled:
-                raise RuntimeError(f"{executable} ts-input chain is unavailable")
+        if not enabled:
+            rules = subprocess.run(
+                [executable, "-S", "ts-input"], capture_output=True, text=True,
+            )
+            if rules.returncode:
+                continue
+            for rule in find_scoped_ts_input_rules(rules.stdout, cidr):
+                run(executable, "-D", "ts-input", *rule)
             continue
 
-        scoped = []
-        for line in rules.stdout.splitlines():
-            if not line.startswith("-A ts-input "):
-                continue
-            args = shlex.split(line)[2:]
-            try:
-                states = set(args[args.index("--ctstate") + 1].split(","))
-            except (ValueError, IndexError):
-                states = set()
-            if (
-                args[args.index("-i") + 1] == HK_INTERFACE
-                if "-i" in args else False
-            ) and f"-s {cidr}" in line and states == {"ESTABLISHED", "RELATED"} and "-j ACCEPT" in line:
-                scoped.append(args)
-        if enabled:
-            if scoped:
-                continue
-            # Tailscale's anti-spoof DROP must remain in place for every other
-            # interface. Insert this exception immediately before that rule.
-            lines = rules.stdout.splitlines()
-            drop_index = next((
-                index for index, line in enumerate(lines)
-                if line.startswith("-A ts-input ")
-                and f"-s {cidr}" in line and "-j DROP" in line
-            ), None)
-            if drop_index is None:
-                # Tailscale installs the CGNAT anti-spoof drop only for IPv4.
-                # IPv6 replies need no exception when that drop is absent.
-                if family == "-6":
-                    continue
-                raise RuntimeError(f"{executable} tailnet anti-spoof rule is unavailable")
-            drop_position = sum(line.startswith("-A ts-input ") for line in lines[:drop_index]) + 1
-            run(executable, "-I", "ts-input", str(drop_position),
-                "-i", HK_INTERFACE, "-s", cidr,
-                "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED",
-                "-j", "ACCEPT")
-        else:
-            for rule in scoped:
-                run(executable, "-D", "ts-input", *rule)
+        # tailscaled creates ts-input only after its router initializes (which
+        # can lag behind network-online on boot). Retry briefly before failing closed.
+        last_error = None
+        for attempt in range(TS_INPUT_ATTEMPTS):
+            rules = subprocess.run(
+                [executable, "-S", "ts-input"], capture_output=True, text=True,
+            )
+            if rules.returncode:
+                last_error = f"{executable} ts-input chain is unavailable"
+            else:
+                if find_scoped_ts_input_rules(rules.stdout, cidr):
+                    last_error = None
+                    break
+                # Tailscale's anti-spoof DROP must remain in place for every other
+                # interface. Insert this exception immediately before that rule.
+                lines = rules.stdout.splitlines()
+                drop_index = next((
+                    index for index, line in enumerate(lines)
+                    if line.startswith("-A ts-input ")
+                    and f"-s {cidr}" in line and "-j DROP" in line
+                ), None)
+                if drop_index is None:
+                    # Tailscale installs the CGNAT anti-spoof drop only for IPv4.
+                    # IPv6 replies need no exception when that drop is absent.
+                    if family == "-6":
+                        last_error = None
+                        break
+                    last_error = f"{executable} tailnet anti-spoof rule is unavailable"
+                else:
+                    drop_position = sum(line.startswith("-A ts-input ") for line in lines[:drop_index]) + 1
+                    run(executable, "-I", "ts-input", str(drop_position),
+                        "-i", HK_INTERFACE, "-s", cidr,
+                        "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED",
+                        "-j", "ACCEPT")
+                    last_error = None
+                    break
+            if attempt + 1 < TS_INPUT_ATTEMPTS:
+                time.sleep(TS_INPUT_RETRY_DELAY)
+        if last_error is not None:
+            raise RuntimeError(last_error)
 
 
 def guard_if_hk_selected():

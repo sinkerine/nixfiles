@@ -34,13 +34,18 @@ let
       fi
     '';
   };
-  disableKeepassxcQuickUnlock = pkgs.writers.writePython3 "disable-keepassxc-quick-unlock" { } ''
+  configureKeepassxcQuickUnlock = pkgs.writers.writePython3 "configure-keepassxc-quick-unlock" { } ''
     import os
     import sys
     import tempfile
     from pathlib import Path
 
     path = Path(sys.argv[1])
+    desired = sys.argv[2]
+    if desired not in ("true", "false"):
+        raise ValueError(f"Expected true or false, got {desired!r}")
+    setting_line = f"QuickUnlock={desired}\n"
+
     path.parent.mkdir(parents=True, exist_ok=True)
 
     if path.exists():
@@ -62,7 +67,7 @@ let
                 insert_at = len(out)
                 while insert_at > 0 and out[insert_at - 1].strip() == "":
                     insert_at -= 1
-                out.insert(insert_at, "QuickUnlock=false\n")
+                out.insert(insert_at, setting_line)
                 found_key = True
             in_security = stripped == "[Security]"
             if in_security:
@@ -70,7 +75,7 @@ let
             out.append(line)
         elif in_security and stripped.startswith("QuickUnlock="):
             if not found_key:
-                out.append("QuickUnlock=false\n")
+                out.append(setting_line)
                 found_key = True
         else:
             out.append(line)
@@ -78,7 +83,7 @@ let
     if in_security and not found_key:
         if out and not out[-1].endswith("\n"):
             out[-1] += "\n"
-        out.append("QuickUnlock=false\n")
+        out.append(setting_line)
         found_key = True
     elif not found_security:
         if out:
@@ -87,7 +92,7 @@ let
             if out[-1].strip() != "":
                 out.append("\n")
         out.append("[Security]\n")
-        out.append("QuickUnlock=false\n")
+        out.append(setting_line)
 
     updated = "".join(out)
     if updated != original or not path.exists():
@@ -109,6 +114,7 @@ in
     enablePolkitAgent = lib.mkEnableOption "polkit-gnome authentication agent" // {
       default = true;
     };
+    enableKeepassxcQuickUnlock = lib.mkEnableOption "KeePassXC Polkit/fingerprint Quick Unlock";
   };
 
   config = lib.mkIf cfg.enable (
@@ -493,9 +499,9 @@ in
           plugins = with pkgs.obs-studio-plugins; [ wlrobs ];
         };
 
-        # Keep KeePassXC's local state file writable while disabling Polkit/fingerprint Quick Unlock.
-        home.activation.disableKeepassxcQuickUnlock = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          run ${disableKeepassxcQuickUnlock} ${lib.escapeShellArg "${config.xdg.stateHome}/keepassxc/keepassxc.ini"}
+        # Keep KeePassXC's local state file writable while configuring Polkit/fingerprint Quick Unlock.
+        home.activation.configureKeepassxcQuickUnlock = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          run ${configureKeepassxcQuickUnlock} ${lib.escapeShellArg "${config.xdg.stateHome}/keepassxc/keepassxc.ini"} ${if cfg.enableKeepassxcQuickUnlock then "true" else "false"}
         '';
       }
     ]

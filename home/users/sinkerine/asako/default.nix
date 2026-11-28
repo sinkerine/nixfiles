@@ -14,7 +14,10 @@
     integrations.enable = true;
   };
 
-  my.essentials.gui.enable = true;
+  my.essentials.gui = {
+    enable = true;
+    enableKeepassxcQuickUnlock = true;
+  };
 
   home.packages = with pkgs; [ radeontop ];
 

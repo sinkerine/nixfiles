@@ -60,7 +60,6 @@ in {
       initContent = mkMerge [
         (mkBefore ''
           # zmodload zsh/zprof
-          export TZ="America/Los_Angeles"
           export PATH="$PATH:$HOME/local/bin:/usr/local/bin:/usr/bin";
           export EDITOR="${editorValue}";
           export TERM="foot";

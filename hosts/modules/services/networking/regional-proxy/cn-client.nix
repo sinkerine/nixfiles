@@ -8,6 +8,9 @@ in
     description = "Asako Hong Kong sing-box TUN routing";
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
+    # Rule-set downloads can fail before Wi-Fi is up on boot. Keep retrying
+    # instead of hitting systemd's start limit before connectivity returns.
+    startLimitIntervalSec = 0;
     serviceConfig = {
       Type = "simple";
       RuntimeDirectory = "asako-hk";

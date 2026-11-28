@@ -59,7 +59,7 @@ with lib;
     systemd.services.asako-proxy-restore = {
       description = "Restore Asako TUN routing choice";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" "sing-box-proxy.service" "asako-proxy-hk-guard.service" ];
+      after = [ "network-online.target" "sing-box-proxy.service" "asako-proxy-hk-guard.service" "tailscaled.service" ];
       requires = [ "sing-box-proxy.service" "asako-proxy-hk-guard.service" ];
       wants = [ "network-online.target" ];
       environment = stateEnvironment;

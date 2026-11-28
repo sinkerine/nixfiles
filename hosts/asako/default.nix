@@ -40,6 +40,8 @@ in
   environment.systemPackages = with pkgs; [
     easyrsa
     brightnessctl
+    # Registers share/polkit-1/actions/org.keepassxc.KeePassXC.policy for Quick Unlock.
+    keepassxc
     sing-box
     (pkgs.writeShellApplication {
       name = "asako-proxy";
